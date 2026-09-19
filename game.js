@@ -51,6 +51,8 @@ const CONFIG = {
   WANDER: {
     shooterSpeed: 45,
     bullSpeed: 42,
+    scorpionSpeed: 48,
+    zombieSpeed: 52,
     pauseMin: 0.5,       // пауза между перебежками
     pauseMax: 2.2,
     arrive: 14,          // с какого расстояния считаем, что дошёл до своей точки
@@ -70,6 +72,10 @@ const CONFIG = {
     crossbow: { name: 'Арбалет',  hp: 55, radius: 13, range: 330, cooldown: 1.0, dmg: 7, projSpeed: 430, projRadius: 4 },
     shotgun:  { name: 'Дробовик', hp: 61, radius: 14, range: 165, cooldown: 1.3, dmg: 4, projSpeed: 380, projRadius: 4, pellets: 4, spread: 0.45 },
     medic:    { name: 'Медик',    hp: 49, radius: 13, range: 220, cooldown: 2.2, heal: 9 },
+    cutter:   { name: 'Резак',    hp: 92, radius: 15, cooldown: 0.5, dmg: 14,
+                reach: 34 },         // лезвия торчат по бокам: рубит только вплотную
+    booster:  { name: 'Усилок',   hp: 58, radius: 13,
+                rateBonus: 0.75 },   // насколько ускоряет соседей по цепочке
   },
 
   // --- враги ---
@@ -89,6 +95,16 @@ const CONFIG = {
                dmg: 9,                  // урон в эпицентре
                blastRadius: 95,         // радиус поражения
                flightTime: 1.5 },       // сколько снаряд летит до земли
+    scorpion: { name: 'Скорпион', hp: 30, radius: 15, range: 380, cooldown: 3.4, dmg: 6,
+               projSpeed: 190,          // гарпун летит медленно, его видно заранее
+               projRadius: 6,
+               pullSpeed: 300 },        // с какой скоростью тащит выдернутого союзника
+    zombie:  { name: 'Зомби', hp: 70, radius: 17, aggro: 520, walkSpeed: 62, cooldown: 4.5,
+               standoff: 55,            // держится рядом, но не вплотную — облако накрывает цепочку
+               cloudRadius: 95,         // радиус вонючего облака
+               cloudDps: 6,             // урон в секунду внутри облака
+               cloudLife: 3.5,          // сколько облако висит
+               cloudGrow: 0.5 },        // за сколько разрастается до полного радиуса
     mine:    { name: 'Мина', hp: 6, radius: 13,
                detectRadius: 110,       // с какого расстояния цепочка её замечает
                triggerRadius: 18,       // с какого расстояния срабатывает под ногами
@@ -101,42 +117,53 @@ const CONFIG = {
 //  ПЛАН КОМНАТ
 //  Координаты — доли от внутреннего размера комнаты (0..1).
 //  pillars / pits / spikes: [cx, cy, w, h] — w,h тоже в долях.
-//  enemies / allies: [тип, cx, cy]
+//  Геометрия комнат фиксированная, а состав бойцов бросается заново каждую игру:
+//    enemies: { spots: [[cx, cy], ...], kinds: сколько разных типов, pool: чем ограничен }
+//    allies:  { spots: [[cx, cy], ...], require: [типы, которые тут всегда], pool: ... }
 //  Стены и колонны блокируют движение и выстрелы, пропасти — только движение,
 //  шипы не блокируют ничего, но колют всех, кто на них стоит.
 // ============================================================================
+
+const ENEMY_POOL = ['shooter', 'bull', 'tower', 'scorpion', 'zombie'];
+const ALLY_POOL = ['crossbow', 'shotgun', 'medic', 'cutter', 'booster'];
 
 const ROOM_PLANS = [
   { // 1 — тихая комната: первый союзник и безопасное знакомство с шипами
     pillars: [[0.30, 0.30, 0.10, 0.10], [0.70, 0.70, 0.10, 0.10]],
     pits: [],
     spikes: [[0.50, 0.78, 0.14, 0.10]],
-    enemies: [],
-    allies: [['crossbow', 0.62, 0.35]],
+    enemies: { spots: [] },
+    // первым всегда достаётся кто-то бьющий: поддержка в одиночку бесполезна
+    allies: { spots: [[0.62, 0.35]], pool: ['crossbow', 'shotgun', 'cutter'] },
   },
-  { // 2 — знакомство со стрелками
+  { // 2 — первый бой: перегородка для укрытия, катапульт тут не бывает
     pillars: [[0.45, 0.50, 0.08, 0.40]],
     pits: [],
     spikes: [],
-    enemies: [['shooter', 0.78, 0.30], ['shooter', 0.70, 0.78]],
-    allies: [],
+    enemies: { spots: [[0.78, 0.30], [0.70, 0.78]], kinds: 2,
+               pool: ['shooter', 'bull', 'scorpion', 'zombie'] },
   },
-  { // 3 — пропасть и трое стрелков, и сразу двое союзников
+  { // 3 — пропасть и сразу двое союзников, один из них всегда Медик
     pillars: [[0.35, 0.18, 0.10, 0.10]],
     pits: [[0.55, 0.50, 0.26, 0.22]],
     spikes: [],
-    enemies: [['shooter', 0.80, 0.25], ['shooter', 0.80, 0.75], ['shooter', 0.62, 0.12]],
-    allies: [['medic', 0.20, 0.55], ['shotgun', 0.22, 0.25]],
+    enemies: { spots: [[0.80, 0.25], [0.80, 0.75], [0.62, 0.12]], kinds: 2 },
+    allies: { spots: [[0.20, 0.55], [0.22, 0.25]], require: ['medic'] },
   },
-  { // 4 — первый бычок и первые опасные шипы по центру
+  { // 4 — шипы ровно там, где хочется пройти
     pillars: [[0.50, 0.22, 0.30, 0.07], [0.50, 0.78, 0.30, 0.07]],
     pits: [],
     spikes: [[0.50, 0.50, 0.18, 0.16]],
-    enemies: [['bull', 0.75, 0.50], ['shooter', 0.88, 0.18], ['shooter', 0.88, 0.82]],
-    allies: [],
+    enemies: { spots: [[0.75, 0.50], [0.88, 0.18], [0.88, 0.82]], kinds: 2 },
   },
-  { // 5 — минное поле: врагов мало, зато пройти насквозь нечем, кроме аккуратности
+  { // 5 — узкий проход между колоннами
     pillars: [[0.30, 0.28, 0.08, 0.08], [0.30, 0.72, 0.08, 0.08], [0.72, 0.50, 0.07, 0.26]],
+    pits: [],
+    spikes: [],
+    enemies: { spots: [[0.92, 0.22], [0.92, 0.78], [0.88, 0.50], [0.50, 0.62]], kinds: 2 },
+  },
+  { // 6 — минное поле: врагов нет вообще, зато подкрепление стоит за минами
+    pillars: [],
     pits: [],
     spikes: [],
     mines: [[0.34, 0.20], [0.34, 0.50], [0.34, 0.80],
@@ -144,68 +171,51 @@ const ROOM_PLANS = [
             [0.58, 0.22], [0.58, 0.50], [0.58, 0.78],
             [0.68, 0.14], [0.68, 0.86],
             [0.82, 0.32], [0.82, 0.68]],
-    enemies: [['shooter', 0.92, 0.22], ['shooter', 0.92, 0.78], ['bull', 0.88, 0.50]],
-    allies: [],
+    enemies: { spots: [] },
+    allies: { spots: [[0.93, 0.28], [0.93, 0.72]], require: ['booster'] },
   },
-  { // 6 — башня под прикрытием стрелков
-    pillars: [[0.40, 0.50, 0.07, 0.34]],
-    pits: [[0.72, 0.20, 0.20, 0.16]],
-    spikes: [],
-    enemies: [['tower', 0.85, 0.50], ['shooter', 0.60, 0.20], ['shooter', 0.60, 0.80],
-              ['shooter', 0.25, 0.50]],
-    allies: [],
-  },
-  { // 7 — бычки на открытом месте и шипы посередине
+  { // 7 — открытое место и шипы посередине
     pillars: [[0.30, 0.65, 0.10, 0.10], [0.66, 0.30, 0.10, 0.10]],
     pits: [],
     spikes: [[0.50, 0.50, 0.20, 0.12]],
-    enemies: [['bull', 0.60, 0.72], ['bull', 0.82, 0.35], ['shooter', 0.90, 0.75],
-              ['shooter', 0.45, 0.18]],
-    allies: [],
+    enemies: { spots: [[0.60, 0.72], [0.82, 0.35], [0.90, 0.75], [0.45, 0.18]], kinds: 2 },
   },
-  { // 8 — смешанная комната и подкрепление
+  { // 8 — смешанная комната: пропасть, шипы и пятеро врагов
     pillars: [[0.52, 0.50, 0.07, 0.30]],
     pits: [[0.30, 0.20, 0.18, 0.14]],
     spikes: [[0.70, 0.85, 0.20, 0.08]],
-    enemies: [['tower', 0.88, 0.30], ['bull', 0.72, 0.65], ['bull', 0.40, 0.75],
-              ['shooter', 0.86, 0.80], ['shooter', 0.70, 0.20]],
-    allies: [['crossbow', 0.18, 0.70], ['medic', 0.18, 0.35]],
+    enemies: { spots: [[0.88, 0.30], [0.72, 0.65], [0.40, 0.75], [0.86, 0.80], [0.70, 0.20]],
+               kinds: 2 },
   },
-  { // 9 — перекрёстный огонь двух катапульт, пропасть и шипы на обходе
+  { // 9 — перелом сложности: три типа врагов и последнее подкрепление
     pillars: [[0.50, 0.25, 0.22, 0.07], [0.50, 0.75, 0.22, 0.07]],
     pits: [[0.50, 0.50, 0.22, 0.18]],
     spikes: [[0.25, 0.50, 0.14, 0.30]],
-    enemies: [['tower', 0.85, 0.20], ['tower', 0.85, 0.80], ['shooter', 0.70, 0.50],
-              ['shooter', 0.35, 0.82], ['shooter', 0.35, 0.18], ['bull', 0.65, 0.35]],
-    allies: [],
+    enemies: { spots: [[0.85, 0.20], [0.85, 0.80], [0.70, 0.50],
+                       [0.35, 0.82], [0.35, 0.18], [0.65, 0.35]], kinds: 3 },
+    allies: { spots: [[0.11, 0.30], [0.11, 0.72]] },
   },
   { // 10 — плотный замес
     pillars: [[0.35, 0.35, 0.09, 0.09], [0.35, 0.65, 0.09, 0.09]],
     pits: [[0.66, 0.50, 0.16, 0.30]],
     spikes: [[0.50, 0.12, 0.22, 0.10]],
-    enemies: [['tower', 0.88, 0.50], ['bull', 0.55, 0.25], ['bull', 0.55, 0.75],
-              ['bull', 0.22, 0.50], ['shooter', 0.82, 0.18], ['shooter', 0.82, 0.82],
-              ['shooter', 0.48, 0.45]],
-    allies: [],
+    enemies: { spots: [[0.88, 0.50], [0.55, 0.25], [0.55, 0.75], [0.22, 0.50],
+                       [0.82, 0.18], [0.82, 0.82], [0.48, 0.45]], kinds: 3 },
   },
   { // 11 — предпоследняя: всё сразу
     pillars: [[0.42, 0.20, 0.08, 0.22], [0.42, 0.80, 0.08, 0.22]],
     pits: [[0.62, 0.50, 0.18, 0.26]],
     spikes: [[0.28, 0.50, 0.14, 0.24]],
-    enemies: [['tower', 0.90, 0.25], ['tower', 0.90, 0.75], ['bull', 0.62, 0.20],
-              ['bull', 0.62, 0.80], ['bull', 0.50, 0.38], ['shooter', 0.78, 0.50],
-              ['shooter', 0.45, 0.50], ['shooter', 0.30, 0.85], ['shooter', 0.30, 0.15]],
-    allies: [],
+    enemies: { spots: [[0.90, 0.25], [0.90, 0.75], [0.62, 0.20], [0.62, 0.80], [0.50, 0.38],
+                       [0.78, 0.50], [0.45, 0.50], [0.30, 0.85], [0.30, 0.15]], kinds: 3 },
   },
   { // 12 — голый загон с десятью бычками: никаких колонн, только полосы шипов
     pillars: [],
     pits: [],
     spikes: [[0.38, 0.50, 0.10, 0.70], [0.78, 0.50, 0.10, 0.70]],
-    enemies: [['bull', 0.50, 0.20], ['bull', 0.50, 0.50], ['bull', 0.50, 0.80],
-              ['bull', 0.62, 0.32], ['bull', 0.62, 0.68], ['bull', 0.68, 0.50],
-              ['bull', 0.88, 0.18], ['bull', 0.88, 0.50], ['bull', 0.88, 0.82],
-              ['bull', 0.94, 0.35]],
-    allies: [],
+    enemies: { spots: [[0.50, 0.20], [0.50, 0.50], [0.50, 0.80], [0.62, 0.32], [0.62, 0.68],
+                       [0.68, 0.50], [0.88, 0.18], [0.88, 0.50], [0.88, 0.82], [0.94, 0.35]],
+               kinds: 1, pool: ['bull'] },
   },
 ];
 
@@ -213,7 +223,9 @@ const COLORS = {
   floor: '#1b1b20', wall: '#4a4a55', pillar: '#5d5d6b', pit: '#101018', pitEdge: '#4a4a5e',
   spikeFloor: '#33202a', spikeTeeth: '#9c4a5c', warning: '#b8863c', mine: '#e0d44a',
   player: '#63d2ff', crossbow: '#8ce27a', shotgun: '#e2c05a', medic: '#e07ac0',
+  cutter: '#b9c4d4', booster: '#5ad6a0',
   neutral: '#6b6b78', enemy: '#e06060', bull: '#e08040', tower: '#c05ce0',
+  scorpion: '#c8a45c', zombie: '#7fa64a', cloud: '#9ccc6a',
   allyShot: '#d8f8b0', enemyShot: '#ff9a7a', blast: '#ff8a3c',
   hpBack: '#2a2a32', hpAlly: '#7ae07a', hpEnemy: '#e07a7a',
 };
@@ -224,6 +236,16 @@ const COLORS = {
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const pickOne = (list) => list[Math.floor(Math.random() * list.length)];
+
+function shuffled(list) {
+  const a = list.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 function circleRectOverlap(x, y, r, rect) {
   const cx = clamp(x, rect.x, rect.x + rect.w);
@@ -405,7 +427,7 @@ function buildWorld() {
 //  СОСТОЯНИЕ ИГРЫ
 // ============================================================================
 
-let player, allies, neutrals, downed, enemies, projectiles, effects, trail;
+let player, allies, neutrals, downed, enemies, projectiles, effects, clouds, trail;
 let camera = { x: 0, y: 0 };
 let status = 'play'; // play | dead | win
 let lightTime = 0;
@@ -418,9 +440,42 @@ function makeUnit(kind, type, x, y, cfg) {
   };
 }
 
+// раскладывает типы по точкам так, чтобы каждый выбранный тип встретился хотя бы раз
+function assignTypes(count, types) {
+  const spots = shuffled(Array.from({ length: count }, (_, i) => i));
+  const out = new Array(count);
+  spots.forEach((spot, k) => { out[spot] = k < types.length ? types[k] : pickOne(types); });
+  return out;
+}
+
+// состав врагов комнаты: точки те же, а типы бросаются заново каждую игру
+function rollEnemies(plan) {
+  const spec = plan.enemies;
+  if (!spec || !spec.spots.length) return [];
+  const pool = spec.pool || ENEMY_POOL;
+  const kinds = clamp(spec.kinds || 1, 1, Math.min(pool.length, spec.spots.length));
+  const types = assignTypes(spec.spots.length, shuffled(pool).slice(0, kinds));
+  return spec.spots.map(([cx, cy], k) => [types[k], cx, cy]);
+}
+
+// состав союзников комнаты: часть типов задана правилом, остальные случайные и без повторов
+function rollAllies(plan) {
+  const spec = plan.allies;
+  if (!spec || !spec.spots.length) return [];
+  const pool = spec.pool || ALLY_POOL;
+  const types = (spec.require || []).slice(0, spec.spots.length);
+  while (types.length < spec.spots.length) {
+    const rest = pool.filter((t) => !types.includes(t));
+    types.push(pickOne(rest.length ? rest : pool));
+  }
+  const order = shuffled(types);
+  return spec.spots.map(([cx, cy], k) => [order[k], cx, cy]);
+}
+
 function resetGame() {
   buildWorld();
   allies = []; neutrals = []; downed = []; enemies = []; projectiles = []; effects = []; trail = [];
+  clouds = [];
   status = 'play';
   lightTime = 0;
   visibleEnemies = [];
@@ -433,11 +488,11 @@ function resetGame() {
   };
 
   ROOM_PLANS.forEach((plan, i) => {
-    for (const [type, cx, cy] of plan.allies) {
+    for (const [type, cx, cy] of rollAllies(plan)) {
       const p = localToWorld(i, cx, cy);
       neutrals.push(makeUnit('neutral', type, p.x, p.y, CONFIG.ALLIES[type]));
     }
-    for (const [type, cx, cy] of plan.enemies) {
+    for (const [type, cx, cy] of rollEnemies(plan)) {
       const p = localToWorld(i, cx, cy);
       const e = makeUnit('enemy', type, p.x, p.y, CONFIG.ENEMIES[type]);
       e.room = i;
@@ -523,6 +578,7 @@ function tryRecruit() {
   u.kind = 'ally';
   u.cd = 0;
   u.vx = 0; u.vy = 0;
+  u.drag = null;
   allies.push(u);
 }
 
@@ -573,6 +629,17 @@ function spawnMortar(from, tx, ty) {
     sx: from.x, sy: from.y, x: from.x, y: from.y,
     tx, ty, t: 0, flight: from.cfg.flightTime,
     dmg: from.cfg.dmg, blast: from.cfg.blastRadius,
+  });
+}
+
+// гарпун Скорпиона: медленная нить, которая выдёргивает союзника из цепочки
+function spawnHook(from, foe) {
+  const a = Math.atan2(foe.y - from.y, foe.x - from.x);
+  projectiles.push({
+    kind: 'hook', team: 'enemy', owner: from,
+    x: from.x, y: from.y,
+    vx: Math.cos(a) * from.cfg.projSpeed, vy: Math.sin(a) * from.cfg.projSpeed,
+    dmg: from.cfg.dmg, r: from.cfg.projRadius, life: 4,
   });
 }
 
@@ -730,7 +797,25 @@ function knockOutAlly(a, angle, speed) {
   downed.push(a);
 }
 
+// попав в союзника, гарпун вырывает его из цепочки и тянет к Скорпиону
+function hookAlly(a, scorpion) {
+  knockOutAlly(a, Math.atan2(scorpion.y - a.y, scorpion.x - a.x), 0);
+  a.drag = scorpion;
+}
+
 function updateDowned(d, dt) {
+  if (d.drag) {
+    const s = d.drag;
+    const dx = s.x - d.x, dy = s.y - d.y;
+    const dd = Math.hypot(dx, dy);
+    if (!enemies.includes(s) || dd < s.r + d.r + 2) { d.drag = null; return; }
+    const step = Math.min(dd, CONFIG.ENEMIES.scorpion.pullSpeed * dt);
+    const from = { x: d.x, y: d.y };
+    moveAndCollide(d, (dx / dd) * step, (dy / dd) * step, world.moveBlockers);
+    if (dist(d, from) < step * 0.3) d.drag = null; // нить упёрлась в препятствие и оборвалась
+    return;
+  }
+
   const sp = Math.hypot(d.vx, d.vy);
   if (sp < 1) { d.vx = 0; d.vy = 0; return; }
   const drop = CONFIG.ENEMIES.bull.knockbackFriction * dt;
@@ -738,6 +823,16 @@ function updateDowned(d, dt) {
   d.vx = (d.vx / sp) * left;
   d.vy = (d.vy / sp) * left;
   moveAndCollide(d, d.vx * dt, d.vy * dt, world.moveBlockers);
+}
+
+// Усилок ускоряет соседей по цепочке: каждый примыкающий Усилок даёт +75% к темпу
+function attackRateMul(index) {
+  let bonus = 0;
+  for (const j of [index - 1, index + 1]) {
+    if (j < 0 || j >= allies.length) continue;
+    if (allies[j].type === 'booster') bonus += CONFIG.ALLIES.booster.rateBonus;
+  }
+  return 1 + bonus;
 }
 
 function updateAlly(a, dt, i) {
@@ -750,8 +845,27 @@ function updateAlly(a, dt, i) {
     moveAndCollide(a, (dx / d) * step, (dy / d) * step, world.moveBlockers);
   }
 
+  if (a.type === 'booster') return; // сам не бьёт и не лечит, только усиливает соседей
+
   a.cd -= dt;
   if (a.cd > 0) return;
+  const rate = attackRateMul(i);
+
+  // лезвия по бокам рубят всех, кто оказался вплотную, — светить фонарём для этого не надо
+  if (a.type === 'cutter') {
+    let cut = false;
+    for (const e of enemies.slice()) {
+      if (e.type === 'mine' && !e.revealed) continue;
+      if (dist(a, e) > a.cfg.reach + e.r) continue;
+      damageUnit(e, a.cfg.dmg);
+      cut = true;
+    }
+    if (cut) {
+      a.cd = a.cfg.cooldown / rate;
+      effects.push({ type: 'ring', x: a.x, y: a.y, r: a.cfg.reach, life: 0.16, color: COLORS.cutter });
+    }
+    return;
+  }
 
   if (a.type === 'medic') {
     let worst = null;
@@ -762,7 +876,7 @@ function updateAlly(a, dt, i) {
     }
     if (worst) {
       worst.hp = Math.min(worst.maxHp, worst.hp + a.cfg.heal);
-      a.cd = a.cfg.cooldown;
+      a.cd = a.cfg.cooldown / rate;
       a.facing = Math.atan2(worst.y - a.y, worst.x - a.x);
       effects.push({ type: 'beam', x1: a.x, y1: a.y, x2: worst.x, y2: worst.y, life: 0.25, color: COLORS.medic });
     }
@@ -782,7 +896,7 @@ function updateAlly(a, dt, i) {
   } else {
     spawnProjectile(a, foe.x, foe.y, a.cfg.projSpeed, a.cfg.dmg, 'ally', a.cfg.projRadius);
   }
-  a.cd = a.cfg.cooldown;
+  a.cd = a.cfg.cooldown / rate;
 }
 
 function updateEnemy(e, dt) {
@@ -802,8 +916,14 @@ function updateEnemy(e, dt) {
     return;
   }
 
-  if (e.type === 'shooter' && !stepOffSpikes(e, dt, CONFIG.WANDER.shooterSpeed * 1.6)) {
-    wanderStep(e, dt, CONFIG.WANDER.shooterSpeed);
+  if (e.type === 'zombie') {
+    updateZombie(e, dt, chain);
+    return;
+  }
+
+  const wanderSpeed = e.type === 'scorpion' ? CONFIG.WANDER.scorpionSpeed : CONFIG.WANDER.shooterSpeed;
+  if (e.type !== 'tower' && !stepOffSpikes(e, dt, wanderSpeed * 1.6)) {
+    wanderStep(e, dt, wanderSpeed);
   }
 
   e.cd -= dt;
@@ -814,10 +934,55 @@ function updateEnemy(e, dt) {
 
   if (e.type === 'tower') {
     spawnMortar(e, foe.x, foe.y);
+  } else if (e.type === 'scorpion') {
+    spawnHook(e, foe);
   } else {
     spawnProjectile(e, foe.x, foe.y, e.cfg.projSpeed, e.cfg.dmg, 'enemy', e.cfg.projRadius);
   }
   e.cd = e.cfg.cooldown;
+}
+
+// зомби норовит встать рядом с цепочкой, но не вплотную, и травит всё вокруг облаком
+function updateZombie(e, dt, chain) {
+  const foe = nearestTarget(e, chain, e.cfg.aggro);
+  e.cd -= dt;
+
+  if (!foe) {
+    if (!stepOffSpikes(e, dt, CONFIG.WANDER.zombieSpeed * 1.6)) {
+      wanderStep(e, dt, CONFIG.WANDER.zombieSpeed);
+    }
+    return;
+  }
+
+  const d = dist(e, foe);
+  e.facing = Math.atan2(foe.y - e.y, foe.x - e.x);
+  const near = e.cfg.standoff;
+  const sign = d > near * 1.15 ? 1 : d < near * 0.8 ? -1 : 0;
+  if (sign) {
+    moveAndCollide(e, Math.cos(e.facing) * e.cfg.walkSpeed * sign * dt,
+      Math.sin(e.facing) * e.cfg.walkSpeed * sign * dt, world.moveBlockers);
+  }
+
+  if (e.cd <= 0 && d < near * 1.6) {
+    clouds.push({ x: e.x, y: e.y, r: e.cfg.cloudRadius, cur: 0, t: 0, life: e.cfg.cloudLife });
+    e.cd = e.cfg.cooldown;
+  }
+}
+
+// вонючее облако висит на месте и травит только цепочку — своих оно не задевает
+function updateClouds(dt) {
+  const cfg = CONFIG.ENEMIES.zombie;
+  const victims = chainUnits().concat(downed);
+  for (let i = clouds.length - 1; i >= 0; i--) {
+    const c = clouds[i];
+    c.t += dt;
+    c.life -= dt;
+    if (c.life <= 0) { clouds.splice(i, 1); continue; }
+    c.cur = c.r * (0.35 + 0.65 * Math.min(1, c.t / cfg.cloudGrow));
+    for (const u of victims) {
+      if (dist(c, u) < c.cur + u.r) damageUnit(u, cfg.cloudDps * dt);
+    }
+  }
 }
 
 function updateBull(e, dt, chain) {
@@ -914,7 +1079,12 @@ function updateProjectiles(dt) {
     if (!dead) {
       const targets = p.team === 'ally' ? enemies : chain;
       for (const t of targets) {
-        if (dist(p, t) < p.r + t.r) { damageUnit(t, p.dmg); dead = true; break; }
+        if (dist(p, t) >= p.r + t.r) continue;
+        damageUnit(t, p.dmg);
+        // игрока гарпун только ранит, а вот союзника уносит к Скорпиону
+        if (p.kind === 'hook' && t.kind === 'ally' && t.hp > 0) hookAlly(t, p.owner);
+        dead = true;
+        break;
       }
     }
     if (dead) projectiles.splice(i, 1);
@@ -976,6 +1146,7 @@ function update(dt) {
   for (const d of downed) updateDowned(d, dt);
   for (const e of enemies.slice()) updateEnemy(e, dt);
   updateProjectiles(dt);
+  updateClouds(dt);
   applySpikes(dt);
   updateMines();
 
@@ -1048,6 +1219,24 @@ function drawMark(u, type) {
     ctx.moveTo(u.x - Math.cos(f) * u.r * 0.3, u.y - Math.sin(f) * u.r * 0.3);
     ctx.lineTo(u.x + Math.cos(f) * u.r * 0.8, u.y + Math.sin(f) * u.r * 0.8);
     ctx.stroke();
+  } else if (type === 'cutter') {
+    // лезвия-«копья» по кругу: видно, на какой дистанции он рубит
+    ctx.strokeStyle = '#0e0e10';
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + f * 0.5;
+      ctx.moveTo(u.x + Math.cos(a) * u.r * 0.45, u.y + Math.sin(a) * u.r * 0.45);
+      ctx.lineTo(u.x + Math.cos(a) * u.r * 1.05, u.y + Math.sin(a) * u.r * 1.05);
+    }
+    ctx.stroke();
+  } else if (type === 'booster') {
+    ctx.beginPath();
+    for (const off of [-0.45, 0.25]) {
+      ctx.moveTo(u.x - u.r * 0.5, u.y + u.r * (off + 0.45));
+      ctx.lineTo(u.x, u.y + u.r * off);
+      ctx.lineTo(u.x + u.r * 0.5, u.y + u.r * (off + 0.45));
+    }
+    ctx.stroke();
   } else if (type === 'player') {
     ctx.beginPath();
     ctx.moveTo(u.x + Math.cos(f) * u.r * 0.9, u.y + Math.sin(f) * u.r * 0.9);
@@ -1059,7 +1248,7 @@ function drawMark(u, type) {
 }
 
 function allyColor(type) {
-  return type === 'crossbow' ? COLORS.crossbow : type === 'medic' ? COLORS.medic : COLORS.shotgun;
+  return COLORS[type] || COLORS.shotgun;
 }
 
 // знак на полу: заминированная комната
@@ -1139,11 +1328,96 @@ function drawEnemy(e) {
       ctx.lineTo(e.x + Math.cos(f) * e.cfg.chargeMaxDist * 0.4, e.y + Math.sin(f) * e.cfg.chargeMaxDist * 0.4);
       ctx.stroke();
     }
+  } else if (e.type === 'scorpion') {
+    drawUnitBody(e, COLORS.scorpion, true);
+    ctx.strokeStyle = '#0e0e10';
+    ctx.lineWidth = 2;
+    const f = e.facing || 0;
+    // две клешни вперёд и загнутый хвост с жалом назад
+    ctx.beginPath();
+    for (const s of [0.5, -0.5]) {
+      ctx.moveTo(e.x + Math.cos(f + s) * e.r * 0.4, e.y + Math.sin(f + s) * e.r * 0.4);
+      ctx.lineTo(e.x + Math.cos(f + s) * e.r * 1.1, e.y + Math.sin(f + s) * e.r * 1.1);
+    }
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(e.x - Math.cos(f) * e.r * 0.8, e.y - Math.sin(f) * e.r * 0.8, e.r * 0.55,
+      f - 1.2, f + 1.2);
+    ctx.stroke();
+  } else if (e.type === 'zombie') {
+    drawUnitBody(e, COLORS.zombie, true);
+    ctx.setLineDash([3, 4]);
+    ctx.strokeStyle = COLORS.cloud;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.r * 1.35, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#0e0e10';
+    const f = e.facing || 0;
+    for (const s of [0.55, -0.55]) {
+      ctx.beginPath();
+      ctx.arc(e.x + Math.cos(f + s) * e.r * 0.5, e.y + Math.sin(f + s) * e.r * 0.5, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
   } else {
     drawUnitBody(e, COLORS.enemy, true);
     drawMark(e, 'crossbow');
   }
   drawHpBar(e);
+}
+
+// нить гарпуна тянется от Скорпиона к наконечнику, пока тот летит
+function drawHook(p) {
+  if (!isLit(p)) return;
+  if (p.owner && enemies.includes(p.owner)) {
+    ctx.strokeStyle = COLORS.scorpion;
+    ctx.globalAlpha = 0.7;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(p.owner.x, p.owner.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  }
+  const a = Math.atan2(p.vy, p.vx);
+  ctx.fillStyle = COLORS.scorpion;
+  ctx.beginPath();
+  ctx.moveTo(p.x + Math.cos(a) * p.r * 1.6, p.y + Math.sin(a) * p.r * 1.6);
+  ctx.lineTo(p.x + Math.cos(a + 2.4) * p.r, p.y + Math.sin(a + 2.4) * p.r);
+  ctx.lineTo(p.x + Math.cos(a - 2.4) * p.r, p.y + Math.sin(a - 2.4) * p.r);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// вонючее облако: рваный круг, который тускнеет к концу жизни
+function drawCloud(c) {
+  if (dist(player, c) > lightRadius() + c.cur) return;
+  const fade = clamp(c.life / 0.8, 0, 1);
+  ctx.fillStyle = COLORS.cloud;
+  ctx.globalAlpha = 0.16 * fade;
+  ctx.beginPath();
+  ctx.arc(c.x, c.y, c.cur, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 0.5 * fade;
+  ctx.strokeStyle = COLORS.cloud;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([9, 7]);
+  ctx.beginPath();
+  ctx.arc(c.x, c.y, c.cur, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 0.28 * fade;
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + c.t * 0.6;
+    const rr = c.cur * (0.32 + (i % 2) * 0.18);
+    ctx.beginPath();
+    ctx.arc(c.x + Math.cos(a) * c.cur * 0.45, c.y + Math.sin(a) * c.cur * 0.45, rr, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
 }
 
 function drawMortar(p) {
@@ -1315,6 +1589,24 @@ function draw() {
     drawEnemy(e);
   }
 
+  for (const c of clouds) drawCloud(c);
+
+  // Усилок отмечает ниточками тех соседей, кого ускоряет
+  ctx.strokeStyle = COLORS.booster;
+  ctx.lineWidth = 2;
+  for (let i = 0; i < allies.length; i++) {
+    if (allies[i].type !== 'booster') continue;
+    for (const j of [i - 1, i + 1]) {
+      if (j < 0 || j >= allies.length) continue;
+      ctx.globalAlpha = 0.35;
+      ctx.beginPath();
+      ctx.moveTo(allies[i].x, allies[i].y);
+      ctx.lineTo(allies[j].x, allies[j].y);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+
   for (let i = allies.length - 1; i >= 0; i--) {
     const a = allies[i];
     drawUnitBody(a, allyColor(a.type), true);
@@ -1328,6 +1620,7 @@ function draw() {
 
   for (const p of projectiles) {
     if (p.kind === 'mortar') { drawMortar(p); continue; }
+    if (p.kind === 'hook') { drawHook(p); continue; }
     if (!isLit(p)) continue;
     ctx.fillStyle = p.team === 'ally' ? COLORS.allyShot : COLORS.enemyShot;
     ctx.beginPath();
@@ -1343,6 +1636,14 @@ function draw() {
       ctx.beginPath();
       ctx.moveTo(fx.x1, fx.y1);
       ctx.lineTo(fx.x2, fx.y2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    } else if (fx.type === 'ring') {
+      ctx.globalAlpha = clamp(fx.life * 5, 0, 0.8);
+      ctx.strokeStyle = fx.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(fx.x, fx.y, fx.r, 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
     } else if (fx.type === 'blast') {
