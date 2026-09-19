@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Chain Prototype</title>
+<style>
+  body { margin: 0; background: #0e0e10; color: #b9b9c0; font: 13px/1.4 monospace;
+         display: flex; flex-direction: column; align-items: center; }
+  #bar { padding: 8px; display: flex; gap: 14px; align-items: center; }
+  button { font: 13px monospace; padding: 5px 12px; background: #23232a; color: #ddd;
+           border: 1px solid #45454f; cursor: pointer; }
+  button:hover { background: #2e2e37; }
+  canvas { background: #0a0a0c; display: block; }
+</style>
+</head>
+<body>
+  <div id="bar">
+    <button id="restart">RESTART (R)</button>
+    <span>ЛКМ — идти &nbsp;|&nbsp; ПРОБЕЛ — присоединить союзника</span>
+  </div>
+  <canvas id="c" width="960" height="640"></canvas>
+  <script src="game.js"></script>
+</body>
+</html>
