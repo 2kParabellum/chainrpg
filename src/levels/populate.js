@@ -4,7 +4,6 @@
 'use strict';
 
 const { clamp, pickOne, shuffled } = G.math;
-const { ENEMY_POOL, ALLY_POOL } = G.level1;
 
 // раскладывает типы по точкам так, чтобы каждый выбранный тип встретился хотя бы раз
 function assignTypes(count, types) {
@@ -15,20 +14,20 @@ function assignTypes(count, types) {
 }
 
 // состав врагов комнаты: точки те же, а типы бросаются заново каждую игру
-function rollEnemies(plan) {
+function rollEnemies(plan, level) {
   const spec = plan.enemies;
   if (!spec || !spec.spots.length) return [];
-  const pool = spec.pool || ENEMY_POOL;
+  const pool = spec.pool || level.enemyPool;
   const kinds = clamp(spec.kinds || 1, 1, Math.min(pool.length, spec.spots.length));
   const types = assignTypes(spec.spots.length, shuffled(pool).slice(0, kinds));
   return spec.spots.map(([cx, cy], k) => [types[k], cx, cy]);
 }
 
 // состав союзников комнаты: часть типов задана правилом, остальные случайные и без повторов
-function rollAllies(plan) {
+function rollAllies(plan, level) {
   const spec = plan.allies;
   if (!spec || !spec.spots.length) return [];
-  const pool = spec.pool || ALLY_POOL;
+  const pool = spec.pool || level.allyPool;
   const types = (spec.require || []).slice(0, spec.spots.length);
   while (types.length < spec.spots.length) {
     const rest = pool.filter((t) => !types.includes(t));

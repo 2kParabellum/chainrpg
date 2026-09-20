@@ -5,7 +5,8 @@
 
 const { CONFIG, COLORS, state } = G;
 const { clamp } = G.math;
-const { currentRoom, lightRadius } = G.session;
+const { currentRoom, lightRadius, isSpotted } = G.session;
+const { roomCount } = G.world;
 const { nearestPickup, MENU, menuRect, menuRowY, menuPreviewOrder } = G.chain;
 const { ctx, allyColor } = G.shapes;
 
@@ -35,7 +36,7 @@ function drawMenuRow(u, y, label, alpha) {
 function drawMenu() {
   const r = menuRect();
   ctx.fillStyle = 'rgba(10,10,12,0.6)';
-  ctx.fillRect(0, 0, CONFIG.ROOM_W, CONFIG.ROOM_H);
+  ctx.fillRect(0, 0, CONFIG.VIEW.w, CONFIG.VIEW.h);
   ctx.fillStyle = '#16161b';
   ctx.fillRect(r.x, r.y, r.w, r.h);
   ctx.strokeStyle = '#45454f';
@@ -78,10 +79,9 @@ function drawHud() {
 
   const room = currentRoom() + 1;
   // необнаруженные мины в счётчик не попадают, о них предупреждает только знак на полу
-  const inRoom = state.enemies.filter((e) => e.room === currentRoom()
-    && (e.type !== 'mine' || e.revealed)).length;
+  const inRoom = state.enemies.filter((e) => e.room === currentRoom() && isSpotted(e)).length;
   ctx.fillStyle = '#c8c8d2';
-  ctx.fillText(`КОМНАТА ${room}/${CONFIG.ROOM_COUNT}   ВРАГОВ ЗДЕСЬ: ${inRoom}   ЦЕПОЧКА: ${state.allies.length + 1}/${CONFIG.CHAIN.maxAllies + 1}`, 12, 22);
+  ctx.fillText(`КОМНАТА ${room}/${roomCount()}   ВРАГОВ ЗДЕСЬ: ${inRoom}   ЦЕПОЧКА: ${state.allies.length + 1}/${CONFIG.CHAIN.maxAllies + 1}`, 12, 22);
 
   let y = 44;
   ctx.fillStyle = COLORS.player;
@@ -98,21 +98,21 @@ function drawHud() {
     ctx.textAlign = 'center';
     const msg = state.allies.length >= CONFIG.CHAIN.maxAllies ? 'ЦЕПОЧКА ПОЛНАЯ'
       : pickup.kind === 'downed' ? 'ПРОБЕЛ — ПОДНЯТЬ' : 'ПРОБЕЛ — ПРИСОЕДИНИТЬ';
-    ctx.fillText(msg, CONFIG.ROOM_W / 2, CONFIG.ROOM_H - 30);
+    ctx.fillText(msg, CONFIG.VIEW.w / 2, CONFIG.VIEW.h - 30);
   }
 
   if (state.menu.open) drawMenu();
 
   if (state.status === 'dead' || state.status === 'win') {
     ctx.fillStyle = 'rgba(10,10,12,0.75)';
-    ctx.fillRect(0, CONFIG.ROOM_H / 2 - 50, CONFIG.ROOM_W, 100);
+    ctx.fillRect(0, CONFIG.VIEW.h / 2 - 50, CONFIG.VIEW.w, 100);
     ctx.textAlign = 'center';
     ctx.fillStyle = state.status === 'win' ? '#8ce27a' : '#e06060';
     ctx.font = '28px monospace';
-    ctx.fillText(state.status === 'win' ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ', CONFIG.ROOM_W / 2, CONFIG.ROOM_H / 2);
+    ctx.fillText(state.status === 'win' ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ', CONFIG.VIEW.w / 2, CONFIG.VIEW.h / 2);
     ctx.font = '14px monospace';
     ctx.fillStyle = '#c8c8d2';
-    ctx.fillText('R — начать заново', CONFIG.ROOM_W / 2, CONFIG.ROOM_H / 2 + 28);
+    ctx.fillText('R — начать заново', CONFIG.VIEW.w / 2, CONFIG.VIEW.h / 2 + 28);
   }
   ctx.restore();
 }
@@ -125,7 +125,7 @@ function drawLight() {
   g.addColorStop(0, 'rgba(6,6,8,0)');
   g.addColorStop(1, `rgba(6,6,8,${CONFIG.VISION.darkness})`);
   ctx.fillStyle = g;
-  ctx.fillRect(state.camera.x, state.camera.y, CONFIG.ROOM_W, CONFIG.ROOM_H);
+  ctx.fillRect(state.camera.x, state.camera.y, CONFIG.VIEW.w, CONFIG.VIEW.h);
 }
 
 G.hud = { drawLight, drawHud };

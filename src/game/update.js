@@ -4,19 +4,28 @@
 'use strict';
 
 const { CONFIG, state } = G;
-const { clamp, dist } = G.math;
+const { clamp, dist, removeFrom } = G.math;
 const { moveAndCollide, slideAlongWall } = G.collision;
 const { world } = G.world;
-const { lightRadius, currentRoom, chainUnits } = G.session;
-const { pushTrail, updateDowned } = G.chain;
-const { updateProjectiles, updateClouds, applySpikes, updateMines, updateEffects } = G.combat;
-const { updateAlly } = G.allyAi;
-const enemyAi = G.enemyAi;
+const { lightRadius, currentRoom, chainUnits, isSpotted } = G.session;
+const { pushTrail, followChain, attackRateMul, updateDowned, knockOutAlly } = G.chain;
+const combat = G.combat;
+const { updateProjectiles, updateClouds, applySpikes, updateEffects } = combat;
+const { wanderStep, stepOffSpikes } = G.roaming;
+const { allyTypes, enemyTypes } = G;
+
+// то, что игра даёт записям типов из content/ параметром: сами они game/ не подключают
+const game = {
+  state, world, chainUnits, isSpotted,
+  nearestTarget: combat.nearestTarget, damageUnit: combat.damageUnit, blast: combat.blast,
+  spawnProjectile: combat.spawnProjectile, spawnMortar: combat.spawnMortar, spawnHook: combat.spawnHook,
+  knockOutAlly, wanderStep, stepOffSpikes, removeFrom,
+};
 
 // движение игрока с инерцией: разгон к точке и накат после отпускания газа
 function updatePlayer(dt) {
   const player = state.player;
-  const cfg = CONFIG.PLAYER;
+  const cfg = player.cfg;
   let ax = 0, ay = 0;
 
   if (player.target) {
@@ -50,9 +59,22 @@ function updatePlayer(dt) {
   }
 }
 
+// звено цепочки: бежит за игроком, а когда перезарядилось — действует по своему типу
+function updateAlly(a, dt, i) {
+  followChain(a, dt, i);
+
+  const type = allyTypes[a.type];
+  if (!type.attack) return; // сам не бьёт и не лечит (Усилок)
+
+  a.cd -= dt;
+  if (a.cd > 0) return;
+  type.attack(a, attackRateMul(i), game);
+}
+
 // общая часть любого врага: регенерация и активация, дальше — поведение по типу
 function updateEnemy(e, dt) {
-  if (e.type === 'mine') return; // мина ничего не делает сама, ей занимается updateMines
+  const type = enemyTypes[e.type];
+  if (!type.update) return; // сам ничего не делает (мина)
 
   // регенерация: если врага давно не задевали, он отлечивается до полного
   e.regenTimer += dt;
@@ -61,7 +83,16 @@ function updateEnemy(e, dt) {
   }
 
   if (Math.abs(e.x - state.player.x) > CONFIG.ACTIVATION_DIST) return;
-  enemyAi.act(e, dt, chainUnits());
+  type.update(e, dt, chainUnits(), game);
+}
+
+// шаг типов, которым нужно видеть итог боя и среды за кадр (мина)
+function updateLate() {
+  const chain = chainUnits();
+  for (const e of state.enemies.slice()) {
+    const type = enemyTypes[e.type];
+    if (type.lateUpdate) type.lateUpdate(e, chain, game);
+  }
 }
 
 function update(dt) {
@@ -73,8 +104,7 @@ function update(dt) {
 
   const lit = lightRadius();
   // союзники бьют только по освещённому, а мину — ещё и только после обнаружения
-  state.visibleEnemies = state.enemies.filter((e) => dist(state.player, e) <= lit
-    && (e.type !== 'mine' || e.revealed));
+  state.visibleEnemies = state.enemies.filter((e) => dist(state.player, e) <= lit && isSpotted(e));
 
   for (let i = 0; i < state.allies.length; i++) updateAlly(state.allies[i], dt, i);
   for (const d of state.downed) updateDowned(d, dt);
@@ -82,17 +112,17 @@ function update(dt) {
   updateProjectiles(dt);
   updateClouds(dt);
   applySpikes(dt);
-  updateMines();
+  updateLate();
   updateEffects(dt);
 
   // мины добивать необязательно: достаточно перебить всё живое
-  const livingEnemies = state.enemies.filter((e) => e.type !== 'mine').length;
-  if (state.status === 'play' && livingEnemies === 0 && currentRoom() === CONFIG.ROOM_COUNT - 1) {
+  const livingEnemies = state.enemies.filter((e) => !enemyTypes[e.type].ignoredForVictory).length;
+  if (state.status === 'play' && livingEnemies === 0 && currentRoom() === state.level.victory.finalRoom) {
     state.status = 'win';
   }
 
   // камера
-  const targetX = clamp(state.player.x - CONFIG.ROOM_W / 2, 0, world.width - CONFIG.ROOM_W);
+  const targetX = clamp(state.player.x - CONFIG.VIEW.w / 2, 0, world.width - CONFIG.VIEW.w);
   state.camera.x += (targetX - state.camera.x) * Math.min(1, CONFIG.CAMERA_LERP * dt);
 }
 

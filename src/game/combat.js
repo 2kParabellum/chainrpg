@@ -1,4 +1,4 @@
-// Бой: всё, что наносит урон, — снаряды, взрывы, облака, шипы, мины, смерть юнита.
+// Бой: всё, что наносит урон, — снаряды, взрывы, облака, шипы, смерть юнита.
 (function (G) {
 'use strict';
 
@@ -8,6 +8,7 @@ const { circleRectOverlap } = G.collision;
 const { world, hasLineOfSight, standsOnSpikes } = G.world;
 const { chainUnits } = G.session;
 const { hookAlly } = G.chain;
+const { enemyTypes } = G;
 
 // --- цели и урон ---
 
@@ -114,26 +115,6 @@ function updateProjectiles(dt) {
   }
 }
 
-// --- мины ---
-
-// мины: обнаруживаются вблизи, взрываются под ногами цепочки, простреливаются союзниками
-function updateMines() {
-  const chain = chainUnits();
-  for (const m of state.enemies.slice()) {
-    if (m.type !== 'mine') continue;
-    for (const u of chain) {
-      const d = dist(m, u);
-      if (d < m.cfg.detectRadius) m.revealed = true;
-      if (d < m.cfg.triggerRadius + u.r) { explodeMine(m); break; }
-    }
-  }
-}
-
-function explodeMine(m) {
-  removeFrom(state.enemies, m);
-  blast(m, m.cfg.blastRadius, m.cfg.dmg, chainUnits().concat(state.downed, state.enemies));
-}
-
 // --- среда ---
 
 // шипы колют всех подряд, пока с них не сойдут
@@ -151,7 +132,7 @@ function applySpikes(dt) {
 
 // вонючее облако висит на месте и травит только цепочку — своих оно не задевает
 function updateClouds(dt) {
-  const cfg = CONFIG.ENEMIES.zombie;
+  const cfg = enemyTypes.zombie.stats;
   const victims = chainUnits().concat(state.downed);
   for (let i = state.clouds.length - 1; i >= 0; i--) {
     const c = state.clouds[i];
@@ -175,6 +156,6 @@ function updateEffects(dt) {
 G.combat = {
   nearestTarget, damageUnit,
   spawnProjectile, spawnMortar, spawnHook,
-  updateProjectiles, updateMines, applySpikes, updateClouds, updateEffects,
+  blast, updateProjectiles, applySpikes, updateClouds, updateEffects,
 };
 })(window.Game = window.Game || {});

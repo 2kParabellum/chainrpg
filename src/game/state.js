@@ -6,11 +6,12 @@
 
 const { CONFIG } = G;
 const { clamp, dist } = G.math;
-const { world, localToWorld, buildWorld } = G.world;
+const { world, localToWorld, buildWorld, roomIndexAt } = G.world;
 const { rollEnemies, rollAllies } = G.populate;
-const { ROOM_PLANS } = G.level1;
+const { allyTypes, enemyTypes } = G;
 
 const state = {
+  level: null,       // данные текущего уровня
   player: null,
   allies: [],        // звенья цепочки по порядку: первый идёт сразу за игроком
   neutrals: [],      // ждут вербовки
@@ -30,12 +31,23 @@ const state = {
 function makeUnit(kind, type, x, y, cfg) {
   return {
     kind, type, x, y, vx: 0, vy: 0, r: cfg.radius, hp: cfg.hp, maxHp: cfg.hp,
-    cd: Math.random() * (cfg.cooldown || 1), facing: 0, regenTimer: 0, cfg,
+    cd: Math.random() * (cfg.cooldown || 1), facing: 0, regenTimer: 0,
+    cfg: { ...cfg }, // у каждого юнита свои характеристики: прокачка одного не трогает остальных
   };
 }
 
-function resetGame() {
-  buildWorld();
+function makeEnemy(type, x, y, room) {
+  const t = enemyTypes[type];
+  const e = makeUnit('enemy', type, x, y, t.stats);
+  e.room = room;
+  if (t.init) t.init(e);
+  return e;
+}
+
+// новая партия на уровне level; игрок и состав бойцов бросаются заново
+function resetGame(level) {
+  state.level = level;
+  buildWorld(level);
   state.allies = []; state.neutrals = []; state.downed = []; state.enemies = [];
   state.projectiles = []; state.effects = []; state.trail = [];
   state.clouds = [];
@@ -44,35 +56,29 @@ function resetGame() {
   state.lightTime = 0;
   state.visibleEnemies = [];
 
-  const spawn = localToWorld(0, 0.12, 0.5);
+  const spawn = localToWorld(0, level.spawn[0], level.spawn[1]);
   state.player = {
     kind: 'player', type: 'player', x: spawn.x, y: spawn.y, vx: 0, vy: 0,
     r: CONFIG.PLAYER.radius, hp: CONFIG.PLAYER.hp, maxHp: CONFIG.PLAYER.hp, facing: 0,
-    target: null, cfg: CONFIG.PLAYER,
+    target: null, cfg: { ...CONFIG.PLAYER },
   };
 
-  ROOM_PLANS.forEach((plan, i) => {
-    for (const [type, cx, cy] of rollAllies(plan)) {
+  level.rooms.forEach((plan, i) => {
+    for (const [type, cx, cy] of rollAllies(plan, level)) {
       const p = localToWorld(i, cx, cy);
-      state.neutrals.push(makeUnit('neutral', type, p.x, p.y, CONFIG.ALLIES[type]));
+      state.neutrals.push(makeUnit('neutral', type, p.x, p.y, allyTypes[type].stats));
     }
-    for (const [type, cx, cy] of rollEnemies(plan)) {
+    for (const [type, cx, cy] of rollEnemies(plan, level)) {
       const p = localToWorld(i, cx, cy);
-      const e = makeUnit('enemy', type, p.x, p.y, CONFIG.ENEMIES[type]);
-      e.room = i;
-      if (type === 'bull') { e.state = 'idle'; e.timer = 0; e.travelled = 0; e.dir = { x: 0, y: 0 }; }
-      state.enemies.push(e);
+      state.enemies.push(makeEnemy(type, p.x, p.y, i));
     }
     for (const [cx, cy] of plan.mines || []) {
       const p = localToWorld(i, cx, cy);
-      const m = makeUnit('enemy', 'mine', p.x, p.y, CONFIG.ENEMIES.mine);
-      m.room = i;
-      m.revealed = false;
-      state.enemies.push(m);
+      state.enemies.push(makeEnemy('mine', p.x, p.y, i));
     }
   });
 
-  state.camera.x = clamp(state.player.x - CONFIG.ROOM_W / 2, 0, world.width - CONFIG.ROOM_W);
+  state.camera.x = clamp(state.player.x - CONFIG.VIEW.w / 2, 0, world.width - CONFIG.VIEW.w);
   state.camera.y = 0;
 }
 
@@ -87,11 +93,11 @@ function lightRadius() {
 
 function isLit(u) { return dist(state.player, u) <= lightRadius(); }
 
-function currentRoom() {
-  const step = CONFIG.ROOM_W + CONFIG.CORRIDOR_LEN;
-  return clamp(Math.floor((state.player.x + CONFIG.CORRIDOR_LEN / 2) / step), 0, CONFIG.ROOM_COUNT - 1);
-}
+// враг, которого уже можно видеть, целить и рубить: скрытые типы (мина) — только после обнаружения
+function isSpotted(e) { return !enemyTypes[e.type].hiddenUntilRevealed || e.revealed; }
+
+function currentRoom() { return roomIndexAt(state.player.x); }
 
 G.state = state;
-G.session = { makeUnit, resetGame, chainUnits, lightRadius, isLit, currentRoom };
+G.session = { makeUnit, resetGame, chainUnits, lightRadius, isLit, isSpotted, currentRoom };
 })(window.Game = window.Game || {});

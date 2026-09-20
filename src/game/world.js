@@ -4,21 +4,31 @@
 (function (G) {
 'use strict';
 
-const { CONFIG } = G;
+const { clamp } = G.math;
 const { circleRectOverlap, segmentHitsRect } = G.collision;
-const { ROOM_PLANS } = G.level1;
 
 const world = {
   walls: [], pillars: [], pits: [], spikes: [], floors: [], warnings: [],
   moveBlockers: [], sightBlockers: [],
-  width: 0, height: CONFIG.ROOM_H,
+  width: 0, height: 0,
 };
 
-function roomOriginX(i) { return i * (CONFIG.ROOM_W + CONFIG.CORRIDOR_LEN); }
+// раскладка текущего уровня: размеры и число комнат; задаётся в buildWorld
+let layout = { roomW: 0, roomH: 0, wall: 0, corridorLen: 0, corridorH: 0, count: 0 };
+
+function roomOriginX(i) { return i * (layout.roomW + layout.corridorLen); }
+
+function roomCount() { return layout.count; }
+
+// в какой комнате находится точка по горизонтали (проход относится к ближайшей комнате)
+function roomIndexAt(x) {
+  const step = layout.roomW + layout.corridorLen;
+  return clamp(Math.floor((x + layout.corridorLen / 2) / step), 0, layout.count - 1);
+}
 
 function roomInterior(i) {
-  const ox = roomOriginX(i), W = CONFIG.WALL;
-  return { x: ox + W, y: W, w: CONFIG.ROOM_W - 2 * W, h: CONFIG.ROOM_H - 2 * W };
+  const ox = roomOriginX(i), W = layout.wall;
+  return { x: ox + W, y: W, w: layout.roomW - 2 * W, h: layout.roomH - 2 * W };
 }
 
 function localToWorld(i, cx, cy) {
@@ -26,10 +36,14 @@ function localToWorld(i, cx, cy) {
   return { x: r.x + cx * r.w, y: r.y + cy * r.h };
 }
 
-function buildWorld() {
+function buildWorld(level) {
   world.walls = []; world.pillars = []; world.pits = []; world.spikes = [];
   world.floors = []; world.warnings = [];
-  const { ROOM_W, ROOM_H, WALL, CORRIDOR_LEN, CORRIDOR_H, ROOM_COUNT } = CONFIG;
+  const g = level.geometry;
+  const ROOM_W = g.roomW, ROOM_H = g.roomH, WALL = g.wall;
+  const CORRIDOR_LEN = g.corridorLen, CORRIDOR_H = g.corridorH, ROOM_COUNT = level.rooms.length;
+  layout = { roomW: ROOM_W, roomH: ROOM_H, wall: WALL, corridorLen: CORRIDOR_LEN, corridorH: CORRIDOR_H, count: ROOM_COUNT };
+  world.height = ROOM_H;
   const gapTop = (ROOM_H - CORRIDOR_H) / 2;
   const gapBottom = (ROOM_H + CORRIDOR_H) / 2;
 
@@ -64,7 +78,7 @@ function buildWorld() {
     }
 
     // препятствия комнаты
-    const plan = ROOM_PLANS[i];
+    const plan = level.rooms[i];
     const inner = roomInterior(i);
     for (const [cx, cy, w, h] of plan.pillars) {
       world.pillars.push({
@@ -135,7 +149,7 @@ function freeSpotInRoom(e) {
 
 
 G.world = {
-  world, roomInterior, localToWorld, buildWorld, hasLineOfSight,
+  world, roomCount, roomIndexAt, roomInterior, localToWorld, buildWorld, hasLineOfSight,
   spikeRectAt, standsOnSpikes, freeSpotInRoom,
 };
 })(window.Game = window.Game || {});

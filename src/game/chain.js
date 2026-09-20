@@ -7,6 +7,7 @@ const { CONFIG, state } = G;
 const { clamp, dist, removeFrom } = G.math;
 const { moveAndCollide } = G.collision;
 const { world } = G.world;
+const { allyTypes } = G;
 
 // --- след ---
 
@@ -46,12 +47,12 @@ function followChain(a, dt, i) {
   }
 }
 
-// Усилок ускоряет соседей по цепочке: каждый примыкающий Усилок даёт +75% к темпу
+// соседи по цепочке с rateBonus (Усилок) ускоряют звено: каждый примыкающий даёт свой бонус к темпу
 function attackRateMul(index) {
   let bonus = 0;
   for (const j of [index - 1, index + 1]) {
     if (j < 0 || j >= state.allies.length) continue;
-    if (state.allies[j].type === 'booster') bonus += CONFIG.ALLIES.booster.rateBonus;
+    bonus += allyTypes[state.allies[j].type].stats.rateBonus || 0;
   }
   return 1 + bonus;
 }
@@ -60,7 +61,7 @@ function attackRateMul(index) {
 
 // ближайший, кого можно подобрать: нейтрал или выбитый из цепочки союзник
 function nearestPickup() {
-  let best = null, bestD = CONFIG.PLAYER.recruitRadius;
+  let best = null, bestD = state.player.cfg.recruitRadius;
   for (const u of state.neutrals.concat(state.downed)) {
     const d = dist(state.player, u);
     if (d < bestD) { bestD = d; best = u; }
@@ -110,7 +111,7 @@ function updateDowned(d, dt) {
     const dx = s.x - d.x, dy = s.y - d.y;
     const dd = Math.hypot(dx, dy);
     if (!state.enemies.includes(s) || dd < s.r + d.r + 2) { d.drag = null; return; }
-    const step = Math.min(dd, CONFIG.ENEMIES.scorpion.pullSpeed * dt);
+    const step = Math.min(dd, s.cfg.pullSpeed * dt);
     const from = { x: d.x, y: d.y };
     moveAndCollide(d, (dx / dd) * step, (dy / dd) * step, world.moveBlockers);
     if (dist(d, from) < step * 0.3) d.drag = null; // нить упёрлась в препятствие и оборвалась
@@ -119,7 +120,7 @@ function updateDowned(d, dt) {
 
   const sp = Math.hypot(d.vx, d.vy);
   if (sp < 1) { d.vx = 0; d.vy = 0; return; }
-  const drop = CONFIG.ENEMIES.bull.knockbackFriction * dt;
+  const drop = CONFIG.DOWNED.friction * dt;
   const left = Math.max(0, sp - drop);
   d.vx = (d.vx / sp) * left;
   d.vy = (d.vy / sp) * left;
@@ -132,7 +133,7 @@ const MENU = { w: 360, rowH: 38, head: 46, foot: 30 };
 
 function menuRect() {
   const h = MENU.head + (state.allies.length + 1) * MENU.rowH + MENU.foot;
-  return { x: (CONFIG.ROOM_W - MENU.w) / 2, y: (CONFIG.ROOM_H - h) / 2, w: MENU.w, h };
+  return { x: (CONFIG.VIEW.w - MENU.w) / 2, y: (CONFIG.VIEW.h - h) / 2, w: MENU.w, h };
 }
 
 // y-координата верха строки: 0 — игрок, 1.. — союзники по порядку цепочки

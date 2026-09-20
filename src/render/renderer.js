@@ -6,8 +6,10 @@
 const { CONFIG, COLORS, state } = G;
 const { clamp, dist } = G.math;
 const { world } = G.world;
-const { isLit, lightRadius } = G.session;
-const { canvas, ctx, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor } = G.shapes;
+const { isLit, isSpotted, lightRadius } = G.session;
+const { allyTypes, enemyTypes } = G;
+const shapes = G.shapes;
+const { canvas, ctx, visible, drawRects, drawHpBar, drawUnitBody, drawMark, playerMark, allyColor } = shapes;
 
 // знак на полу: заминированная комната
 function drawWarning(w) {
@@ -28,100 +30,9 @@ function drawWarning(w) {
   ctx.fillRect(w.x - 1.5, w.y + s * 0.42, 3, 3);
 }
 
-function drawMine(m) {
-  ctx.strokeStyle = COLORS.mine;
-  ctx.lineWidth = 2;
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    ctx.beginPath();
-    ctx.moveTo(m.x + Math.cos(a) * m.r * 0.7, m.y + Math.sin(a) * m.r * 0.7);
-    ctx.lineTo(m.x + Math.cos(a) * m.r * 1.25, m.y + Math.sin(a) * m.r * 1.25);
-    ctx.stroke();
-  }
-  ctx.fillStyle = COLORS.mine;
-  ctx.beginPath();
-  ctx.arc(m.x, m.y, m.r * 0.7, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#0e0e10';
-  ctx.beginPath();
-  ctx.arc(m.x, m.y, m.r * 0.3, 0, Math.PI * 2);
-  ctx.stroke();
-  drawHpBar(m);
-}
-
+// тело врага рисует его запись в реестре, полоску HP — сцена
 function drawEnemy(e) {
-  if (e.type === 'mine') { drawMine(e); return; }
-  if (e.type === 'tower') {
-    ctx.fillStyle = COLORS.tower;
-    ctx.fillRect(e.x - e.r, e.y - e.r, e.r * 2, e.r * 2);
-    // рычаг катапульты, направленный на цель
-    ctx.strokeStyle = '#0e0e10';
-    ctx.lineWidth = 3;
-    const f = e.facing || 0;
-    ctx.beginPath();
-    ctx.moveTo(e.x - Math.cos(f) * e.r * 0.6, e.y - Math.sin(f) * e.r * 0.6);
-    ctx.lineTo(e.x + Math.cos(f) * e.r * 0.8, e.y + Math.sin(f) * e.r * 0.8);
-    ctx.stroke();
-    ctx.fillStyle = '#0e0e10';
-    ctx.beginPath();
-    ctx.arc(e.x + Math.cos(f) * e.r * 0.8, e.y + Math.sin(f) * e.r * 0.8, 4, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (e.type === 'bull') {
-    const color = e.state === 'telegraph' ? '#ffe070' : COLORS.bull;
-    drawUnitBody(e, color, true);
-    ctx.strokeStyle = '#0e0e10';
-    ctx.lineWidth = 3;
-    const f = e.facing || 0;
-    ctx.beginPath();
-    ctx.moveTo(e.x + Math.cos(f + 0.6) * e.r * 0.5, e.y + Math.sin(f + 0.6) * e.r * 0.5);
-    ctx.lineTo(e.x + Math.cos(f + 0.6) * e.r, e.y + Math.sin(f + 0.6) * e.r);
-    ctx.moveTo(e.x + Math.cos(f - 0.6) * e.r * 0.5, e.y + Math.sin(f - 0.6) * e.r * 0.5);
-    ctx.lineTo(e.x + Math.cos(f - 0.6) * e.r, e.y + Math.sin(f - 0.6) * e.r);
-    ctx.stroke();
-    if (e.state === 'telegraph') {
-      ctx.strokeStyle = 'rgba(255,224,112,0.5)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(e.x, e.y);
-      ctx.lineTo(e.x + Math.cos(f) * e.cfg.chargeMaxDist * 0.4, e.y + Math.sin(f) * e.cfg.chargeMaxDist * 0.4);
-      ctx.stroke();
-    }
-  } else if (e.type === 'scorpion') {
-    drawUnitBody(e, COLORS.scorpion, true);
-    ctx.strokeStyle = '#0e0e10';
-    ctx.lineWidth = 2;
-    const f = e.facing || 0;
-    // две клешни вперёд и загнутый хвост с жалом назад
-    ctx.beginPath();
-    for (const s of [0.5, -0.5]) {
-      ctx.moveTo(e.x + Math.cos(f + s) * e.r * 0.4, e.y + Math.sin(f + s) * e.r * 0.4);
-      ctx.lineTo(e.x + Math.cos(f + s) * e.r * 1.1, e.y + Math.sin(f + s) * e.r * 1.1);
-    }
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(e.x - Math.cos(f) * e.r * 0.8, e.y - Math.sin(f) * e.r * 0.8, e.r * 0.55,
-      f - 1.2, f + 1.2);
-    ctx.stroke();
-  } else if (e.type === 'zombie') {
-    drawUnitBody(e, COLORS.zombie, true);
-    ctx.setLineDash([3, 4]);
-    ctx.strokeStyle = COLORS.cloud;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(e.x, e.y, e.r * 1.35, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#0e0e10';
-    const f = e.facing || 0;
-    for (const s of [0.55, -0.55]) {
-      ctx.beginPath();
-      ctx.arc(e.x + Math.cos(f + s) * e.r * 0.5, e.y + Math.sin(f + s) * e.r * 0.5, 2.2, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  } else {
-    drawUnitBody(e, COLORS.enemy, true);
-    drawMark(e, 'crossbow');
-  }
+  enemyTypes[e.type].draw(e, shapes);
   drawHpBar(e);
 }
 
@@ -261,7 +172,7 @@ function drawNeutrals() {
     ctx.setLineDash([4, 4]);
     drawUnitBody(n, COLORS.neutral, false);
     ctx.setLineDash([]);
-    drawMark(n, n.type);
+    drawMark(n, allyTypes[n.type].mark);
     ctx.fillStyle = COLORS.neutral;
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
@@ -296,7 +207,7 @@ function drawDowned() {
 
 function drawWarnings() {
   for (const w of world.warnings) {
-    if (Math.abs(w.x - state.camera.x - CONFIG.ROOM_W / 2) > CONFIG.ROOM_W) continue;
+    if (Math.abs(w.x - state.camera.x - CONFIG.VIEW.w / 2) > CONFIG.VIEW.w) continue;
     drawWarning(w);
   }
 }
@@ -304,7 +215,7 @@ function drawWarnings() {
 function drawEnemies() {
   for (const e of state.enemies) {
     if (!isLit(e)) continue;
-    if (e.type === 'mine' && !e.revealed) continue;
+    if (!isSpotted(e)) continue;
     drawEnemy(e);
   }
 }
@@ -319,7 +230,7 @@ function drawBoosterLinks() {
   ctx.strokeStyle = COLORS.booster;
   ctx.lineWidth = 2;
   for (let i = 0; i < allies.length; i++) {
-    if (allies[i].type !== 'booster') continue;
+    if (!allyTypes[allies[i].type].stats.rateBonus) continue;
     for (const j of [i - 1, i + 1]) {
       if (j < 0 || j >= allies.length) continue;
       ctx.globalAlpha = 0.35;
@@ -337,12 +248,12 @@ function drawChain() {
   for (let i = state.allies.length - 1; i >= 0; i--) {
     const a = state.allies[i];
     drawUnitBody(a, allyColor(a.type), true);
-    drawMark(a, a.type);
+    drawMark(a, allyTypes[a.type].mark);
     drawHpBar(a);
   }
 
   drawUnitBody(state.player, COLORS.player, true);
-  drawMark(state.player, 'player');
+  drawMark(state.player, playerMark);
   drawHpBar(state.player);
 }
 

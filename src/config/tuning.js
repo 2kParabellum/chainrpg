@@ -1,17 +1,11 @@
-// Общие параметры игры: всё, что нужно крутить, лежит здесь.
-// Блоки ALLIES / ENEMIES / WANDER пока остаются тут; на этапе 2 они переедут
-// в реестры типов (content/), а здесь останутся только общие параметры.
+// Общие параметры игры, не привязанные к конкретному типу сущности.
+// Характеристики союзников и врагов лежат в реестрах content/allies.js и content/enemies.js.
 (function (G) {
 'use strict';
 
 const CONFIG = {
-  // --- геометрия мира ---
-  ROOM_W: 960,          // ширина комнаты (= ширина экрана)
-  ROOM_H: 640,          // высота комнаты (= высота экрана)
-  WALL: 40,             // толщина стен
-  CORRIDOR_LEN: 260,    // длина прохода между комнатами
-  CORRIDOR_H: 130,      // ширина (узость) прохода
-  ROOM_COUNT: 12,
+  // --- экран: размер видимой области и канваса; размеры комнат задаёт уровень ---
+  VIEW: { w: 960, h: 640 },
 
   ACTIVATION_DIST: 1000, // на каком расстоянии от игрока враги оживают
   CAMERA_LERP: 6,        // плавность камеры
@@ -26,6 +20,11 @@ const CONFIG = {
     wallFriction: 0.94,  // сколько скорости остаётся при скольжении вдоль стены
     radius: 14,
     recruitRadius: 70,   // на каком расстоянии можно подобрать союзника
+  },
+
+  // --- лежачие союзники ---
+  DOWNED: {
+    friction: 620,       // торможение выбитого юнита, пока он скользит по полу
   },
 
   // --- фонарь игрока (круг обзора) ---
@@ -51,10 +50,6 @@ const CONFIG = {
 
   // --- случайные блуждания врагов по своей комнате ---
   WANDER: {
-    shooterSpeed: 45,
-    bullSpeed: 42,
-    scorpionSpeed: 48,
-    zombieSpeed: 52,
     pauseMin: 0.5,       // пауза между перебежками
     pauseMax: 2.2,
     arrive: 14,          // с какого расстояния считаем, что дошёл до своей точки
@@ -67,51 +62,6 @@ const CONFIG = {
     trailStep: 5,        // шаг записи следа игрока
     followSpeed: 200,    // базовая скорость догоняющего звена
     catchUpGain: 8,      // множитель "подтягивания" отставшего звена
-  },
-
-  // --- союзники ---
-  ALLIES: {
-    crossbow: { name: 'Арбалет',  hp: 55, radius: 13, range: 330, cooldown: 1.0, dmg: 7, projSpeed: 430, projRadius: 4 },
-    shotgun:  { name: 'Дробовик', hp: 61, radius: 14, range: 165, cooldown: 1.3, dmg: 4, projSpeed: 380, projRadius: 4, pellets: 4, spread: 0.45 },
-    medic:    { name: 'Медик',    hp: 49, radius: 13, range: 220, cooldown: 2.2, heal: 9 },
-    cutter:   { name: 'Резак',    hp: 92, radius: 15, cooldown: 0.5, dmg: 14,
-                reach: 34 },         // лезвия торчат по бокам: рубит только вплотную
-    booster:  { name: 'Усилок',   hp: 58, radius: 13,
-                rateBonus: 0.75 },   // насколько ускоряет соседей по цепочке
-  },
-
-  // --- враги ---
-  ENEMIES: {
-    shooter: { name: 'Стрелок', hp: 22, radius: 14, range: 340, cooldown: 1.7, dmg: 5, projSpeed: 300, projRadius: 4 },
-    bull:    { name: 'Бычок',   hp: 44, radius: 18, dmg: 12, aggro: 430, walkSpeed: 55,
-               telegraph: 0.7, chargeSpeed: 540, chargeMaxDist: 720, chargeCooldown: 1.6,
-               chargeStartSpeed: 150,   // с какой скорости начинается рывок
-               chargeAccel: 780,        // разгон во время рывка
-               chargeBrake: 620,        // торможение после того, как кого-то переехал
-               chargeStopSpeed: 110,    // на какой скорости рывок заканчивается
-               repeatDamage: 0.5,       // множитель урона для всех целей после первой
-               knockoutChance: 0.3,     // шанс выбить из цепочки того, кого переехал
-               knockbackSpeed: 380,     // с какой силой отбрасывает выбитого
-               knockbackFriction: 620 },
-    tower:   { name: 'Катапульта', hp: 55, radius: 20, range: 430, cooldown: 3.2,
-               dmg: 9,                  // урон в эпицентре
-               blastRadius: 95,         // радиус поражения
-               flightTime: 1.5 },       // сколько снаряд летит до земли
-    scorpion: { name: 'Скорпион', hp: 30, radius: 15, range: 380, cooldown: 3.4, dmg: 6,
-               projSpeed: 190,          // гарпун летит медленно, его видно заранее
-               projRadius: 6,
-               pullSpeed: 300 },        // с какой скоростью тащит выдернутого союзника
-    zombie:  { name: 'Зомби', hp: 70, radius: 17, aggro: 520, walkSpeed: 62, cooldown: 4.5,
-               standoff: 55,            // держится рядом, но не вплотную — облако накрывает цепочку
-               cloudRadius: 95,         // радиус вонючего облака
-               cloudDps: 6,             // урон в секунду внутри облака
-               cloudLife: 3.5,          // сколько облако висит
-               cloudGrow: 0.5 },        // за сколько разрастается до полного радиуса
-    mine:    { name: 'Мина', hp: 6, radius: 13,
-               detectRadius: 110,       // с какого расстояния цепочка её замечает
-               triggerRadius: 18,       // с какого расстояния срабатывает под ногами
-               dmg: 20,                 // урон в эпицентре взрыва
-               blastRadius: 80 },
   },
 };
 
