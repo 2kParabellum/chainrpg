@@ -11,14 +11,46 @@
            border: 1px solid #45454f; cursor: pointer; }
   button:hover { background: #2e2e37; }
   canvas { background: #0a0a0c; display: block; }
+  #stage { position: relative; }
+  #overlay { position: absolute; inset: 0; background: rgba(10,10,12,0.97);
+             display: flex; align-items: center; justify-content: center; }
+  #overlay.hidden { display: none; }
+  .panel { display: none; flex-direction: column; align-items: center; gap: 14px; }
+  .panel.active { display: flex; }
+  .panel h1 { margin: 0 0 14px; font: 28px monospace; color: #c8c8d2; letter-spacing: 4px; }
+  .panel h2 { margin: 0 0 6px; font: 20px monospace; color: #c8c8d2; }
+  .panel button { width: 240px; padding: 10px 12px; font-size: 16px; }
+  #controlsList { margin: 0 0 8px; border-collapse: collapse; font-size: 14px; }
+  #controlsList td { padding: 5px 10px; }
+  #controlsList td:first-child { color: #f0f0f5; text-align: right; white-space: nowrap; }
 </style>
 </head>
 <body>
   <div id="bar">
     <button id="restart">RESTART (R)</button>
-    <span>ЛКМ — идти &nbsp;|&nbsp; ПРОБЕЛ — присоединить союзника</span>
+    <span>ЛКМ — идти &nbsp;|&nbsp; ПРОБЕЛ — присоединить союзника &nbsp;|&nbsp; X — бросить последнего &nbsp;|&nbsp; C — порядок цепочки</span>
   </div>
-  <canvas id="c" width="960" height="640"></canvas>
+  <div id="stage">
+    <canvas id="c" width="960" height="640"></canvas>
+    <div id="overlay">
+      <div id="panelMain" class="panel active">
+        <h1>CHAIN</h1>
+        <button id="startBtn">Начать играть</button>
+        <button id="controlsBtn">Управление</button>
+      </div>
+      <div id="panelControls" class="panel">
+        <h2>Управление</h2>
+        <table id="controlsList">
+          <tr><td>ЛКМ</td><td>идти в точку (можно удерживать и вести курсор)</td></tr>
+          <tr><td>ПРОБЕЛ</td><td>присоединить союзника или поднять выбитого</td></tr>
+          <tr><td>X</td><td>бросить последнего союзника цепочки</td></tr>
+          <tr><td>C</td><td>порядок цепочки (пауза), C / ESC — закрыть</td></tr>
+          <tr><td>R</td><td>начать заново</td></tr>
+        </table>
+        <button id="backBtn">Назад</button>
+      </div>
+    </div>
+  </div>
   <script src="game.js"></script>
 </body>
 </html>

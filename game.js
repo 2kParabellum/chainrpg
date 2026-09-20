@@ -429,7 +429,7 @@ function buildWorld() {
 
 let player, allies, neutrals, downed, enemies, projectiles, effects, clouds, trail;
 let camera = { x: 0, y: 0 };
-let status = 'play'; // play | dead | win
+let status = 'play'; // menu | play | dead | win
 let lightTime = 0;
 let visibleEnemies = [];
 
@@ -477,6 +477,7 @@ function resetGame() {
   allies = []; neutrals = []; downed = []; enemies = []; projectiles = []; effects = []; trail = [];
   clouds = [];
   status = 'play';
+  menu.open = false; menu.drag = null;
   lightTime = 0;
   visibleEnemies = [];
 
@@ -536,6 +537,56 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 let mouseDown = false;
 
+// меню порядка цепочки: игра на паузе, союзников перетаскивают мышью
+const MENU = { w: 360, rowH: 38, head: 46, foot: 30 };
+const menu = { open: false, drag: null }; // drag: { from, y } — индекс союзника и высота курсора
+
+function menuRect() {
+  const h = MENU.head + (allies.length + 1) * MENU.rowH + MENU.foot;
+  return { x: (CONFIG.ROOM_W - MENU.w) / 2, y: (CONFIG.ROOM_H - h) / 2, w: MENU.w, h };
+}
+
+// y-координата верха строки: 0 — игрок, 1.. — союзники по порядку цепочки
+function menuRowY(row) { return menuRect().y + MENU.head + row * MENU.rowH; }
+
+// в какую позицию цепочки (0..allies.length-1) попадает курсор на высоте y
+function menuSlotAt(y) {
+  const slot = Math.floor((y - menuRowY(1)) / MENU.rowH);
+  return clamp(slot, 0, allies.length - 1);
+}
+
+function canvasPos(ev) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (ev.clientX - rect.left) * (canvas.width / rect.width),
+    y: (ev.clientY - rect.top) * (canvas.height / rect.height),
+  };
+}
+
+function toggleMenu() {
+  if (menu.open) { menu.open = false; menu.drag = null; return; }
+  if (status !== 'play') return;
+  menu.open = true;
+  menu.drag = null;
+  mouseDown = false;
+}
+
+// порядок союзников с учётом перетаскиваемого прямо сейчас
+function menuPreviewOrder() {
+  const order = allies.slice();
+  if (!menu.drag) return order;
+  const [moved] = order.splice(menu.drag.from, 1);
+  order.splice(menuSlotAt(menu.drag.y), 0, moved);
+  return order;
+}
+
+// сбросить последнего союзника: он остаётся лежать на месте, поднять его можно ПРОБЕЛОМ
+function dropLastAlly() {
+  if (status !== 'play' || menu.open) return;
+  const a = allies[allies.length - 1];
+  if (a) knockOutAlly(a, 0, 0);
+}
+
 function screenToWorld(ev) {
   const rect = canvas.getBoundingClientRect();
   return {
@@ -546,18 +597,61 @@ function screenToWorld(ev) {
 
 canvas.addEventListener('mousedown', (ev) => {
   if (ev.button !== 0) return;
+  if (menu.open) {
+    const p = canvasPos(ev);
+    const row = Math.floor((p.y - menuRowY(0)) / MENU.rowH);
+    const r = menuRect();
+    if (row >= 1 && row <= allies.length && p.x >= r.x && p.x <= r.x + r.w) {
+      menu.drag = { from: row - 1, y: p.y };
+    }
+    return;
+  }
   mouseDown = true;
   player.target = screenToWorld(ev);
 });
-canvas.addEventListener('mousemove', (ev) => { if (mouseDown) player.target = screenToWorld(ev); });
-window.addEventListener('mouseup', () => { mouseDown = false; });
+canvas.addEventListener('mousemove', (ev) => {
+  if (menu.open) { if (menu.drag) menu.drag.y = canvasPos(ev).y; return; }
+  if (mouseDown) player.target = screenToWorld(ev);
+});
+window.addEventListener('mouseup', (ev) => {
+  mouseDown = false;
+  if (menu.drag) {
+    menu.drag.y = canvasPos(ev).y;
+    allies = menuPreviewOrder();
+    menu.drag = null;
+  }
+});
 canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
 
 window.addEventListener('keydown', (ev) => {
-  if (ev.code === 'Space') { ev.preventDefault(); tryRecruit(); }
-  if (ev.code === 'KeyR') resetGame();
+  if (status === 'menu') return;
+  if (ev.code === 'KeyR') { resetGame(); return; }
+  if (ev.code === 'Space') { ev.preventDefault(); if (!menu.open) tryRecruit(); return; }
+  if (ev.repeat) return;
+  if (ev.code === 'KeyC') toggleMenu();
+  else if (ev.code === 'Escape' && menu.open) toggleMenu();
+  else if (ev.code === 'KeyX') dropLastAlly();
 });
-document.getElementById('restart').addEventListener('click', (ev) => { resetGame(); ev.currentTarget.blur(); });
+document.getElementById('restart').addEventListener('click', (ev) => {
+  ev.currentTarget.blur();
+  if (status !== 'menu') resetGame();
+});
+
+// главное меню: оверлей поверх канваса, пока status === 'menu'
+const overlay = document.getElementById('overlay');
+const panelMain = document.getElementById('panelMain');
+const panelControls = document.getElementById('panelControls');
+function showPanel(controls) {
+  panelMain.classList.toggle('active', !controls);
+  panelControls.classList.toggle('active', controls);
+}
+document.getElementById('startBtn').addEventListener('click', (ev) => {
+  ev.currentTarget.blur();
+  resetGame();
+  overlay.classList.add('hidden');
+});
+document.getElementById('controlsBtn').addEventListener('click', (ev) => { ev.currentTarget.blur(); showPanel(true); });
+document.getElementById('backBtn').addEventListener('click', (ev) => { ev.currentTarget.blur(); showPanel(false); });
 
 // ближайший, кого можно подобрать: нейтрал или выбитый из цепочки союзник
 function nearestPickup() {
@@ -1132,7 +1226,7 @@ function updatePlayer(dt) {
 }
 
 function update(dt) {
-  if (status !== 'play') return;
+  if (status !== 'play' || menu.open) return;
 
   lightTime += dt;
   updatePlayer(dt);
@@ -1451,6 +1545,67 @@ function drawMortar(p) {
   ctx.fill();
 }
 
+function drawMenuRow(u, y, label, alpha) {
+  const r = menuRect();
+  const x = r.x + 10, w = r.w - 20, h = MENU.rowH - 6;
+  const color = u.type === 'player' ? COLORS.player : allyColor(u.type);
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#23232a';
+  ctx.fillRect(x, y + 3, w, h);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 3.5, w - 1, h - 1);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x + 20, y + 3 + h / 2, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.textAlign = 'left';
+  ctx.font = '13px monospace';
+  ctx.fillText(label, x + 40, y + 3 + h / 2 + 4);
+  ctx.textAlign = 'right';
+  ctx.fillText(`${Math.max(0, Math.ceil(u.hp))}/${u.maxHp}`, x + w - 10, y + 3 + h / 2 + 4);
+  ctx.globalAlpha = 1;
+}
+
+// меню порядка цепочки: игрок сверху, союзники ниже в том порядке, в каком они бегут за ним
+function drawMenu() {
+  const r = menuRect();
+  ctx.fillStyle = 'rgba(10,10,12,0.6)';
+  ctx.fillRect(0, 0, CONFIG.ROOM_W, CONFIG.ROOM_H);
+  ctx.fillStyle = '#16161b';
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.strokeStyle = '#45454f';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+
+  ctx.fillStyle = '#c8c8d2';
+  ctx.font = '14px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('ПОРЯДОК ЦЕПОЧКИ', r.x + r.w / 2, r.y + 22);
+  ctx.font = '11px monospace';
+  ctx.fillStyle = '#8a8a95';
+  ctx.fillText(allies.length > 1 ? 'перетащи мышью, чтобы поменять местами' : 'пока переставлять некого',
+    r.x + r.w / 2, r.y + 38);
+
+  drawMenuRow(player, menuRowY(0), 'ИГРОК (голова)', 1);
+
+  const order = menuPreviewOrder();
+  const dragged = menu.drag ? allies[menu.drag.from] : null;
+  order.forEach((a, i) => {
+    const y = menuRowY(i + 1);
+    drawMenuRow(a, y, `${i + 1}. ${a.cfg.name}`, a === dragged ? 0.25 : 1);
+  });
+  if (dragged) {
+    const y = clamp(menu.drag.y - MENU.rowH / 2, menuRowY(1), menuRowY(allies.length));
+    drawMenuRow(dragged, y, dragged.cfg.name, 1);
+  }
+
+  ctx.fillStyle = '#8a8a95';
+  ctx.font = '11px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('C / ESC — закрыть, игра на паузе', r.x + r.w / 2, r.y + r.h - 10);
+}
+
 function drawHud() {
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1482,7 +1637,9 @@ function drawHud() {
     ctx.fillText(msg, CONFIG.ROOM_W / 2, CONFIG.ROOM_H - 30);
   }
 
-  if (status !== 'play') {
+  if (menu.open) drawMenu();
+
+  if (status === 'dead' || status === 'win') {
     ctx.fillStyle = 'rgba(10,10,12,0.75)';
     ctx.fillRect(0, CONFIG.ROOM_H / 2 - 50, CONFIG.ROOM_W, 100);
     ctx.textAlign = 'center';
@@ -1692,4 +1849,5 @@ function loop(now) {
 }
 
 resetGame();
+status = 'menu';
 requestAnimationFrame(loop);
