@@ -110,12 +110,15 @@ const ROOM_PLANS = [
 ];
 
 G.level1 = {
+  name: 'Learn the Ropes',
+  blurb: '12 комнат в линию: учимся собирать цепочку и воевать',
   // размеры комнаты в пикселях; комнаты стоят в линию и соединены проходами
-  geometry: { roomW: 960, roomH: 640, wall: 40, corridorLen: 260, corridorH: 130 },
-  spawn: [0.12, 0.5],          // где стартует игрок: доли внутреннего размера первой комнаты
+  geometry: { kind: 'line', roomW: 960, roomH: 640, wall: 40, corridorLen: 260, corridorH: 130 },
+  spawn: { room: 0, at: [0.12, 0.5] }, // где стартует игрок: комната и доли её внутреннего размера
   enemyPool: ENEMY_POOL,       // из каких типов бросается состав, если комната не задала свой пул
   allyPool: ALLY_POOL,
-  victory: { finalRoom: ROOM_PLANS.length - 1 }, // победа: комната достигнута и все враги перебиты
+  // победа: игрок дошёл до последней комнаты и все враги перебиты
+  victory: { kind: 'clearFinalRoom', finalRoom: ROOM_PLANS.length - 1 },
   rooms: ROOM_PLANS,
 };
 })(window.Game = window.Game || {});

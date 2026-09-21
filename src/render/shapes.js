@@ -10,7 +10,8 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 function visible(rect) {
-  return rect.x + rect.w > state.camera.x - 40 && rect.x < state.camera.x + CONFIG.VIEW.w + 40;
+  return rect.x + rect.w > state.camera.x - 40 && rect.x < state.camera.x + CONFIG.VIEW.w + 40
+      && rect.y + rect.h > state.camera.y - 40 && rect.y < state.camera.y + CONFIG.VIEW.h + 40;
 }
 
 function drawRects(list, color) {

@@ -7,19 +7,24 @@ const { CONFIG, state } = G;
 const { clamp, dist, removeFrom } = G.math;
 const { moveAndCollide, slideAlongWall } = G.collision;
 const { world } = G.world;
-const { lightRadius, currentRoom, chainUnits, isSpotted } = G.session;
+const { lightRadius, currentRoom, chainUnits, isSpotted, spawnEnemy } = G.session;
+const { freeSpotNear } = G.world;
 const { pushTrail, followChain, attackRateMul, updateDowned, knockOutAlly } = G.chain;
 const combat = G.combat;
 const { updateProjectiles, updateClouds, applySpikes, updateEffects } = combat;
-const { wanderStep, stepOffSpikes } = G.roaming;
+const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
 const { allyTypes, enemyTypes } = G;
+
+// типы, которые может породить портал: только те, что умеют гнаться за игроком
+const chaserTypes = Object.keys(enemyTypes).filter((k) => enemyTypes[k].chaseSpeed !== undefined);
 
 // то, что игра даёт записям типов из content/ параметром: сами они game/ не подключают
 const game = {
   state, world, chainUnits, isSpotted,
   nearestTarget: combat.nearestTarget, damageUnit: combat.damageUnit, blast: combat.blast,
   spawnProjectile: combat.spawnProjectile, spawnMortar: combat.spawnMortar, spawnHook: combat.spawnHook,
-  knockOutAlly, wanderStep, stepOffSpikes, removeFrom,
+  knockOutAlly, wanderStep, stepOffSpikes, chaseStep, removeFrom,
+  spawnEnemy, freeSpotNear, chaserTypes,
 };
 
 // движение игрока с инерцией: разгон к точке и накат после отпускания газа
@@ -77,13 +82,25 @@ function updateEnemy(e, dt) {
   if (!type.update) return; // сам ничего не делает (мина)
 
   // регенерация: если врага давно не задевали, он отлечивается до полного
-  e.regenTimer += dt;
-  if (e.regenTimer > CONFIG.ENEMY_REGEN.delay && e.hp < e.maxHp) {
-    e.hp = Math.min(e.maxHp, e.hp + (e.maxHp / CONFIG.ENEMY_REGEN.fullTime) * dt);
+  if (!type.noRegen) {
+    e.regenTimer += dt;
+    if (e.regenTimer > CONFIG.ENEMY_REGEN.delay && e.hp < e.maxHp) {
+      e.hp = Math.min(e.maxHp, e.hp + (e.maxHp / CONFIG.ENEMY_REGEN.fullTime) * dt);
+    }
   }
 
-  if (Math.abs(e.x - state.player.x) > CONFIG.ACTIVATION_DIST) return;
+  // порталы и порождённые ими охотники действуют на любом расстоянии, остальные спят вдали от игрока
+  if (!type.alwaysActive && !e.hunter && dist(e, state.player) > CONFIG.ACTIVATION_DIST) return;
   type.update(e, dt, chainUnits(), game);
+}
+
+// условие победы задаёт уровень
+function isVictory() {
+  const rule = state.level.victory;
+  if (rule.kind === 'destroyType') return !state.enemies.some((e) => e.type === rule.type);
+  // мины добивать необязательно: достаточно перебить всё живое
+  const living = state.enemies.filter((e) => !enemyTypes[e.type].ignoredForVictory).length;
+  return living === 0 && currentRoom() === rule.finalRoom;
 }
 
 // шаг типов, которым нужно видеть итог боя и среды за кадр (мина)
@@ -115,15 +132,14 @@ function update(dt) {
   updateLate();
   updateEffects(dt);
 
-  // мины добивать необязательно: достаточно перебить всё живое
-  const livingEnemies = state.enemies.filter((e) => !enemyTypes[e.type].ignoredForVictory).length;
-  if (state.status === 'play' && livingEnemies === 0 && currentRoom() === state.level.victory.finalRoom) {
-    state.status = 'win';
-  }
+  if (state.status === 'play' && isVictory()) state.status = 'win';
 
   // камера
   const targetX = clamp(state.player.x - CONFIG.VIEW.w / 2, 0, world.width - CONFIG.VIEW.w);
-  state.camera.x += (targetX - state.camera.x) * Math.min(1, CONFIG.CAMERA_LERP * dt);
+  const targetY = clamp(state.player.y - CONFIG.VIEW.h / 2, 0, world.height - CONFIG.VIEW.h);
+  const k = Math.min(1, CONFIG.CAMERA_LERP * dt);
+  state.camera.x += (targetX - state.camera.x) * k;
+  state.camera.y += (targetY - state.camera.y) * k;
 }
 
 G.update = { update };

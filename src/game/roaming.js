@@ -1,12 +1,12 @@
-// Блуждание врагов по своей комнате и сход с шипов. Общие движения, которыми
-// пользуются записи типов из content/enemies.js.
+// Общие движения врагов: блуждание по своей комнате, сход с шипов, погоня за игроком.
+// Ими пользуются записи типов из content/enemies.js.
 (function (G) {
 'use strict';
 
-const { CONFIG } = G;
+const { CONFIG, state } = G;
 const { dist } = G.math;
-const { moveAndCollide } = G.collision;
-const { world, spikeRectAt, standsOnSpikes, freeSpotInRoom } = G.world;
+const { moveAndCollide, circleRectOverlap } = G.collision;
+const { world, spikeRectAt, standsOnSpikes, freeSpotInRoom, hasLineOfSight } = G.world;
 
 // враг, оказавшийся на шипах не в рывке, сходит с них кратчайшим путём
 function stepOffSpikes(e, dt, speed) {
@@ -48,5 +48,54 @@ function wanderStep(e, dt, speed) {
   }
 }
 
-G.roaming = { wanderStep, stepOffSpikes };
+// враг-охотник (его породил портал) идёт к игроку напрямую, где бы тот ни был. Поиска пути нет:
+// упёршись в препятствие, охотник идёт вдоль него, пока путь к игроку снова не освободится;
+// если обход упёрся в тупик или затянулся, меняет сторону.
+// stopDist — на каком расстоянии от игрока остановиться, если игрока видно (стрелки держат дистанцию)
+const DETOUR_MAX = 3;       // дольше этого одну сторону обхода не держим
+const DETOUR_MIN = 0.4;     // раньше этого обход не заканчиваем, чтобы не дёргаться у стены
+const STUCK_TIME = 0.25;    // сколько стоим без продвижения, прежде чем считать, что упёрлись
+
+function pathAheadBlocked(e, ux, uy) {
+  const px = e.x + ux * (e.r + 24), py = e.y + uy * (e.r + 24);
+  return world.moveBlockers.some((rect) => circleRectOverlap(px, py, e.r, rect));
+}
+
+function chaseStep(e, dt, speed, stopDist) {
+  const target = state.player;
+  const dx = target.x - e.x, dy = target.y - e.y;
+  const d = Math.hypot(dx, dy);
+  if (d < 1) return;
+  if (stopDist && d < stopDist && hasLineOfSight(e, target)) return;
+
+  let ux = dx / d, uy = dy / d;
+  if (e.detour > 0) {
+    e.detour -= dt;
+    e.detourAge += dt;
+    if (e.detourAge > DETOUR_MIN && !pathAheadBlocked(e, ux, uy)) e.detour = 0; // путь свободен
+    else {
+      // идём вдоль препятствия, слегка прижимаясь к нему в сторону цели
+      const px = -uy * e.detourSide, py = ux * e.detourSide;
+      const len = Math.hypot(ux * 0.35 + px, uy * 0.35 + py);
+      ux = (ux * 0.35 + px) / len;
+      uy = (uy * 0.35 + py) / len;
+      if (e.detour <= 0) e.detourSide = -e.detourSide;   // затянулось — пробуем с другой стороны
+    }
+  }
+
+  const step = speed * dt;
+  const from = { x: e.x, y: e.y };
+  moveAndCollide(e, ux * step, uy * step, world.moveBlockers);
+
+  e.chaseStuck = dist(e, from) < step * 0.35 ? (e.chaseStuck || 0) + dt : 0;
+  if (e.chaseStuck > STUCK_TIME) {
+    e.chaseStuck = 0;
+    if (e.detour > 0) e.detourSide = -e.detourSide;      // обход упёрся в тупик — идём в другую сторону
+    else if (!e.detourSide) e.detourSide = Math.random() < 0.5 ? -1 : 1;
+    e.detour = DETOUR_MAX;
+    e.detourAge = 0;
+  }
+}
+
+G.roaming = { wanderStep, stepOffSpikes, chaseStep };
 })(window.Game = window.Game || {});

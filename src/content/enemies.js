@@ -5,26 +5,33 @@
 // Поля записи:
 //   stats        — характеристики; юнит получает их как cfg
 //   wanderSpeed  — скорость блуждания по комнате; нет поля — враг не блуждает
+//   chaseSpeed   — скорость погони за игроком; есть поле — тип «подвижный»: такого врага может
+//                  породить портал, и порождённый (e.hunter) идёт к игроку через всю карту
 //   init         — (e): личные поля юнита при создании
 //   update       — (e, dt, chain, game): поведение за кадр, когда враг активен и жив
 //   lateUpdate   — (e, chain, game): шаг после боя и среды (мина: обнаружение и подрыв)
 //   draw         — (e, g): тело врага; полоску HP рисует сцена
 //   hiddenUntilRevealed — враг невидим и неуязвим для прицеливания, пока e.revealed не станет true
 //   ignoredForVictory   — не считается в условии победы
+//   noRegen      — не отлечивается сам (портал)
+//   alwaysActive — живёт и действует на любом расстоянии от игрока (портал)
+//   deathFlash   — радиус вспышки при гибели (только вид)
 // Всё, что нужно от игры, запись получает параметром game, а от рисования — параметром g
 // и никогда не подключает game/ и render/ сама.
 (function (G) {
 'use strict';
 
 const { COLORS } = G;
-const { dist } = G.math;
+const { dist, pickOne } = G.math;
 const { moveAndCollide } = G.collision;
 
-// общий шаблон стрелка, катапульты и скорпиона: блуждать, целиться, стрелять по перезарядке
+// общий шаблон стрелка, катапульты и скорпиона: блуждать, целиться, стрелять по перезарядке;
+// охотник (порождён порталом) вместо блуждания идёт к игроку и держит дистанцию 0.6 дальности
 function ranged(type, fire) {
   return function (e, dt, chain, game) {
-    if (type.wanderSpeed !== undefined && !game.stepOffSpikes(e, dt, type.wanderSpeed * 1.6)) {
-      game.wanderStep(e, dt, type.wanderSpeed);
+    if (type.wanderSpeed !== undefined) {
+      if (e.hunter) game.chaseStep(e, dt, type.chaseSpeed, e.cfg.range * 0.6);
+      else if (!game.stepOffSpikes(e, dt, type.wanderSpeed * 1.6)) game.wanderStep(e, dt, type.wanderSpeed);
     }
 
     e.cd -= dt;
@@ -41,6 +48,7 @@ function ranged(type, fire) {
 const shooter = {
   stats: { name: 'Стрелок', hp: 22, radius: 14, range: 340, cooldown: 1.7, dmg: 5, projSpeed: 300, projRadius: 4 },
   wanderSpeed: 45,
+  chaseSpeed: 80,
   draw(e, g) {
     const { ctx } = g;
     g.drawUnitBody(e, COLORS.enemy, true);
@@ -90,6 +98,7 @@ const scorpion = {
            projRadius: 6,
            pullSpeed: 300 },        // с какой скоростью тащит выдернутого союзника
   wanderSpeed: 48,
+  chaseSpeed: 75,
   draw(e, g) {
     const { ctx } = g;
     g.drawUnitBody(e, COLORS.scorpion, true);
@@ -120,11 +129,13 @@ const zombie = {
            cloudLife: 3.5,          // сколько облако висит
            cloudGrow: 0.5 },        // за сколько разрастается до полного радиуса
   wanderSpeed: 52,
+  chaseSpeed: 70,
   update(e, dt, chain, game) {
     const foe = game.nearestTarget(e, chain, e.cfg.aggro);
     e.cd -= dt;
 
     if (!foe) {
+      if (e.hunter) { game.chaseStep(e, dt, zombie.chaseSpeed); return; }
       if (!game.stepOffSpikes(e, dt, zombie.wanderSpeed * 1.6)) {
         game.wanderStep(e, dt, zombie.wanderSpeed);
       }
@@ -176,12 +187,14 @@ const bull = {
            knockoutChance: 0.3,     // шанс выбить из цепочки того, кого переехал
            knockbackSpeed: 380 },   // с какой силой отбрасывает выбитого
   wanderSpeed: 42,
+  chaseSpeed: 95,
   init(e) { e.state = 'idle'; e.timer = 0; e.travelled = 0; e.dir = { x: 0, y: 0 }; },
   update(e, dt, chain, game) {
     const foe = game.nearestTarget(e, chain, e.cfg.aggro);
 
     if (e.state === 'idle') {
-      if (game.stepOffSpikes(e, dt, bull.wanderSpeed * 1.6)) return;
+      if (e.hunter && !foe) { game.chaseStep(e, dt, bull.chaseSpeed); return; }
+      if (!e.hunter && game.stepOffSpikes(e, dt, bull.wanderSpeed * 1.6)) return;
       if (!foe) { game.wanderStep(e, dt, bull.wanderSpeed); return; }
       e.facing = Math.atan2(foe.y - e.y, foe.x - e.x);
       moveAndCollide(e, Math.cos(e.facing) * e.cfg.walkSpeed * dt,
@@ -313,5 +326,71 @@ const mine = {
   },
 };
 
-G.enemyTypes = { shooter, bull, tower, scorpion, zombie, mine };
+// портал: неподвижная громадина с кучей HP. Раз в несколько секунд выпускает рядом с собой
+// подвижного врага, и тот идёт прямо к игроку. Сам не блуждает, не лечится и всегда «включён».
+const portal = {
+  stats: { name: 'Портал', hp: 900, radius: 46,
+           spawnMin: 8,             // пауза между выходами врагов: случайная, от spawnMin до spawnMax
+           spawnMax: 13,
+           maxAlive: 6,             // сколько порождённых им врагов может жить одновременно
+           spawnRingMin: 25,        // враг появляется в кольце от края портала: от ..
+           spawnRingMax: 80,        // .. до этих расстояний
+           spawnClearance: 22 },    // радиус свободного места под появляющегося врага
+  noRegen: true,
+  alwaysActive: true,
+  deathFlash: 170,
+  init(e) {
+    e.age = 0;
+    // первый враг выходит не сразу, а в пределах обычной паузы
+    e.spawnTimer = e.cfg.spawnMin + Math.random() * (e.cfg.spawnMax - e.cfg.spawnMin);
+  },
+  update(e, dt, chain, game) {
+    e.age += dt;
+    e.spawnTimer -= dt;
+    if (e.spawnTimer > 0) return;
+
+    const cfg = e.cfg;
+    e.spawnTimer = cfg.spawnMin + Math.random() * (cfg.spawnMax - cfg.spawnMin);
+    if (game.state.enemies.filter((x) => x.spawnedBy === e).length >= cfg.maxAlive) return;
+
+    const spot = game.freeSpotNear(e.x, e.y, e.r + cfg.spawnRingMin, e.r + cfg.spawnRingMax, cfg.spawnClearance);
+    if (!spot) { e.spawnTimer = 1; return; } // всё занято — пробуем ещё раз через секунду
+    game.spawnEnemy(pickOne(game.chaserTypes), spot.x, spot.y, e.room, { hunter: true, spawnedBy: e });
+    game.state.effects.push({ type: 'ring', x: spot.x, y: spot.y, r: 26, life: 0.35, color: COLORS.portal });
+  },
+  draw(e, g) {
+    const { ctx } = g;
+    // перед выходом врага ядро разгорается
+    const soon = e.spawnTimer < 1.5 ? 1 - e.spawnTimer / 1.5 : 0;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+    ctx.fillStyle = '#1a1024';
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = COLORS.portal;
+    ctx.stroke();
+
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 8]);
+    ctx.lineDashOffset = -e.age * 30;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.r * 0.72, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineDashOffset = e.age * 45;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.r * 0.46, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
+
+    ctx.globalAlpha = 0.35 + soon * 0.55;
+    ctx.fillStyle = COLORS.portal;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.r * (0.2 + 0.05 * Math.sin(e.age * 3) + soon * 0.12), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  },
+};
+
+G.enemyTypes = { shooter, bull, tower, scorpion, zombie, mine, portal };
 })(window.Game = window.Game || {});

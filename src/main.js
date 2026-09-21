@@ -15,7 +15,9 @@ const { canvas } = G.shapes;
 const { drawScene } = G.renderer;
 const { drawLight, drawHud } = G.hud;
 
-const START_LEVEL = G.level1;
+// уровни в порядке их показа в меню; за фоном меню при запуске стоит первый
+const LEVELS = [G.level1, G.level2];
+const START_LEVEL = LEVELS[0];
 
 // --- ввод: намерения игрока ---
 
@@ -70,26 +72,52 @@ initInput(canvas, {
 // --- экраны: кнопки и оверлей главного меню ---
 
 const overlay = document.getElementById('overlay');
-const panelMain = document.getElementById('panelMain');
-const panelControls = document.getElementById('panelControls');
+const panels = {
+  main: document.getElementById('panelMain'),
+  levels: document.getElementById('panelLevels'),
+  controls: document.getElementById('panelControls'),
+};
 
-function showPanel(controls) {
-  panelMain.classList.toggle('active', !controls);
-  panelControls.classList.toggle('active', controls);
+function showPanel(name) {
+  for (const [key, el] of Object.entries(panels)) el.classList.toggle('active', key === name);
 }
 function syncOverlay() { overlay.classList.toggle('hidden', state.status !== 'menu'); }
 
-document.getElementById('restart').addEventListener('click', (ev) => {
-  ev.currentTarget.blur();
-  if (state.status !== 'menu') resetGame(state.level);
+function onClick(id, handler) {
+  document.getElementById(id).addEventListener('click', (ev) => { ev.currentTarget.blur(); handler(); });
+}
+
+function startLevel(level) {
+  resetGame(level);
+  syncOverlay();
+}
+
+// кнопки выбора уровня строятся из списка уровней
+const levelList = document.getElementById('levelList');
+LEVELS.forEach((level, i) => {
+  const btn = document.createElement('button');
+  btn.className = 'level';
+  btn.append(`${i + 1}. ${level.name}`);
+  const blurb = document.createElement('small');
+  blurb.textContent = level.blurb;
+  btn.append(blurb);
+  btn.addEventListener('click', (ev) => { ev.currentTarget.blur(); startLevel(level); });
+  levelList.append(btn);
 });
-document.getElementById('startBtn').addEventListener('click', (ev) => {
-  ev.currentTarget.blur();
-  resetGame(START_LEVEL);
+
+onClick('restart', () => { if (state.status !== 'menu') resetGame(state.level); });
+// возврат в меню посреди партии: пока меню открыто, игра стоит на паузе
+onClick('menuBtn', () => {
+  state.menu.open = false; state.menu.drag = null;
+  mouseDown = false;
+  state.status = 'menu';
+  showPanel('main');
   syncOverlay();
 });
-document.getElementById('controlsBtn').addEventListener('click', (ev) => { ev.currentTarget.blur(); showPanel(true); });
-document.getElementById('backBtn').addEventListener('click', (ev) => { ev.currentTarget.blur(); showPanel(false); });
+onClick('startBtn', () => showPanel('levels'));
+onClick('levelsBackBtn', () => showPanel('main'));
+onClick('controlsBtn', () => showPanel('controls'));
+onClick('backBtn', () => showPanel('main'));
 
 // --- цикл ---
 

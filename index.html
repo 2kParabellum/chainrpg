@@ -20,6 +20,9 @@
   .panel h1 { margin: 0 0 14px; font: 28px monospace; color: #c8c8d2; letter-spacing: 4px; }
   .panel h2 { margin: 0 0 6px; font: 20px monospace; color: #c8c8d2; }
   .panel button { width: 240px; padding: 10px 12px; font-size: 16px; }
+  #levelList { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .panel button.level { width: 420px; text-align: left; }
+  .panel button.level small { display: block; margin-top: 4px; font-size: 12px; color: #8a8a95; }
   #controlsList { margin: 0 0 8px; border-collapse: collapse; font-size: 14px; }
   #controlsList td { padding: 5px 10px; }
   #controlsList td:first-child { color: #f0f0f5; text-align: right; white-space: nowrap; }
@@ -28,6 +31,7 @@
 <body>
   <div id="bar">
     <button id="restart">RESTART (R)</button>
+    <button id="menuBtn">МЕНЮ</button>
     <span>ЛКМ — идти &nbsp;|&nbsp; ПРОБЕЛ — присоединить союзника &nbsp;|&nbsp; X — бросить последнего &nbsp;|&nbsp; C — порядок цепочки</span>
   </div>
   <div id="stage">
@@ -35,8 +39,13 @@
     <div id="overlay">
       <div id="panelMain" class="panel active">
         <h1>CHAIN</h1>
-        <button id="startBtn">Начать играть</button>
+        <button id="startBtn">Играть</button>
         <button id="controlsBtn">Управление</button>
+      </div>
+      <div id="panelLevels" class="panel">
+        <h2>Выбор уровня</h2>
+        <div id="levelList"></div>
+        <button id="levelsBackBtn">Назад</button>
       </div>
       <div id="panelControls" class="panel">
         <h2>Управление</h2>
@@ -59,6 +68,7 @@
   <script src="src/content/allies.js"></script>
   <script src="src/content/enemies.js"></script>
   <script src="src/levels/level1.js"></script>
+  <script src="src/levels/level2.js"></script>
   <script src="src/levels/populate.js"></script>
   <script src="src/game/world.js"></script>
   <script src="src/game/state.js"></script>

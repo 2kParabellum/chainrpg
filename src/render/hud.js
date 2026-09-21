@@ -6,7 +6,7 @@
 const { CONFIG, COLORS, state } = G;
 const { clamp } = G.math;
 const { currentRoom, lightRadius, isSpotted } = G.session;
-const { roomCount } = G.world;
+const { roomCount, roomIndexAt } = G.world;
 const { nearestPickup, MENU, menuRect, menuRowY, menuPreviewOrder } = G.chain;
 const { ctx, allyColor } = G.shapes;
 
@@ -77,11 +77,17 @@ function drawHud() {
   ctx.font = '13px monospace';
   ctx.textAlign = 'left';
 
-  const room = currentRoom() + 1;
+  const level = state.level;
+  const here = currentRoom();
   // необнаруженные мины в счётчик не попадают, о них предупреждает только знак на полу
-  const inRoom = state.enemies.filter((e) => e.room === currentRoom() && isSpotted(e)).length;
+  const inRoom = state.enemies.filter((e) => roomIndexAt(e.x, e.y) === here && isSpotted(e)).length;
+  const where = level.zoneNames ? `ЗОНА: ${level.zoneNames[here]}` : `КОМНАТА ${here + 1}/${roomCount()}`;
+  // цель уровня «разрушить всё заданного типа» показываем счётчиком
+  const rule = level.victory;
+  const goal = rule.kind === 'destroyType'
+    ? `   ${rule.label}: ${state.enemies.filter((e) => e.type === rule.type).length}` : '';
   ctx.fillStyle = '#c8c8d2';
-  ctx.fillText(`КОМНАТА ${room}/${roomCount()}   ВРАГОВ ЗДЕСЬ: ${inRoom}   ЦЕПОЧКА: ${state.allies.length + 1}/${CONFIG.CHAIN.maxAllies + 1}`, 12, 22);
+  ctx.fillText(`${where}   ВРАГОВ ЗДЕСЬ: ${inRoom}${goal}   ЦЕПОЧКА: ${state.allies.length + 1}/${CONFIG.CHAIN.maxAllies + 1}`, 12, 22);
 
   let y = 44;
   ctx.fillStyle = COLORS.player;

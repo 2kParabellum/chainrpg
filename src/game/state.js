@@ -6,7 +6,7 @@
 
 const { CONFIG } = G;
 const { clamp, dist } = G.math;
-const { world, localToWorld, buildWorld, roomIndexAt } = G.world;
+const { world, localToWorld, buildWorld, roomIndexAt, scatterSpot } = G.world;
 const { rollEnemies, rollAllies } = G.populate;
 const { allyTypes, enemyTypes } = G;
 
@@ -44,6 +44,14 @@ function makeEnemy(type, x, y, room) {
   return e;
 }
 
+// новый враг посреди партии (его порождает портал); extra — личные поля вроде hunter и spawnedBy
+function spawnEnemy(type, x, y, room, extra) {
+  const e = makeEnemy(type, x, y, room);
+  Object.assign(e, extra);
+  state.enemies.push(e);
+  return e;
+}
+
 // новая партия на уровне level; игрок и состав бойцов бросаются заново
 function resetGame(level) {
   state.level = level;
@@ -56,7 +64,7 @@ function resetGame(level) {
   state.lightTime = 0;
   state.visibleEnemies = [];
 
-  const spawn = localToWorld(0, level.spawn[0], level.spawn[1]);
+  const spawn = localToWorld(level.spawn.room, level.spawn.at[0], level.spawn.at[1]);
   state.player = {
     kind: 'player', type: 'player', x: spawn.x, y: spawn.y, vx: 0, vy: 0,
     r: CONFIG.PLAYER.radius, hp: CONFIG.PLAYER.hp, maxHp: CONFIG.PLAYER.hp, facing: 0,
@@ -68,8 +76,23 @@ function resetGame(level) {
       const p = localToWorld(i, cx, cy);
       state.neutrals.push(makeUnit('neutral', type, p.x, p.y, allyTypes[type].stats));
     }
-    for (const [type, cx, cy] of rollEnemies(plan, level)) {
+    // занятые точки комнаты: враги без фиксированного места расставляются мимо них
+    const taken = [];
+    // порталы ставятся первыми, чтобы вокруг них оставалось свободное место
+    for (const [cx, cy] of plan.portals || []) {
       const p = localToWorld(i, cx, cy);
+      const portal = makeEnemy('portal', p.x, p.y, i);
+      state.enemies.push(portal);
+      taken.push({ x: p.x, y: p.y, r: portal.r + CONFIG.SCATTER.portalClearance });
+    }
+    for (const [type, cx, cy] of rollEnemies(plan, level)) {
+      let p;
+      if (cx === undefined) {
+        p = scatterSpot(i, enemyTypes[type].stats.radius, taken, CONFIG.SCATTER.gap);
+        taken.push({ x: p.x, y: p.y, r: p.r });
+      } else {
+        p = localToWorld(i, cx, cy);
+      }
       state.enemies.push(makeEnemy(type, p.x, p.y, i));
     }
     for (const [cx, cy] of plan.mines || []) {
@@ -79,7 +102,7 @@ function resetGame(level) {
   });
 
   state.camera.x = clamp(state.player.x - CONFIG.VIEW.w / 2, 0, world.width - CONFIG.VIEW.w);
-  state.camera.y = 0;
+  state.camera.y = clamp(state.player.y - CONFIG.VIEW.h / 2, 0, world.height - CONFIG.VIEW.h);
 }
 
 function chainUnits() { return [state.player].concat(state.allies); }
@@ -96,8 +119,8 @@ function isLit(u) { return dist(state.player, u) <= lightRadius(); }
 // враг, которого уже можно видеть, целить и рубить: скрытые типы (мина) — только после обнаружения
 function isSpotted(e) { return !enemyTypes[e.type].hiddenUntilRevealed || e.revealed; }
 
-function currentRoom() { return roomIndexAt(state.player.x); }
+function currentRoom() { return roomIndexAt(state.player.x, state.player.y); }
 
 G.state = state;
-G.session = { makeUnit, resetGame, chainUnits, lightRadius, isLit, isSpotted, currentRoom };
+G.session = { makeUnit, spawnEnemy, resetGame, chainUnits, lightRadius, isLit, isSpotted, currentRoom };
 })(window.Game = window.Game || {});

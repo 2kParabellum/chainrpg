@@ -122,6 +122,12 @@ function drawMortar(p) {
 
 function drawTerrain() {
   drawRects(world.floors, COLORS.floor);
+  // зоны поля подсвечены по степени опасности
+  for (const f of world.floors) {
+    if (!f.tint || !visible(f)) continue;
+    ctx.fillStyle = COLORS.zoneTint[f.tint];
+    ctx.fillRect(f.x, f.y, f.w, f.h);
+  }
 
   ctx.fillStyle = COLORS.pit;
   ctx.strokeStyle = COLORS.pitEdge;
@@ -207,7 +213,7 @@ function drawDowned() {
 
 function drawWarnings() {
   for (const w of world.warnings) {
-    if (Math.abs(w.x - state.camera.x - CONFIG.VIEW.w / 2) > CONFIG.VIEW.w) continue;
+    if (!visible({ x: w.x - 20, y: w.y - 20, w: 40, h: 40 })) continue;
     drawWarning(w);
   }
 }

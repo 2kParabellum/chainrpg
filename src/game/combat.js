@@ -28,7 +28,11 @@ function damageUnit(u, dmg) {
   if (u.hp <= 0) {
     if (u.kind === 'player') state.status = 'dead';
     else if (u.kind === 'ally') removeFrom(state.allies, u);
-    else if (u.kind === 'enemy') removeFrom(state.enemies, u);
+    else if (u.kind === 'enemy') {
+      removeFrom(state.enemies, u);
+      const flash = enemyTypes[u.type].deathFlash;
+      if (flash) state.effects.push({ type: 'blast', x: u.x, y: u.y, r: flash, life: 0.35 });
+    }
     else if (u.kind === 'neutral') removeFrom(state.neutrals, u);
   }
 }
