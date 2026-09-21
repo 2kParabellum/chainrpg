@@ -69,7 +69,8 @@ shooter.update = ranged(shooter, (e, foe, game) => {
 
 const tower = {
   stats: { name: 'Катапульта', hp: 55, radius: 20, range: 430, cooldown: 3.2,
-           dmg: 9,                  // урон в эпицентре
+           dmg: 13,                 // урон в эпицентре
+           edgeDmg: 5,              // урон на краю радиуса (между ними урон падает линейно)
            blastRadius: 95,         // радиус поражения
            flightTime: 1.5 },       // сколько снаряд летит до земли
   draw(e, g) {
@@ -93,10 +94,10 @@ const tower = {
 tower.update = ranged(tower, (e, foe, game) => game.spawnMortar(e, foe.x, foe.y));
 
 const scorpion = {
-  stats: { name: 'Скорпион', hp: 30, radius: 15, range: 380, cooldown: 3.4, dmg: 6,
+  stats: { name: 'Скорпион', hp: 30, radius: 15, range: 456, cooldown: 2.96, dmg: 6,
            projSpeed: 190,          // гарпун летит медленно, его видно заранее
            projRadius: 6,
-           pullSpeed: 300 },        // с какой скоростью тащит выдернутого союзника
+           pullSpeed: 450 },        // с какой скоростью тащит выдернутого союзника
   wanderSpeed: 48,
   chaseSpeed: 75,
   draw(e, g) {
@@ -125,7 +126,7 @@ const zombie = {
   stats: { name: 'Зомби', hp: 70, radius: 17, aggro: 520, walkSpeed: 62, cooldown: 4.5,
            standoff: 55,            // держится рядом, но не вплотную — облако накрывает цепочку
            cloudRadius: 95,         // радиус вонючего облака
-           cloudDps: 6,             // урон в секунду внутри облака
+           cloudDps: 8,            // урон в секунду внутри облака
            cloudLife: 3.5,          // сколько облако висит
            cloudGrow: 0.5 },        // за сколько разрастается до полного радиуса
   wanderSpeed: 52,
@@ -284,7 +285,7 @@ const bull = {
 // мина: не блуждает и сама не действует; цепочка её замечает вблизи, она взрывается под ногами
 // и простреливается союзниками, как любой враг — но только после обнаружения
 const mine = {
-  stats: { name: 'Мина', hp: 6, radius: 13,
+  stats: { name: 'Мина', hp: 12, radius: 13,
            detectRadius: 110,       // с какого расстояния цепочка её замечает
            triggerRadius: 18,       // с какого расстояния срабатывает под ногами
            dmg: 20,                 // урон в эпицентре взрыва
@@ -328,11 +329,14 @@ const mine = {
 
 // портал: неподвижная громадина с кучей HP. Раз в несколько секунд выпускает рядом с собой
 // подвижного врага, и тот идёт прямо к игроку. Сам не блуждает, не лечится и всегда «включён».
+// Темп зависит от числа живых порталов: чем меньше их осталось, тем чаще выпускает каждый.
 const portal = {
   stats: { name: 'Портал', hp: 900, radius: 46,
-           spawnMin: 8,             // пауза между выходами врагов: случайная, от spawnMin до spawnMax
-           spawnMax: 13,
-           maxAlive: 6,             // сколько порождённых им врагов может жить одновременно
+           // пауза между выходами врагов у каждого портала; номер = сколько порталов живо (1, 2, 3, 4);
+           // при большем числе порталов берётся последнее значение
+           spawnEvery: [5, 10, 15, 20],
+           stagger: 6,              // разброс первого выхода (сек), чтобы порталы не стреляли залпом
+           maxHunters: 24,          // предел охотников на всей карте: пока их столько, порталы не выпускают новых
            spawnRingMin: 25,        // враг появляется в кольце от края портала: от ..
            spawnRingMax: 80,        // .. до этих расстояний
            spawnClearance: 22 },    // радиус свободного места под появляющегося врага
@@ -341,27 +345,32 @@ const portal = {
   deathFlash: 170,
   init(e) {
     e.age = 0;
-    // первый враг выходит не сразу, а в пределах обычной паузы
-    e.spawnTimer = e.cfg.spawnMin + Math.random() * (e.cfg.spawnMax - e.cfg.spawnMin);
+    e.sinceSpawn = Math.random() * e.cfg.stagger; // сколько прошло с прошлого выхода врага
+    e.spawnIn = 99;                               // сколько осталось до следующего (для вида)
   },
   update(e, dt, chain, game) {
     e.age += dt;
-    e.spawnTimer -= dt;
-    if (e.spawnTimer > 0) return;
+    e.sinceSpawn += dt;
 
     const cfg = e.cfg;
-    e.spawnTimer = cfg.spawnMin + Math.random() * (cfg.spawnMax - cfg.spawnMin);
-    if (game.state.enemies.filter((x) => x.spawnedBy === e).length >= cfg.maxAlive) return;
+    // интервал пересчитывается каждый кадр: когда соседний портал разрушен, остальные ускоряются сразу
+    const alive = game.state.enemies.filter((x) => x.type === e.type).length;
+    const every = cfg.spawnEvery[Math.min(alive, cfg.spawnEvery.length) - 1];
+    e.spawnIn = every - e.sinceSpawn;
+    if (e.spawnIn > 0) return;
+
+    e.sinceSpawn = 0;
+    if (game.state.enemies.filter((x) => x.hunter).length >= cfg.maxHunters) return;
 
     const spot = game.freeSpotNear(e.x, e.y, e.r + cfg.spawnRingMin, e.r + cfg.spawnRingMax, cfg.spawnClearance);
-    if (!spot) { e.spawnTimer = 1; return; } // всё занято — пробуем ещё раз через секунду
+    if (!spot) { e.sinceSpawn = every - 1; return; } // всё занято — пробуем ещё раз через секунду
     game.spawnEnemy(pickOne(game.chaserTypes), spot.x, spot.y, e.room, { hunter: true, spawnedBy: e });
     game.state.effects.push({ type: 'ring', x: spot.x, y: spot.y, r: 26, life: 0.35, color: COLORS.portal });
   },
   draw(e, g) {
     const { ctx } = g;
     // перед выходом врага ядро разгорается
-    const soon = e.spawnTimer < 1.5 ? 1 - e.spawnTimer / 1.5 : 0;
+    const soon = e.spawnIn < 1.5 ? 1 - Math.max(0, e.spawnIn) / 1.5 : 0;
     ctx.beginPath();
     ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
     ctx.fillStyle = '#1a1024';

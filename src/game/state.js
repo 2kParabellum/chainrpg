@@ -7,7 +7,7 @@
 const { CONFIG } = G;
 const { clamp, dist } = G.math;
 const { world, localToWorld, buildWorld, roomIndexAt, scatterSpot } = G.world;
-const { rollEnemies, rollAllies } = G.populate;
+const { rollEnemies, rollAllies, rollScatterAllies } = G.populate;
 const { allyTypes, enemyTypes } = G;
 
 const state = {
@@ -100,6 +100,16 @@ function resetGame(level) {
       state.enemies.push(makeEnemy('mine', p.x, p.y, i));
     }
   });
+
+  // союзники, разбросанные по зонам: ставятся после всех, мимо уже стоящих бойцов
+  for (const [type, zone] of rollScatterAllies(level)) {
+    const taken = state.enemies.concat(state.neutrals)
+      .filter((u) => roomIndexAt(u.x, u.y) === zone)
+      .map((u) => ({ x: u.x, y: u.y, r: u.r }));
+    const stats = allyTypes[type].stats;
+    const p = scatterSpot(zone, stats.radius, taken, CONFIG.SCATTER.gap);
+    state.neutrals.push(makeUnit('neutral', type, p.x, p.y, stats));
+  }
 
   state.camera.x = clamp(state.player.x - CONFIG.VIEW.w / 2, 0, world.width - CONFIG.VIEW.w);
   state.camera.y = clamp(state.player.y - CONFIG.VIEW.h / 2, 0, world.height - CONFIG.VIEW.h);

@@ -44,5 +44,17 @@ function rollAllies(plan, level) {
   return spots.map(([cx, cy], k) => [order[k], cx, cy]);
 }
 
-G.populate = { rollEnemies, rollAllies };
+// союзники, разбросанные по уровню сверх точек комнат: список [тип, номер зоны];
+// точку внутри зоны подбирает state.js. Типы идут по кругу перемешанного пула, зоны — по кругу перемешанного списка
+function rollScatterAllies(level) {
+  const spec = level.scatterAllies;
+  if (!spec) return [];
+  const types = [];
+  while (types.length < spec.count) types.push(...shuffled(level.allyPool));
+  const zones = [];
+  while (zones.length < spec.count) zones.push(...shuffled(spec.zones));
+  return Array.from({ length: spec.count }, (_, k) => [types[k], zones[k]]);
+}
+
+G.populate = { rollEnemies, rollAllies, rollScatterAllies };
 })(window.Game = window.Game || {});

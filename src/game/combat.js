@@ -38,11 +38,14 @@ function damageUnit(u, dmg) {
 }
 
 // урон по площади: центр взрыва, радиус, урон и список тех, кого он может задеть;
-// вспышка рисуется в fxAt (по умолчанию — в центре)
-function blast(center, radius, dmg, victims, fxAt = center) {
+// вспышка рисуется в fxAt (по умолчанию — в центре). Если задан edgeDmg, урон линейно
+// падает от dmg в эпицентре до edgeDmg на краю радиуса
+function blast(center, radius, dmg, victims, fxAt = center, edgeDmg = dmg) {
   state.effects.push({ type: 'blast', x: fxAt.x, y: fxAt.y, r: radius, life: 0.35 });
   for (const u of victims) {
-    if (dist(center, u) < radius + u.r) damageUnit(u, dmg);
+    const d = dist(center, u);
+    if (d >= radius + u.r) continue;
+    damageUnit(u, dmg + (edgeDmg - dmg) * Math.min(1, d / radius));
   }
 }
 
@@ -62,7 +65,7 @@ function spawnMortar(from, tx, ty) {
     kind: 'mortar', team: 'enemy', r: 5,
     sx: from.x, sy: from.y, x: from.x, y: from.y,
     tx, ty, t: 0, flight: from.cfg.flightTime,
-    dmg: from.cfg.dmg, blast: from.cfg.blastRadius,
+    dmg: from.cfg.dmg, edgeDmg: from.cfg.edgeDmg, blast: from.cfg.blastRadius,
   });
 }
 
@@ -78,7 +81,7 @@ function spawnHook(from, foe) {
 }
 
 function explodeMortar(p) {
-  blast(p, p.blast, p.dmg, chainUnits().concat(state.downed), { x: p.tx, y: p.ty });
+  blast({ x: p.tx, y: p.ty }, p.blast, p.dmg, chainUnits().concat(state.downed), undefined, p.edgeDmg);
 }
 
 function updateProjectiles(dt) {
@@ -121,11 +124,14 @@ function updateProjectiles(dt) {
 
 // --- среда ---
 
-// шипы колют всех подряд, пока с них не сойдут
+// шипы колют всех, кто движется по ним; стоящего на месте не трогают
 function applySpikes(dt) {
   const victims = chainUnits().concat(state.downed, state.enemies);
   for (const u of victims) {
+    const moved = u.spikeX === undefined || Math.hypot(u.x - u.spikeX, u.y - u.spikeY) > CONFIG.SPIKES.moveSpeed * dt;
+    u.spikeX = u.x; u.spikeY = u.y;
     if (!standsOnSpikes(u)) { u.spikeCd = 0; continue; }
+    if (!moved) continue;
     u.spikeCd = (u.spikeCd || 0) - dt;
     if (u.spikeCd <= 0) {
       u.spikeCd = CONFIG.SPIKES.interval;
