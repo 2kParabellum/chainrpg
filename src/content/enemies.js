@@ -94,8 +94,8 @@ const tower = {
 tower.update = ranged(tower, (e, foe, game) => game.spawnMortar(e, foe.x, foe.y));
 
 const scorpion = {
-  stats: { name: 'Скорпион', hp: 30, radius: 15, range: 456, cooldown: 2.96, dmg: 6,
-           projSpeed: 190,          // гарпун летит медленно, его видно заранее
+  stats: { name: 'Скорпион', hp: 30, radius: 15, range: 456, cooldown: 3.5, dmg: 6,
+           projSpeed: 218,         // гарпун летит медленно, его видно заранее
            projRadius: 6,
            pullSpeed: 450 },        // с какой скоростью тащит выдернутого союзника
   wanderSpeed: 48,
