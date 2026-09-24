@@ -49,20 +49,17 @@ function drawMenu() {
   ctx.fillText('ПОРЯДОК ЦЕПОЧКИ', r.x + r.w / 2, r.y + 22);
   ctx.font = '11px monospace';
   ctx.fillStyle = '#8a8a95';
-  ctx.fillText(state.party.length > 2 ? 'перетащи мышью, чтобы поменять местами' : 'пока переставлять некого',
+  ctx.fillText(state.party.length > 1 ? 'перетащи мышью; первый в списке несёт факел' : 'пока переставлять некого',
     r.x + r.w / 2, r.y + 38);
-
-  drawMenuRow(state.party[0], menuRowY(0), `${state.party[0].cfg.name} (ведущий)`, 1);
 
   const order = menuPreviewOrder();
   const dragged = state.menu.drag ? state.party[state.menu.drag.from] : null;
   order.forEach((a, i) => {
-    if (i === 0) return;
     const y = menuRowY(i);
-    drawMenuRow(a, y, `${i + 1}. ${a.cfg.name}`, a === dragged ? 0.25 : 1);
+    drawMenuRow(a, y, `${i + 1}. ${a.cfg.name}${i === 0 ? ' — факел' : ''}`, a === dragged ? 0.25 : 1);
   });
   if (dragged) {
-    const y = clamp(state.menu.drag.y - MENU.rowH / 2, menuRowY(1), menuRowY(state.party.length - 1));
+    const y = clamp(state.menu.drag.y - MENU.rowH / 2, menuRowY(0), menuRowY(state.party.length - 1));
     drawMenuRow(dragged, y, dragged.cfg.name, 1);
   }
 

@@ -119,6 +119,7 @@ function update(dt) {
   if (state.status !== 'play' || state.menu.open) return;
 
   state.lightTime += dt;
+  state.swapCd = Math.max(0, state.swapCd - dt);
   updateLeader(dt);
   pushTrail();
 

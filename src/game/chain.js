@@ -3,7 +3,7 @@
 (function (G) {
 'use strict';
 
-const { CONFIG, state } = G;
+const { CONFIG, COLORS, state } = G;
 const { clamp, dist, removeFrom } = G.math;
 const { moveAndCollide } = G.collision;
 const { world } = G.world;
@@ -46,7 +46,7 @@ function trailPointAt(distBack) {
 
 // звено i (i ≥ 1) бежит к своей точке на следе ведущего; отставшее подтягивается быстрее
 function followChain(a, dt, i) {
-  const target = trailPointAt((i + 1) * CONFIG.CHAIN.spacing);
+  const target = trailPointAt(i * CONFIG.CHAIN.spacing);
   const dx = target.x - a.x, dy = target.y - a.y;
   const d = Math.hypot(dx, dy);
   if (d > 0.5) {
@@ -144,6 +144,38 @@ function updateDowned(d, dt) {
   moveAndCollide(d, d.vx * dt, d.vy * dt, world.moveBlockers);
 }
 
+// --- порядок цепочки ---
+
+// поставить цепочку в новый порядок newOrder (те же юниты). Если сменился ведущий, звенья
+// меняются местами на полу: каждое встаёт на место своей новой позиции, а скорость и взгляд
+// ведущего переходят новому — цепочка не рвётся и след остаётся верным
+function applyOrder(newOrder) {
+  const old = state.party;
+  const lead = old[0], next = newOrder[0];
+  if (next !== lead) {
+    const slots = old.map((u) => ({ x: u.x, y: u.y }));
+    const { vx, vy, facing } = lead;
+    newOrder.forEach((u, i) => {
+      if (old[i] !== u) { u.x = slots[i].x; u.y = slots[i].y; }
+    });
+    lead.vx = 0; lead.vy = 0;
+    next.vx = vx; next.vy = vy; next.facing = facing;
+    state.effects.push({ type: 'beam', x1: slots[0].x, y1: slots[0].y, x2: lead.x, y2: lead.y,
+                         life: 0.25, color: COLORS.hero });
+    state.swapCd = CONFIG.CHAIN.swapCooldown;
+  }
+  state.party = newOrder;
+}
+
+// клавиши 2..9: звено k меняется местами с ведущим
+function swapWithLeader(k) {
+  if (state.status !== 'play' || state.menu.open || state.swapCd > 0) return;
+  if (k < 1 || k >= state.party.length) return;
+  const order = state.party.slice();
+  [order[0], order[k]] = [order[k], order[0]];
+  applyOrder(order);
+}
+
 // --- меню порядка цепочки (модель и раскладка; рисует его render/hud.js) ---
 
 const MENU = { w: 360, rowH: 38, head: 46, foot: 30 };
@@ -156,10 +188,10 @@ function menuRect() {
 // y-координата верха строки: строки идут по порядку цепочки, 0 — ведущий
 function menuRowY(row) { return menuRect().y + MENU.head + row * MENU.rowH; }
 
-// в какую позицию цепочки (1..party.length-1) попадает курсор на высоте y
+// в какую позицию цепочки (0..party.length-1) попадает курсор на высоте y
 function menuSlotAt(y) {
   const slot = Math.floor((y - menuRowY(0)) / MENU.rowH);
-  return clamp(slot, 1, state.party.length - 1);
+  return clamp(slot, 0, state.party.length - 1);
 }
 
 // порядок цепочки с учётом перетаскиваемого прямо сейчас
@@ -172,6 +204,7 @@ function menuPreviewOrder() {
 }
 
 G.chain = {
+  applyOrder, swapWithLeader,
   pushTrail, rebuildTrail, trailPointAt, followChain, attackRateMul,
   nearestPickup, tryRecruit, canBeDisplaced, knockOutAlly, dropLastAlly, hookAlly, updateDowned,
   MENU, menuRect, menuRowY, menuSlotAt, menuPreviewOrder,

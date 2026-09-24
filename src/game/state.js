@@ -24,6 +24,7 @@ const state = {
   camera: { x: 0, y: 0 },
   status: 'play',    // menu | play | dead | win
   lightTime: 0,
+  swapCd: 0,         // сколько ещё нельзя менять ведущего
   visibleEnemies: [], // освещённые враги: считаются раз за кадр, по ним стреляют союзники
   menu: { open: false, drag: null }, // меню порядка цепочки; drag: { from, y }
 };
@@ -61,7 +62,7 @@ function resetGame(level) {
   state.clouds = [];
   state.status = 'play';
   state.menu.open = false; state.menu.drag = null;
-  state.lightTime = 0;
+  state.lightTime = 0; state.swapCd = 0;
   state.visibleEnemies = [];
 
   const spawn = localToWorld(level.spawn.room, level.spawn.at[0], level.spawn.at[1]);

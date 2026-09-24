@@ -9,7 +9,7 @@
 const { state } = G;
 const { initInput } = G.input;
 const { resetGame } = G.session;
-const { tryRecruit, dropLastAlly, MENU, menuRect, menuRowY, menuPreviewOrder } = G.chain;
+const { tryRecruit, dropLastAlly, applyOrder, swapWithLeader, MENU, menuRect, menuRowY, menuPreviewOrder } = G.chain;
 const { update } = G.update;
 const { canvas } = G.shapes;
 const { drawScene } = G.renderer;
@@ -39,7 +39,7 @@ initInput(canvas, {
     if (state.menu.open) {
       const row = Math.floor((p.y - menuRowY(0)) / MENU.rowH);
       const r = menuRect();
-      if (row >= 1 && row <= state.party.length - 1 && p.x >= r.x && p.x <= r.x + r.w) {
+      if (row >= 0 && row <= state.party.length - 1 && p.x >= r.x && p.x <= r.x + r.w) {
         state.menu.drag = { from: row, y: p.y };
       }
       return;
@@ -55,17 +55,18 @@ initInput(canvas, {
     mouseDown = false;
     if (state.menu.drag) {
       state.menu.drag.y = p.y;
-      state.party = menuPreviewOrder();
+      applyOrder(menuPreviewOrder());
       state.menu.drag = null;
     }
   },
-  onCommand(name) {
+  onCommand(name, arg) {
     if (state.status === 'menu') return;
     if (name === 'restart') resetGame(state.level);
     else if (name === 'recruit') { if (!state.menu.open) tryRecruit(); }
     else if (name === 'toggleMenu') toggleMenu();
     else if (name === 'cancel') { if (state.menu.open) toggleMenu(); }
     else if (name === 'drop') dropLastAlly();
+    else if (name === 'swap') swapWithLeader(arg);
   },
 });
 

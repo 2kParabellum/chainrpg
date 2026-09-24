@@ -4,7 +4,7 @@
 //
 // handlers:
 //   onPointerDown(p), onPointerMove(p), onPointerUp(p)   p = { x, y } в пикселях канваса
-//   onCommand(name)   'restart' | 'recruit' | 'toggleMenu' | 'cancel' | 'drop'
+//   onCommand(name, arg)   'restart' | 'recruit' | 'toggleMenu' | 'cancel' | 'drop' | 'swap' (arg — номер звена с нуля)
 (function (G) {
 'use strict';
 
@@ -15,6 +15,11 @@ const KEY_COMMANDS = {
   Escape: { name: 'cancel' },
   KeyX: { name: 'drop' },
 };
+// цифры 2..9 (и на цифровой клавиатуре): сделать звено с этим номером ведущим
+for (let n = 2; n <= 9; n++) {
+  KEY_COMMANDS['Digit' + n] = { name: 'swap', arg: n - 1 };
+  KEY_COMMANDS['Numpad' + n] = { name: 'swap', arg: n - 1 };
+}
 
 function initInput(canvas, handlers) {
   function canvasPos(ev) {
@@ -38,7 +43,7 @@ function initInput(canvas, handlers) {
     if (!cmd) return;
     if (cmd.preventDefault) ev.preventDefault();
     if (ev.repeat && !cmd.repeatable) return;
-    handlers.onCommand(cmd.name);
+    handlers.onCommand(cmd.name, cmd.arg);
   });
 }
 
