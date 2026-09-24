@@ -1,6 +1,6 @@
 // Состояние партии: всё, что меняется по ходу игры, лежит в одном объекте state.
 // Другие модули читают и правят его поля, но не хранят собственных копий списков:
-// сброс партии подменяет массивы целиком, поэтому обращаться надо всегда как state.allies.
+// сброс партии подменяет массивы целиком, поэтому обращаться надо всегда как state.party.
 (function (G) {
 'use strict';
 
@@ -12,15 +12,15 @@ const { allyTypes, enemyTypes } = G;
 
 const state = {
   level: null,       // данные текущего уровня
-  player: null,
-  allies: [],        // звенья цепочки по порядку: первый идёт сразу за игроком
+  party: [],         // вся цепочка по порядку: [0] — ведущий (им управляет игрок), остальные бегут по его следу
+  moveTarget: null,  // куда идёт ведущий: цель управления, при смене ведущего она остаётся
   neutrals: [],      // ждут вербовки
   downed: [],        // выбитые из цепочки, лежат до подбора
   enemies: [],
   projectiles: [],
   effects: [],
   clouds: [],
-  trail: [],         // след игрока, по которому бегут союзники
+  trail: [],         // след ведущего, по которому бегут остальные звенья
   camera: { x: 0, y: 0 },
   status: 'play',    // menu | play | dead | win
   lightTime: 0,
@@ -56,7 +56,7 @@ function spawnEnemy(type, x, y, room, extra) {
 function resetGame(level) {
   state.level = level;
   buildWorld(level);
-  state.allies = []; state.neutrals = []; state.downed = []; state.enemies = [];
+  state.party = []; state.moveTarget = null; state.neutrals = []; state.downed = []; state.enemies = [];
   state.projectiles = []; state.effects = []; state.trail = [];
   state.clouds = [];
   state.status = 'play';
@@ -65,11 +65,7 @@ function resetGame(level) {
   state.visibleEnemies = [];
 
   const spawn = localToWorld(level.spawn.room, level.spawn.at[0], level.spawn.at[1]);
-  state.player = {
-    kind: 'player', type: 'player', x: spawn.x, y: spawn.y, vx: 0, vy: 0,
-    r: CONFIG.PLAYER.radius, hp: CONFIG.PLAYER.hp, maxHp: CONFIG.PLAYER.hp, facing: 0,
-    target: null, cfg: { ...CONFIG.PLAYER },
-  };
+  state.party.push(makeUnit('ally', 'hero', spawn.x, spawn.y, allyTypes.hero.stats));
 
   level.rooms.forEach((plan, i) => {
     for (const [type, cx, cy] of rollAllies(plan, level)) {
@@ -111,11 +107,14 @@ function resetGame(level) {
     state.neutrals.push(makeUnit('neutral', type, p.x, p.y, stats));
   }
 
-  state.camera.x = clamp(state.player.x - CONFIG.VIEW.w / 2, 0, world.width - CONFIG.VIEW.w);
-  state.camera.y = clamp(state.player.y - CONFIG.VIEW.h / 2, 0, world.height - CONFIG.VIEW.h);
+  state.camera.x = clamp(state.party[0].x - CONFIG.VIEW.w / 2, 0, world.width - CONFIG.VIEW.w);
+  state.camera.y = clamp(state.party[0].y - CONFIG.VIEW.h / 2, 0, world.height - CONFIG.VIEW.h);
 }
 
-function chainUnits() { return [state.player].concat(state.allies); }
+// ведущий: первое звено цепочки, от него считаются свет, камера, активация врагов и цель охотников
+function leader() { return state.party[0]; }
+
+function chainUnits() { return state.party.slice(); }
 
 // радиус фонаря с лёгким дрожанием пламени
 function lightRadius() {
@@ -124,16 +123,16 @@ function lightRadius() {
                   + Math.sin(state.lightTime * v.flickerSpeed * 2.7) * v.flicker * 0.5;
 }
 
-function isLit(u) { return dist(state.player, u) <= lightRadius(); }
+function isLit(u) { return dist(leader(), u) <= lightRadius(); }
 
 // враг, которого уже можно видеть, целить и рубить: скрытые типы (мина) — только после обнаружения
 function isSpotted(e) { return !enemyTypes[e.type].hiddenUntilRevealed || e.revealed; }
 
-// сколько союзников можно тащить за собой: уровень может задать свой предел, иначе общий
-function maxAllies() { return state.level.maxAllies || CONFIG.CHAIN.maxAllies; }
+// сколько тел в цепочке вместе с ведущим: уровень может задать свой предел, иначе общий
+function maxParty() { return state.level.maxParty || CONFIG.CHAIN.maxParty; }
 
-function currentRoom() { return roomIndexAt(state.player.x, state.player.y); }
+function currentRoom() { return roomIndexAt(leader().x, leader().y); }
 
 G.state = state;
-G.session = { makeUnit, spawnEnemy, resetGame, chainUnits, lightRadius, isLit, isSpotted, currentRoom, maxAllies };
+G.session = { makeUnit, spawnEnemy, resetGame, leader, chainUnits, lightRadius, isLit, isSpotted, currentRoom, maxParty };
 })(window.Game = window.Game || {});

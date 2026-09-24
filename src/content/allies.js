@@ -4,6 +4,7 @@
 //
 // Поля записи:
 //   color    — цвет тела и подписей
+//   anchor   — нельзя выбить, утащить и бросить; смерть такого звена — поражение (Герой)
 //   stats    — характеристики; юнит получает их как cfg
 //   attack   — (a, rate, game): вызывается, когда перезарядка кончилась; rate — множитель темпа.
 //              Записи без attack ничего не делают сами (Усилок).
@@ -23,6 +24,22 @@ function shootNearest(a, rate, game, fire) {
   fire(foe);
   a.cd = a.cfg.cooldown / rate;
 }
+
+// Герой: с него начинается партия, всегда в цепочке (его нельзя выбить и бросить), его смерть — поражение
+const hero = {
+  color: COLORS.hero,
+  anchor: true,
+  stats: { name: 'Герой', hp: 75, radius: 14 },
+  // треугольник-«нос» показывает направление движения
+  mark(u, f, ctx) {
+    ctx.beginPath();
+    ctx.moveTo(u.x + Math.cos(f) * u.r * 0.9, u.y + Math.sin(f) * u.r * 0.9);
+    ctx.lineTo(u.x + Math.cos(f + 2.5) * u.r * 0.7, u.y + Math.sin(f + 2.5) * u.r * 0.7);
+    ctx.lineTo(u.x + Math.cos(f - 2.5) * u.r * 0.7, u.y + Math.sin(f - 2.5) * u.r * 0.7);
+    ctx.closePath();
+    ctx.stroke();
+  },
+};
 
 const crossbow = {
   color: COLORS.crossbow,
@@ -137,5 +154,5 @@ const booster = {
   },
 };
 
-G.allyTypes = { crossbow, shotgun, medic, cutter, booster };
+G.allyTypes = { hero, crossbow, shotgun, medic, cutter, booster };
 })(window.Game = window.Game || {});

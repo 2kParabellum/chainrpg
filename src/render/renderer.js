@@ -6,10 +6,10 @@
 const { CONFIG, COLORS, state } = G;
 const { clamp, dist } = G.math;
 const { world } = G.world;
-const { isLit, isSpotted, lightRadius } = G.session;
+const { leader, isLit, isSpotted, lightRadius } = G.session;
 const { allyTypes, enemyTypes } = G;
 const shapes = G.shapes;
-const { canvas, ctx, visible, drawRects, drawHpBar, drawUnitBody, drawMark, playerMark, allyColor } = shapes;
+const { canvas, ctx, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor } = shapes;
 
 // знак на полу: заминированная комната
 function drawWarning(w) {
@@ -63,7 +63,7 @@ function drawHook(p) {
 
 // вонючее облако: рваный круг, который тускнеет к концу жизни
 function drawCloud(c) {
-  if (dist(state.player, c) > lightRadius() + c.cur) return;
+  if (dist(leader(), c) > lightRadius() + c.cur) return;
   const fade = clamp(c.life / 0.8, 0, 1);
   ctx.fillStyle = COLORS.cloud;
   ctx.globalAlpha = 0.16 * fade;
@@ -162,7 +162,7 @@ function drawTerrain() {
 
 // точка назначения
 function drawTargetMarker() {
-  const target = state.player.target;
+  const target = state.moveTarget;
   if (target && state.status === 'play') {
     ctx.strokeStyle = 'rgba(99,210,255,0.5)';
     ctx.lineWidth = 1;
@@ -232,7 +232,7 @@ function drawClouds() {
 
 // Усилок отмечает ниточками тех соседей, кого ускоряет
 function drawBoosterLinks() {
-  const allies = state.allies;
+  const allies = state.party;
   ctx.strokeStyle = COLORS.booster;
   ctx.lineWidth = 2;
   for (let i = 0; i < allies.length; i++) {
@@ -249,18 +249,14 @@ function drawBoosterLinks() {
   }
 }
 
-// цепочка: с хвоста, чтобы голова оказалась сверху
+// цепочка: с хвоста, чтобы ведущий оказался сверху
 function drawChain() {
-  for (let i = state.allies.length - 1; i >= 0; i--) {
-    const a = state.allies[i];
+  for (let i = state.party.length - 1; i >= 0; i--) {
+    const a = state.party[i];
     drawUnitBody(a, allyColor(a.type), true);
     drawMark(a, allyTypes[a.type].mark);
     drawHpBar(a);
   }
-
-  drawUnitBody(state.player, COLORS.player, true);
-  drawMark(state.player, playerMark);
-  drawHpBar(state.player);
 }
 
 function drawProjectiles() {

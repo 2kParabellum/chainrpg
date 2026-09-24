@@ -5,7 +5,7 @@
 
 const { CONFIG, COLORS, state } = G;
 const { clamp } = G.math;
-const { currentRoom, lightRadius, isSpotted, maxAllies } = G.session;
+const { leader, currentRoom, lightRadius, isSpotted, maxParty } = G.session;
 const { roomCount, roomIndexAt } = G.world;
 const { nearestPickup, MENU, menuRect, menuRowY, menuPreviewOrder } = G.chain;
 const { ctx, allyColor } = G.shapes;
@@ -13,7 +13,7 @@ const { ctx, allyColor } = G.shapes;
 function drawMenuRow(u, y, label, alpha) {
   const r = menuRect();
   const x = r.x + 10, w = r.w - 20, h = MENU.rowH - 6;
-  const color = u.type === 'player' ? COLORS.player : allyColor(u.type);
+  const color = allyColor(u.type);
   ctx.globalAlpha = alpha;
   ctx.fillStyle = '#23232a';
   ctx.fillRect(x, y + 3, w, h);
@@ -49,19 +49,20 @@ function drawMenu() {
   ctx.fillText('ПОРЯДОК ЦЕПОЧКИ', r.x + r.w / 2, r.y + 22);
   ctx.font = '11px monospace';
   ctx.fillStyle = '#8a8a95';
-  ctx.fillText(state.allies.length > 1 ? 'перетащи мышью, чтобы поменять местами' : 'пока переставлять некого',
+  ctx.fillText(state.party.length > 2 ? 'перетащи мышью, чтобы поменять местами' : 'пока переставлять некого',
     r.x + r.w / 2, r.y + 38);
 
-  drawMenuRow(state.player, menuRowY(0), 'ИГРОК (голова)', 1);
+  drawMenuRow(state.party[0], menuRowY(0), `${state.party[0].cfg.name} (ведущий)`, 1);
 
   const order = menuPreviewOrder();
-  const dragged = state.menu.drag ? state.allies[state.menu.drag.from] : null;
+  const dragged = state.menu.drag ? state.party[state.menu.drag.from] : null;
   order.forEach((a, i) => {
-    const y = menuRowY(i + 1);
+    if (i === 0) return;
+    const y = menuRowY(i);
     drawMenuRow(a, y, `${i + 1}. ${a.cfg.name}`, a === dragged ? 0.25 : 1);
   });
   if (dragged) {
-    const y = clamp(state.menu.drag.y - MENU.rowH / 2, menuRowY(1), menuRowY(state.allies.length));
+    const y = clamp(state.menu.drag.y - MENU.rowH / 2, menuRowY(1), menuRowY(state.party.length - 1));
     drawMenuRow(dragged, y, dragged.cfg.name, 1);
   }
 
@@ -87,22 +88,20 @@ function drawHud() {
   const goal = rule.kind === 'destroyType'
     ? `   ${rule.label}: ${state.enemies.filter((e) => e.type === rule.type).length}` : '';
   ctx.fillStyle = '#c8c8d2';
-  ctx.fillText(`${where}   ВРАГОВ ЗДЕСЬ: ${inRoom}${goal}   ЦЕПОЧКА: ${state.allies.length + 1}/${maxAllies() + 1}`, 12, 22);
+  ctx.fillText(`${where}   ВРАГОВ ЗДЕСЬ: ${inRoom}${goal}   ЦЕПОЧКА: ${state.party.length}/${maxParty()}`, 12, 22);
 
   let y = 44;
-  ctx.fillStyle = COLORS.player;
-  ctx.fillText(`ИГРОК  ${Math.max(0, Math.ceil(state.player.hp))}/${state.player.maxHp}`, 12, y);
-  for (const a of state.allies) {
-    y += 16;
+  for (const a of state.party) {
     ctx.fillStyle = allyColor(a.type);
     ctx.fillText(`${a.cfg.name.padEnd(9, ' ')} ${Math.max(0, Math.ceil(a.hp))}/${a.maxHp}`, 12, y);
+    y += 16;
   }
 
   const pickup = nearestPickup();
   if (pickup && state.status === 'play') {
     ctx.fillStyle = '#f0f0f5';
     ctx.textAlign = 'center';
-    const msg = state.allies.length >= maxAllies() ? 'ЦЕПОЧКА ПОЛНАЯ'
+    const msg = state.party.length >= maxParty() ? 'ЦЕПОЧКА ПОЛНАЯ'
       : pickup.kind === 'downed' ? 'ПРОБЕЛ — ПОДНЯТЬ' : 'ПРОБЕЛ — ПРИСОЕДИНИТЬ';
     ctx.fillText(msg, CONFIG.VIEW.w / 2, CONFIG.VIEW.h - 30);
   }
@@ -126,8 +125,8 @@ function drawHud() {
 // темнота за пределами фонаря
 function drawLight() {
   const r = lightRadius();
-  const g = ctx.createRadialGradient(state.player.x, state.player.y, r * CONFIG.VISION.innerRatio,
-    state.player.x, state.player.y, r);
+  const g = ctx.createRadialGradient(leader().x, leader().y, r * CONFIG.VISION.innerRatio,
+    leader().x, leader().y, r);
   g.addColorStop(0, 'rgba(6,6,8,0)');
   g.addColorStop(1, `rgba(6,6,8,${CONFIG.VISION.darkness})`);
   ctx.fillStyle = g;

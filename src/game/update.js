@@ -7,7 +7,7 @@ const { CONFIG, state } = G;
 const { clamp, dist, removeFrom, pickWeighted } = G.math;
 const { moveAndCollide, slideAlongWall } = G.collision;
 const { world } = G.world;
-const { lightRadius, currentRoom, chainUnits, isSpotted, spawnEnemy } = G.session;
+const { leader, lightRadius, currentRoom, chainUnits, isSpotted, spawnEnemy } = G.session;
 const { freeSpotNear } = G.world;
 const { pushTrail, followChain, attackRateMul, updateDowned, knockOutAlly } = G.chain;
 const combat = G.combat;
@@ -30,46 +30,46 @@ const game = {
   spawnEnemy, freeSpotNear, pickChaser,
 };
 
-// движение игрока с инерцией: разгон к точке и накат после отпускания газа
-function updatePlayer(dt) {
-  const player = state.player;
-  const cfg = player.cfg;
+// движение ведущего с инерцией: разгон к точке и накат после отпускания газа
+function updateLeader(dt) {
+  const lead = leader();
+  const cfg = CONFIG.LEADER;
   let ax = 0, ay = 0;
 
-  if (player.target) {
-    const dx = player.target.x - player.x, dy = player.target.y - player.y;
+  if (state.moveTarget) {
+    const dx = state.moveTarget.x - lead.x, dy = state.moveTarget.y - lead.y;
     const d = Math.hypot(dx, dy);
-    if (d <= cfg.arriveRadius) player.target = null;
+    if (d <= cfg.arriveRadius) state.moveTarget = null;
     else { ax = dx / d; ay = dy / d; }
   }
 
   if (ax || ay) {
-    player.vx += ax * cfg.accel * dt;
-    player.vy += ay * cfg.accel * dt;
-    const sp = Math.hypot(player.vx, player.vy);
+    lead.vx += ax * cfg.accel * dt;
+    lead.vy += ay * cfg.accel * dt;
+    const sp = Math.hypot(lead.vx, lead.vy);
     if (sp > cfg.speed) {
-      player.vx = (player.vx / sp) * cfg.speed;
-      player.vy = (player.vy / sp) * cfg.speed;
+      lead.vx = (lead.vx / sp) * cfg.speed;
+      lead.vy = (lead.vy / sp) * cfg.speed;
     }
   } else {
-    const sp = Math.hypot(player.vx, player.vy);
+    const sp = Math.hypot(lead.vx, lead.vy);
     const drop = cfg.brake * dt;
-    if (sp <= drop) { player.vx = 0; player.vy = 0; }
-    else { player.vx -= (player.vx / sp) * drop; player.vy -= (player.vy / sp) * drop; }
+    if (sp <= drop) { lead.vx = 0; lead.vy = 0; }
+    else { lead.vx -= (lead.vx / sp) * drop; lead.vy -= (lead.vy / sp) * drop; }
   }
 
-  const sp = Math.hypot(player.vx, player.vy);
+  const sp = Math.hypot(lead.vx, lead.vy);
   if (sp > 0.5) {
-    player.facing = Math.atan2(player.vy, player.vx);
+    lead.facing = Math.atan2(lead.vy, lead.vx);
     // упёршись в стену, не тормозим в ноль, а скользим вдоль неё
-    const normal = moveAndCollide(player, player.vx * dt, player.vy * dt, world.moveBlockers);
-    if (normal) slideAlongWall(player, normal, cfg.wallFriction);
+    const normal = moveAndCollide(lead, lead.vx * dt, lead.vy * dt, world.moveBlockers);
+    if (normal) slideAlongWall(lead, normal, cfg.wallFriction);
   }
 }
 
-// звено цепочки: бежит за игроком, а когда перезарядилось — действует по своему типу
+// звено цепочки: ведущий идёт сам, остальные бегут за ним; когда перезарядилось — действует по своему типу
 function updateAlly(a, dt, i) {
-  followChain(a, dt, i);
+  if (i > 0) followChain(a, dt, i);
 
   const type = allyTypes[a.type];
   if (!type.attack) return; // сам не бьёт и не лечит (Усилок)
@@ -93,7 +93,7 @@ function updateEnemy(e, dt) {
   }
 
   // порталы и порождённые ими охотники действуют на любом расстоянии, остальные спят вдали от игрока
-  if (!type.alwaysActive && !e.hunter && dist(e, state.player) > CONFIG.ACTIVATION_DIST) return;
+  if (!type.alwaysActive && !e.hunter && dist(e, leader()) > CONFIG.ACTIVATION_DIST) return;
   type.update(e, dt, chainUnits(), game);
 }
 
@@ -119,14 +119,17 @@ function update(dt) {
   if (state.status !== 'play' || state.menu.open) return;
 
   state.lightTime += dt;
-  updatePlayer(dt);
+  updateLeader(dt);
   pushTrail();
 
   const lit = lightRadius();
   // союзники бьют только по освещённому, а мину — ещё и только после обнаружения
-  state.visibleEnemies = state.enemies.filter((e) => dist(state.player, e) <= lit && isSpotted(e));
+  state.visibleEnemies = state.enemies.filter((e) => dist(leader(), e) <= lit && isSpotted(e));
 
-  for (let i = 0; i < state.allies.length; i++) updateAlly(state.allies[i], dt, i);
+  for (const a of state.party.slice()) {
+    const i = state.party.indexOf(a);
+    if (i >= 0) updateAlly(a, dt, i);
+  }
   for (const d of state.downed) updateDowned(d, dt);
   for (const e of state.enemies.slice()) updateEnemy(e, dt);
   updateProjectiles(dt);
@@ -138,8 +141,8 @@ function update(dt) {
   if (state.status === 'play' && isVictory()) state.status = 'win';
 
   // камера
-  const targetX = clamp(state.player.x - CONFIG.VIEW.w / 2, 0, world.width - CONFIG.VIEW.w);
-  const targetY = clamp(state.player.y - CONFIG.VIEW.h / 2, 0, world.height - CONFIG.VIEW.h);
+  const targetX = clamp(leader().x - CONFIG.VIEW.w / 2, 0, world.width - CONFIG.VIEW.w);
+  const targetY = clamp(leader().y - CONFIG.VIEW.h / 2, 0, world.height - CONFIG.VIEW.h);
   const k = Math.min(1, CONFIG.CAMERA_LERP * dt);
   state.camera.x += (targetX - state.camera.x) * k;
   state.camera.y += (targetY - state.camera.y) * k;

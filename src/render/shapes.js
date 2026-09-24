@@ -44,19 +44,9 @@ function drawMark(u, paint) {
   paint(u, u.facing || 0, ctx);
 }
 
-// треугольник-«нос» игрока показывает направление движения
-function playerMark(u, f) {
-  ctx.beginPath();
-  ctx.moveTo(u.x + Math.cos(f) * u.r * 0.9, u.y + Math.sin(f) * u.r * 0.9);
-  ctx.lineTo(u.x + Math.cos(f + 2.5) * u.r * 0.7, u.y + Math.sin(f + 2.5) * u.r * 0.7);
-  ctx.lineTo(u.x + Math.cos(f - 2.5) * u.r * 0.7, u.y + Math.sin(f - 2.5) * u.r * 0.7);
-  ctx.closePath();
-  ctx.stroke();
-}
-
 function allyColor(type) {
   return allyTypes[type].color;
 }
 
-G.shapes = { canvas, ctx, visible, drawRects, drawHpBar, drawUnitBody, drawMark, playerMark, allyColor };
+G.shapes = { canvas, ctx, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor };
 })(window.Game = window.Game || {});

@@ -1,4 +1,4 @@
-// Цепочка как механика: след игрока, следование звеньев, вербовка, бросок,
+// Цепочка как механика: след ведущего, следование звеньев, вербовка, бросок,
 // выбивание и протяжка лежачих, бонус соседей, модель меню порядка.
 (function (G) {
 'use strict';
@@ -7,22 +7,30 @@ const { CONFIG, state } = G;
 const { clamp, dist, removeFrom } = G.math;
 const { moveAndCollide } = G.collision;
 const { world } = G.world;
-const { maxAllies } = G.session;
+const { leader, maxParty } = G.session;
 const { allyTypes } = G;
 
 // --- след ---
 
 function pushTrail() {
+  const lead = leader();
   const head = state.trail[0];
-  if (!head || Math.hypot(head.x - state.player.x, head.y - state.player.y) > CONFIG.CHAIN.trailStep) {
-    state.trail.unshift({ x: state.player.x, y: state.player.y });
-    const maxLen = Math.ceil((maxAllies() * CONFIG.CHAIN.spacing + 200) / CONFIG.CHAIN.trailStep);
+  if (!head || Math.hypot(head.x - lead.x, head.y - lead.y) > CONFIG.CHAIN.trailStep) {
+    state.trail.unshift({ x: lead.x, y: lead.y });
+    const maxLen = Math.ceil((maxParty() * CONFIG.CHAIN.spacing + 200) / CONFIG.CHAIN.trailStep);
     if (state.trail.length > maxLen) state.trail.pop();
   }
 }
 
+// после гибели ведущего след старого ведущего уходит вперёд от нового: строим его заново
+// по положению звеньев (новый ведущий — первое звено, за ним остальные)
+function rebuildTrail() {
+  state.trail = state.party.slice(1).map((u) => ({ x: u.x, y: u.y }));
+}
+
 function trailPointAt(distBack) {
-  let prev = { x: state.player.x, y: state.player.y };
+  const lead = leader();
+  let prev = { x: lead.x, y: lead.y };
   let acc = 0;
   for (const p of state.trail) {
     const seg = Math.hypot(p.x - prev.x, p.y - prev.y);
@@ -36,7 +44,7 @@ function trailPointAt(distBack) {
   return prev;
 }
 
-// звено i бежит к своей точке на следе игрока; отставшее подтягивается быстрее
+// звено i (i ≥ 1) бежит к своей точке на следе ведущего; отставшее подтягивается быстрее
 function followChain(a, dt, i) {
   const target = trailPointAt((i + 1) * CONFIG.CHAIN.spacing);
   const dx = target.x - a.x, dy = target.y - a.y;
@@ -52,8 +60,8 @@ function followChain(a, dt, i) {
 function attackRateMul(index) {
   let bonus = 0;
   for (const j of [index - 1, index + 1]) {
-    if (j < 0 || j >= state.allies.length) continue;
-    bonus += allyTypes[state.allies[j].type].stats.rateBonus || 0;
+    if (j < 0 || j >= state.party.length) continue;
+    bonus += allyTypes[state.party[j].type].stats.rateBonus || 0;
   }
   return 1 + bonus;
 }
@@ -62,9 +70,9 @@ function attackRateMul(index) {
 
 // ближайший, кого можно подобрать: нейтрал или выбитый из цепочки союзник
 function nearestPickup() {
-  let best = null, bestD = state.player.cfg.recruitRadius;
+  let best = null, bestD = CONFIG.LEADER.recruitRadius;
   for (const u of state.neutrals.concat(state.downed)) {
-    const d = dist(state.player, u);
+    const d = dist(leader(), u);
     if (d < bestD) { bestD = d; best = u; }
   }
   return best;
@@ -72,7 +80,7 @@ function nearestPickup() {
 
 function tryRecruit() {
   if (state.status !== 'play') return;
-  if (state.allies.length >= maxAllies()) return;
+  if (state.party.length >= maxParty()) return;
   const u = nearestPickup();
   if (!u) return;
   removeFrom(u.kind === 'downed' ? state.downed : state.neutrals, u);
@@ -80,12 +88,18 @@ function tryRecruit() {
   u.cd = 0;
   u.vx = 0; u.vy = 0;
   u.drag = null;
-  state.allies.push(u);
+  state.party.push(u);
+}
+
+// выбить из цепочки или утащить можно только рядового союзника: ведущего и Героя — нельзя
+function canBeDisplaced(u) {
+  return u.kind === 'ally' && u !== leader() && !allyTypes[u.type].anchor;
 }
 
 // бычок выбивает союзника из цепочки: тот отлетает и лежит, пока его не подберут
 function knockOutAlly(a, angle, speed) {
-  removeFrom(state.allies, a);
+  if (!canBeDisplaced(a)) return;
+  removeFrom(state.party, a);
   a.kind = 'downed';
   a.vx = Math.cos(angle) * speed;
   a.vy = Math.sin(angle) * speed;
@@ -96,12 +110,14 @@ function knockOutAlly(a, angle, speed) {
 // сбросить последнего союзника: он остаётся лежать на месте, поднять его можно ПРОБЕЛОМ
 function dropLastAlly() {
   if (state.status !== 'play' || state.menu.open) return;
-  const a = state.allies[state.allies.length - 1];
-  if (a) knockOutAlly(a, 0, 0);
+  for (let i = state.party.length - 1; i > 0; i--) {
+    if (canBeDisplaced(state.party[i])) { knockOutAlly(state.party[i], 0, 0); return; }
+  }
 }
 
 // попав в союзника, гарпун вырывает его из цепочки и тянет к Скорпиону
 function hookAlly(a, scorpion) {
+  if (!canBeDisplaced(a)) return;
   knockOutAlly(a, Math.atan2(scorpion.y - a.y, scorpion.x - a.x), 0);
   a.drag = scorpion;
 }
@@ -133,22 +149,22 @@ function updateDowned(d, dt) {
 const MENU = { w: 360, rowH: 38, head: 46, foot: 30 };
 
 function menuRect() {
-  const h = MENU.head + (state.allies.length + 1) * MENU.rowH + MENU.foot;
+  const h = MENU.head + state.party.length * MENU.rowH + MENU.foot;
   return { x: (CONFIG.VIEW.w - MENU.w) / 2, y: (CONFIG.VIEW.h - h) / 2, w: MENU.w, h };
 }
 
-// y-координата верха строки: 0 — игрок, 1.. — союзники по порядку цепочки
+// y-координата верха строки: строки идут по порядку цепочки, 0 — ведущий
 function menuRowY(row) { return menuRect().y + MENU.head + row * MENU.rowH; }
 
-// в какую позицию цепочки (0..allies.length-1) попадает курсор на высоте y
+// в какую позицию цепочки (1..party.length-1) попадает курсор на высоте y
 function menuSlotAt(y) {
-  const slot = Math.floor((y - menuRowY(1)) / MENU.rowH);
-  return clamp(slot, 0, state.allies.length - 1);
+  const slot = Math.floor((y - menuRowY(0)) / MENU.rowH);
+  return clamp(slot, 1, state.party.length - 1);
 }
 
-// порядок союзников с учётом перетаскиваемого прямо сейчас
+// порядок цепочки с учётом перетаскиваемого прямо сейчас
 function menuPreviewOrder() {
-  const order = state.allies.slice();
+  const order = state.party.slice();
   if (!state.menu.drag) return order;
   const [moved] = order.splice(state.menu.drag.from, 1);
   order.splice(menuSlotAt(state.menu.drag.y), 0, moved);
@@ -156,8 +172,8 @@ function menuPreviewOrder() {
 }
 
 G.chain = {
-  pushTrail, trailPointAt, followChain, attackRateMul,
-  nearestPickup, tryRecruit, knockOutAlly, dropLastAlly, hookAlly, updateDowned,
+  pushTrail, rebuildTrail, trailPointAt, followChain, attackRateMul,
+  nearestPickup, tryRecruit, canBeDisplaced, knockOutAlly, dropLastAlly, hookAlly, updateDowned,
   MENU, menuRect, menuRowY, menuSlotAt, menuPreviewOrder,
 };
 })(window.Game = window.Game || {});

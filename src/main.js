@@ -39,23 +39,23 @@ initInput(canvas, {
     if (state.menu.open) {
       const row = Math.floor((p.y - menuRowY(0)) / MENU.rowH);
       const r = menuRect();
-      if (row >= 1 && row <= state.allies.length && p.x >= r.x && p.x <= r.x + r.w) {
-        state.menu.drag = { from: row - 1, y: p.y };
+      if (row >= 1 && row <= state.party.length - 1 && p.x >= r.x && p.x <= r.x + r.w) {
+        state.menu.drag = { from: row, y: p.y };
       }
       return;
     }
     mouseDown = true;
-    state.player.target = toWorld(p);
+    state.moveTarget = toWorld(p);
   },
   onPointerMove(p) {
     if (state.menu.open) { if (state.menu.drag) state.menu.drag.y = p.y; return; }
-    if (mouseDown) state.player.target = toWorld(p);
+    if (mouseDown) state.moveTarget = toWorld(p);
   },
   onPointerUp(p) {
     mouseDown = false;
     if (state.menu.drag) {
       state.menu.drag.y = p.y;
-      state.allies = menuPreviewOrder();
+      state.party = menuPreviewOrder();
       state.menu.drag = null;
     }
   },

@@ -7,8 +7,8 @@ const { dist, removeFrom } = G.math;
 const { circleRectOverlap } = G.collision;
 const { world, hasLineOfSight, standsOnSpikes } = G.world;
 const { chainUnits } = G.session;
-const { hookAlly } = G.chain;
-const { enemyTypes } = G;
+const { hookAlly, rebuildTrail } = G.chain;
+const { allyTypes, enemyTypes } = G;
 
 // --- цели и урон ---
 
@@ -26,8 +26,13 @@ function damageUnit(u, dmg) {
   u.hp -= dmg;
   u.regenTimer = 0;
   if (u.hp <= 0) {
-    if (u.kind === 'player') state.status = 'dead';
-    else if (u.kind === 'ally') removeFrom(state.allies, u);
+    if (u.kind === 'ally') {
+      // гибель Героя — конец партии; его тело остаётся в цепочке, чтобы сцена и камера не остались без ведущего
+      if (allyTypes[u.type].anchor) { state.status = 'dead'; return; }
+      const wasLeader = state.party[0] === u;
+      removeFrom(state.party, u);
+      if (wasLeader) rebuildTrail();
+    }
     else if (u.kind === 'enemy') {
       removeFrom(state.enemies, u);
       const flash = enemyTypes[u.type].deathFlash;

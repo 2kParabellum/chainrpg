@@ -6,6 +6,7 @@
 const { CONFIG, state } = G;
 const { dist } = G.math;
 const { moveAndCollide, circleRectOverlap } = G.collision;
+const { leader } = G.session;
 const { world, spikeRectAt, standsOnSpikes, freeSpotInRoom, hasLineOfSight } = G.world;
 
 // враг, оказавшийся на шипах не в рывке, сходит с них кратчайшим путём
@@ -62,7 +63,7 @@ function pathAheadBlocked(e, ux, uy) {
 }
 
 function chaseStep(e, dt, speed, stopDist) {
-  const target = state.player;
+  const target = leader();
   const dx = target.x - e.x, dy = target.y - e.y;
   const d = Math.hypot(dx, dy);
   if (d < 1) return;
