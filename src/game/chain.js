@@ -7,6 +7,7 @@ const { CONFIG, state } = G;
 const { clamp, dist, removeFrom } = G.math;
 const { moveAndCollide } = G.collision;
 const { world } = G.world;
+const { maxAllies } = G.session;
 const { allyTypes } = G;
 
 // --- след ---
@@ -15,7 +16,7 @@ function pushTrail() {
   const head = state.trail[0];
   if (!head || Math.hypot(head.x - state.player.x, head.y - state.player.y) > CONFIG.CHAIN.trailStep) {
     state.trail.unshift({ x: state.player.x, y: state.player.y });
-    const maxLen = Math.ceil((CONFIG.CHAIN.maxAllies * CONFIG.CHAIN.spacing + 200) / CONFIG.CHAIN.trailStep);
+    const maxLen = Math.ceil((maxAllies() * CONFIG.CHAIN.spacing + 200) / CONFIG.CHAIN.trailStep);
     if (state.trail.length > maxLen) state.trail.pop();
   }
 }
@@ -71,7 +72,7 @@ function nearestPickup() {
 
 function tryRecruit() {
   if (state.status !== 'play') return;
-  if (state.allies.length >= CONFIG.CHAIN.maxAllies) return;
+  if (state.allies.length >= maxAllies()) return;
   const u = nearestPickup();
   if (!u) return;
   removeFrom(u.kind === 'downed' ? state.downed : state.neutrals, u);

@@ -5,7 +5,7 @@
 
 const { CONFIG, COLORS, state } = G;
 const { clamp } = G.math;
-const { currentRoom, lightRadius, isSpotted } = G.session;
+const { currentRoom, lightRadius, isSpotted, maxAllies } = G.session;
 const { roomCount, roomIndexAt } = G.world;
 const { nearestPickup, MENU, menuRect, menuRowY, menuPreviewOrder } = G.chain;
 const { ctx, allyColor } = G.shapes;
@@ -87,7 +87,7 @@ function drawHud() {
   const goal = rule.kind === 'destroyType'
     ? `   ${rule.label}: ${state.enemies.filter((e) => e.type === rule.type).length}` : '';
   ctx.fillStyle = '#c8c8d2';
-  ctx.fillText(`${where}   ВРАГОВ ЗДЕСЬ: ${inRoom}${goal}   ЦЕПОЧКА: ${state.allies.length + 1}/${CONFIG.CHAIN.maxAllies + 1}`, 12, 22);
+  ctx.fillText(`${where}   ВРАГОВ ЗДЕСЬ: ${inRoom}${goal}   ЦЕПОЧКА: ${state.allies.length + 1}/${maxAllies() + 1}`, 12, 22);
 
   let y = 44;
   ctx.fillStyle = COLORS.player;
@@ -102,7 +102,7 @@ function drawHud() {
   if (pickup && state.status === 'play') {
     ctx.fillStyle = '#f0f0f5';
     ctx.textAlign = 'center';
-    const msg = state.allies.length >= CONFIG.CHAIN.maxAllies ? 'ЦЕПОЧКА ПОЛНАЯ'
+    const msg = state.allies.length >= maxAllies() ? 'ЦЕПОЧКА ПОЛНАЯ'
       : pickup.kind === 'downed' ? 'ПРОБЕЛ — ПОДНЯТЬ' : 'ПРОБЕЛ — ПРИСОЕДИНИТЬ';
     ctx.fillText(msg, CONFIG.VIEW.w / 2, CONFIG.VIEW.h - 30);
   }

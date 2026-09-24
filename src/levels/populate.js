@@ -5,13 +5,15 @@
 (function (G) {
 'use strict';
 
-const { clamp, pickOne, shuffled } = G.math;
+const { clamp, pickOne, pickWeighted, sampleWeighted, shuffled } = G.math;
 
-// раскладывает типы по точкам так, чтобы каждый выбранный тип встретился хотя бы раз
-function assignTypes(count, types) {
+// раскладывает типы по точкам так, чтобы каждый выбранный тип встретился хотя бы раз;
+// с весами (weights) остальные точки добираются чаще из тех типов, у которых вес больше
+function assignTypes(count, types, weights) {
   const spots = shuffled(Array.from({ length: count }, (_, i) => i));
   const out = new Array(count);
-  spots.forEach((spot, k) => { out[spot] = k < types.length ? types[k] : pickOne(types); });
+  const extra = () => (weights ? pickWeighted(types, weights) : pickOne(types));
+  spots.forEach((spot, k) => { out[spot] = k < types.length ? types[k] : extra(); });
   return out;
 }
 
@@ -22,7 +24,10 @@ function rollEnemies(plan, level) {
   if (!count) return [];
   const pool = spec.pool || level.enemyPool;
   const kinds = clamp(spec.kinds || 1, 1, Math.min(pool.length, count));
-  const types = assignTypes(count, shuffled(pool).slice(0, kinds));
+  // уровень может задать веса типов (enemyWeights): частые типы попадают в состав зоны чаще
+  const weights = level.enemyWeights;
+  const chosen = weights ? sampleWeighted(pool, kinds, weights) : shuffled(pool).slice(0, kinds);
+  const types = assignTypes(count, chosen, weights);
   return types.map((type, k) => (spec.spots ? [type, ...spec.spots[k]] : [type]));
 }
 

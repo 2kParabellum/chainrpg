@@ -129,8 +129,11 @@ function isLit(u) { return dist(state.player, u) <= lightRadius(); }
 // враг, которого уже можно видеть, целить и рубить: скрытые типы (мина) — только после обнаружения
 function isSpotted(e) { return !enemyTypes[e.type].hiddenUntilRevealed || e.revealed; }
 
+// сколько союзников можно тащить за собой: уровень может задать свой предел, иначе общий
+function maxAllies() { return state.level.maxAllies || CONFIG.CHAIN.maxAllies; }
+
 function currentRoom() { return roomIndexAt(state.player.x, state.player.y); }
 
 G.state = state;
-G.session = { makeUnit, spawnEnemy, resetGame, chainUnits, lightRadius, isLit, isSpotted, currentRoom };
+G.session = { makeUnit, spawnEnemy, resetGame, chainUnits, lightRadius, isLit, isSpotted, currentRoom, maxAllies };
 })(window.Game = window.Game || {});

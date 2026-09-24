@@ -364,7 +364,7 @@ const portal = {
 
     const spot = game.freeSpotNear(e.x, e.y, e.r + cfg.spawnRingMin, e.r + cfg.spawnRingMax, cfg.spawnClearance);
     if (!spot) { e.sinceSpawn = every - 1; return; } // всё занято — пробуем ещё раз через секунду
-    game.spawnEnemy(pickOne(game.chaserTypes), spot.x, spot.y, e.room, { hunter: true, spawnedBy: e });
+    game.spawnEnemy(game.pickChaser(), spot.x, spot.y, e.room, { hunter: true, spawnedBy: e });
     game.state.effects.push({ type: 'ring', x: spot.x, y: spot.y, r: 26, life: 0.35, color: COLORS.portal });
   },
   draw(e, g) {

@@ -4,7 +4,7 @@
 'use strict';
 
 const { CONFIG, state } = G;
-const { clamp, dist, removeFrom } = G.math;
+const { clamp, dist, removeFrom, pickWeighted } = G.math;
 const { moveAndCollide, slideAlongWall } = G.collision;
 const { world } = G.world;
 const { lightRadius, currentRoom, chainUnits, isSpotted, spawnEnemy } = G.session;
@@ -18,13 +18,16 @@ const { allyTypes, enemyTypes } = G;
 // типы, которые может породить портал: только те, что умеют гнаться за игроком
 const chaserTypes = Object.keys(enemyTypes).filter((k) => enemyTypes[k].chaseSpeed !== undefined);
 
+// случайный тип для порождения порталом: подвижные типы с весами уровня (enemyWeights)
+function pickChaser() { return pickWeighted(chaserTypes, state.level.enemyWeights || {}); }
+
 // то, что игра даёт записям типов из content/ параметром: сами они game/ не подключают
 const game = {
   state, world, chainUnits, isSpotted,
   nearestTarget: combat.nearestTarget, damageUnit: combat.damageUnit, blast: combat.blast,
   spawnProjectile: combat.spawnProjectile, spawnMortar: combat.spawnMortar, spawnHook: combat.spawnHook,
   knockOutAlly, wanderStep, stepOffSpikes, chaseStep, removeFrom,
-  spawnEnemy, freeSpotNear, chaserTypes,
+  spawnEnemy, freeSpotNear, pickChaser,
 };
 
 // движение игрока с инерцией: разгон к точке и накат после отпускания газа
