@@ -6,7 +6,8 @@
 'use strict';
 
 const { clamp } = G.math;
-const { circleRectOverlap, segmentHitsRect } = G.collision;
+const { CONFIG } = G;
+const { circleRectOverlap, segmentHitsRect, segmentHitT } = G.collision;
 
 const world = {
   walls: [], pillars: [], pits: [], spikes: [], floors: [], warnings: [],
@@ -49,6 +50,16 @@ function localToWorld(i, cx, cy) {
   return { x: r.x + cx * r.w, y: r.y + cy * r.h };
 }
 
+// шипы режутся на клетки: Воин топчет их по клеткам, а прочие запросы видят исходный прямоугольник (parent)
+function addSpikes(rect) {
+  const step = CONFIG.SPIKES.cell;
+  for (let y = rect.y; y < rect.y + rect.h; y += step) {
+    for (let x = rect.x; x < rect.x + rect.w; x += step) {
+      world.spikes.push({ x, y, w: Math.min(step, rect.x + rect.w - x), h: Math.min(step, rect.y + rect.h - y), parent: rect });
+    }
+  }
+}
+
 // препятствия и знаки комнаты из её плана; координаты плана — доли внутреннего размера комнаты
 function addRoomContent(plan, i) {
   const inner = roomInterior(i);
@@ -58,7 +69,7 @@ function addRoomContent(plan, i) {
   });
   for (const p of plan.pillars) world.pillars.push(toRect(p));
   for (const p of plan.pits) world.pits.push(toRect(p));
-  for (const p of plan.spikes) world.spikes.push(toRect(p));
+  for (const p of plan.spikes) addSpikes(toRect(p));
   // в заминированных комнатах на полу у входа нарисованы предупреждающие знаки
   if ((plan.mines || []).length) {
     for (const [cx, cy] of [[0.09, 0.30], [0.09, 0.70]]) {
@@ -164,12 +175,31 @@ function hasLineOfSight(a, b) {
   return true;
 }
 
-// прямоугольник шипов, на котором стоит юнит (или null); касаются только «ноги» — 0.6 радиуса
+// шипы, на которых стоит юнит, — их исходный прямоугольник (или null); касаются только «ноги» — 0.6 радиуса
 function spikeRectAt(u) {
-  for (const rect of world.spikes) {
-    if (circleRectOverlap(u.x, u.y, u.r * 0.6, rect)) return rect;
+  for (const cell of world.spikes) {
+    if (circleRectOverlap(u.x, u.y, u.r * 0.6, cell)) return cell.parent;
   }
   return null;
+}
+
+// убирает клетки шипов под кругом (сапоги Воина). Единственное, что меняет мир по ходу партии;
+// сброс партии пересобирает мир, и шипы возвращаются
+function trampleSpikes(x, y, r) {
+  if (world.spikes.some((cell) => circleRectOverlap(x, y, r, cell))) {
+    world.spikes = world.spikes.filter((cell) => !circleRectOverlap(x, y, r, cell));
+  }
+}
+
+// длина луча из (x, y) под углом angle, не длиннее len: упирается в стены и колонны
+function rayLength(x, y, angle, len) {
+  const x2 = x + Math.cos(angle) * len, y2 = y + Math.sin(angle) * len;
+  let best = 1;
+  for (const rect of world.sightBlockers) {
+    const t = segmentHitT(x, y, x2, y2, rect);
+    if (t !== null && t < best) best = t;
+  }
+  return len * best;
 }
 
 function standsOnSpikes(u) { return spikeRectAt(u) !== null; }
@@ -230,6 +260,6 @@ function freeSpotNear(x, y, minR, maxR, r) {
 
 G.world = {
   world, roomCount, roomIndexAt, roomInterior, localToWorld, buildWorld, hasLineOfSight,
-  spikeRectAt, standsOnSpikes, freeSpotInRoom, scatterSpot, freeSpotNear,
+  spikeRectAt, standsOnSpikes, trampleSpikes, rayLength, freeSpotInRoom, scatterSpot, freeSpotNear,
 };
 })(window.Game = window.Game || {});

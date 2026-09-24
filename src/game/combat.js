@@ -2,13 +2,13 @@
 (function (G) {
 'use strict';
 
-const { CONFIG, state } = G;
+const { CONFIG, COLORS, state } = G;
 const { dist, removeFrom } = G.math;
 const { circleRectOverlap } = G.collision;
 const { world, hasLineOfSight, standsOnSpikes } = G.world;
-const { chainUnits } = G.session;
+const { chainUnits, activeWeapons, isSpotted } = G.session;
 const { hookAlly, rebuildTrail } = G.chain;
-const { allyTypes, enemyTypes } = G;
+const { allyTypes, enemyTypes, weapons } = G;
 
 // --- цели и урон ---
 
@@ -85,6 +85,36 @@ function spawnHook(from, foe) {
   });
 }
 
+// огненный горшок Факира: летит по дуге, как снаряд катапульты, но бьёт врагов и оставляет огонь
+function spawnFirebomb(from, tx, ty, w) {
+  state.projectiles.push({
+    kind: 'firebomb', team: 'ally', r: 5,
+    sx: from.x, sy: from.y, x: from.x, y: from.y,
+    tx, ty, t: 0, flight: w.flight,
+    dmg: w.dmg, edgeDmg: w.edgeDmg, blast: w.radius,
+    fireRadius: w.fireRadius, fireLife: w.fireLife, fireLight: w.fireLight, burnDps: w.burnDps,
+  });
+}
+
+function explodeFirebomb(p) {
+  blast({ x: p.tx, y: p.ty }, p.blast, p.dmg, state.enemies.filter(isSpotted), undefined, p.edgeDmg);
+  state.fires.push({ x: p.tx, y: p.ty, r: p.fireRadius, life: p.fireLife, light: p.fireLight, burnDps: p.burnDps, t: 0 });
+}
+
+// щиты цепочки: первый, кто останавливает вражеский снаряд, гасит его
+function blockedByShield(p) {
+  for (const u of state.party) {
+    for (const w of activeWeapons(u)) {
+      const def = weapons[w.type];
+      if (def.block && def.block(u, w, p)) {
+        state.effects.push({ type: 'ring', x: p.x, y: p.y, r: 12, life: 0.2, color: COLORS.shield });
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function explodeMortar(p) {
   blast({ x: p.tx, y: p.ty }, p.blast, p.dmg, chainUnits().concat(state.downed), undefined, p.edgeDmg);
 }
@@ -94,13 +124,16 @@ function updateProjectiles(dt) {
   for (let i = state.projectiles.length - 1; i >= 0; i--) {
     const p = state.projectiles[i];
 
-    // снаряд катапульты летит поверх стен и взрывается в точке прицеливания
-    if (p.kind === 'mortar') {
+    // снаряд катапульты и горшок Факира летят поверх стен и взрываются в точке прицеливания
+    if (p.kind === 'mortar' || p.kind === 'firebomb') {
       p.t += dt;
       const k = Math.min(1, p.t / p.flight);
       p.x = p.sx + (p.tx - p.sx) * k;
       p.y = p.sy + (p.ty - p.sy) * k;
-      if (k >= 1) { explodeMortar(p); state.projectiles.splice(i, 1); }
+      if (k >= 1) {
+        if (p.kind === 'mortar') explodeMortar(p); else explodeFirebomb(p);
+        state.projectiles.splice(i, 1);
+      }
       continue;
     }
 
@@ -112,6 +145,7 @@ function updateProjectiles(dt) {
         if (circleRectOverlap(p.x, p.y, p.r, rect)) { dead = true; break; }
       }
     }
+    if (!dead && p.team === 'enemy' && blockedByShield(p)) dead = true;
     if (!dead) {
       const targets = p.team === 'ally' ? state.enemies : chain;
       for (const t of targets) {
@@ -161,6 +195,20 @@ function updateClouds(dt) {
   }
 }
 
+// огонь на земле: гаснет по времени; урон горения — только если он задан (по умолчанию огонь лишь светит)
+function updateFires(dt) {
+  for (let i = state.fires.length - 1; i >= 0; i--) {
+    const f = state.fires[i];
+    f.t += dt;
+    f.life -= dt;
+    if (f.life <= 0) { state.fires.splice(i, 1); continue; }
+    if (!f.burnDps) continue;
+    for (const e of state.enemies.slice()) {
+      if (isSpotted(e) && dist(f, e) < f.r + e.r) damageUnit(e, f.burnDps * dt);
+    }
+  }
+}
+
 function updateEffects(dt) {
   for (let i = state.effects.length - 1; i >= 0; i--) {
     state.effects[i].life -= dt;
@@ -170,7 +218,7 @@ function updateEffects(dt) {
 
 G.combat = {
   nearestTarget, damageUnit,
-  spawnProjectile, spawnMortar, spawnHook,
-  blast, updateProjectiles, applySpikes, updateClouds, updateEffects,
+  spawnProjectile, spawnMortar, spawnHook, spawnFirebomb,
+  blast, updateProjectiles, applySpikes, updateClouds, updateFires, updateEffects,
 };
 })(window.Game = window.Game || {});

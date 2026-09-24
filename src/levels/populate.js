@@ -31,35 +31,56 @@ function rollEnemies(plan, level) {
   return types.map((type, k) => (spec.spots ? [type, ...spec.spots[k]] : [type]));
 }
 
-// состав союзников комнаты: часть типов задана правилом, остальные случайные и без повторов;
-// с `chance` каждая точка занята союзником лишь с этой вероятностью
-function rollAllies(plan, level) {
-  const spec = plan.allies;
-  if (!spec || !spec.spots.length) return [];
-  const spots = spec.chance === undefined
-    ? spec.spots : spec.spots.filter(() => Math.random() < spec.chance);
-  if (!spots.length) return [];
-  const pool = spec.pool || level.allyPool;
-  const types = (spec.require || []).slice(0, spots.length);
-  while (types.length < spots.length) {
-    const rest = pool.filter((t) => !types.includes(t));
-    types.push(pickOne(rest.length ? rest : pool));
+// состав союзников уровня одним броском: каждый персонаж существует в одном экземпляре.
+// Сначала расставляются обязательные типы комнат (require), затем остальные места берут случайный
+// ещё не занятый тип из своего набора (pool комнаты или allyPool уровня); если типов не хватило,
+// место остаётся пустым. Комнаты с собственным pool выбирают раньше прочих, чтобы им хватило.
+// Возвращает { rooms: [[тип, cx, cy], ... по комнатам], scatter: [[тип, номер зоны], ...] };
+// точку разбросанного союзника внутри зоны подбирает state.js.
+// С `chance` каждая точка комнаты занята лишь с этой вероятностью.
+function rollLevelAllies(level) {
+  const slots = [];   // { room, at: [cx, cy] | null, zone, pool, restricted, type }
+  const used = new Set();
+
+  level.rooms.forEach((plan, room) => {
+    const spec = plan.allies;
+    if (!spec || !spec.spots.length) return;
+    const spots = spec.chance === undefined
+      ? spec.spots : spec.spots.filter(() => Math.random() < spec.chance);
+    const mine = shuffled(spots).map((at) => ({
+      room, at, pool: spec.pool || level.allyPool, restricted: !!spec.pool, type: null,
+    }));
+    (spec.require || []).forEach((type, k) => {
+      if (k < mine.length && !used.has(type)) { mine[k].type = type; used.add(type); }
+    });
+    slots.push(...mine);
+  });
+
+  const scatter = level.scatterAllies;
+  if (scatter) {
+    const zones = [];
+    while (zones.length < scatter.count) zones.push(...shuffled(scatter.zones));
+    for (let k = 0; k < scatter.count; k++) {
+      slots.push({ zone: zones[k], pool: level.allyPool, restricted: false, type: null });
+    }
   }
-  const order = shuffled(types);
-  return spots.map(([cx, cy], k) => [order[k], cx, cy]);
+
+  const free = shuffled(slots.filter((s) => !s.type)).sort((a, b) => b.restricted - a.restricted);
+  for (const slot of free) {
+    const options = slot.pool.filter((t) => !used.has(t));
+    if (!options.length) continue;
+    slot.type = pickOne(options);
+    used.add(slot.type);
+  }
+
+  const out = { rooms: level.rooms.map(() => []), scatter: [] };
+  for (const s of slots) {
+    if (!s.type) continue;
+    if (s.at) out.rooms[s.room].push([s.type, s.at[0], s.at[1]]);
+    else out.scatter.push([s.type, s.zone]);
+  }
+  return out;
 }
 
-// союзники, разбросанные по уровню сверх точек комнат: список [тип, номер зоны];
-// точку внутри зоны подбирает state.js. Типы идут по кругу перемешанного пула, зоны — по кругу перемешанного списка
-function rollScatterAllies(level) {
-  const spec = level.scatterAllies;
-  if (!spec) return [];
-  const types = [];
-  while (types.length < spec.count) types.push(...shuffled(level.allyPool));
-  const zones = [];
-  while (zones.length < spec.count) zones.push(...shuffled(spec.zones));
-  return Array.from({ length: spec.count }, (_, k) => [types[k], zones[k]]);
-}
-
-G.populate = { rollEnemies, rollAllies, rollScatterAllies };
+G.populate = { rollEnemies, rollLevelAllies };
 })(window.Game = window.Game || {});

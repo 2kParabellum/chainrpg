@@ -6,8 +6,8 @@
 const { CONFIG, COLORS, state } = G;
 const { clamp, dist } = G.math;
 const { world } = G.world;
-const { leader, isLit, isSpotted, lightRadius } = G.session;
-const { allyTypes, enemyTypes } = G;
+const { isLit, isSpotted, activeWeapons } = G.session;
+const { allyTypes, enemyTypes, weapons } = G;
 const shapes = G.shapes;
 const { canvas, ctx, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor } = shapes;
 
@@ -63,7 +63,7 @@ function drawHook(p) {
 
 // вонючее облако: рваный круг, который тускнеет к концу жизни
 function drawCloud(c) {
-  if (dist(leader(), c) > lightRadius() + c.cur) return;
+  if (!isLit(c, c.cur)) return;
   const fade = clamp(c.life / 0.8, 0, 1);
   ctx.fillStyle = COLORS.cloud;
   ctx.globalAlpha = 0.16 * fade;
@@ -178,7 +178,7 @@ function drawNeutrals() {
     ctx.setLineDash([4, 4]);
     drawUnitBody(n, COLORS.neutral, false);
     ctx.setLineDash([]);
-    drawMark(n, allyTypes[n.type].mark);
+    drawMark(n, allyTypes[n.type].mark, 'chain');
     ctx.fillStyle = COLORS.neutral;
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
@@ -230,38 +230,74 @@ function drawClouds() {
   for (const c of state.clouds) drawCloud(c);
 }
 
-// Усилок отмечает ниточками тех соседей, кого ускоряет
-function drawBoosterLinks() {
-  const allies = state.party;
-  ctx.strokeStyle = COLORS.booster;
-  ctx.lineWidth = 2;
-  for (let i = 0; i < allies.length; i++) {
-    if (!allyTypes[allies[i].type].stats.rateBonus) continue;
-    for (const j of [i - 1, i + 1]) {
-      if (j < 0 || j >= allies.length) continue;
-      ctx.globalAlpha = 0.35;
+// огонь Факира на земле: пляшущие языки в круге, гаснет к концу жизни
+function drawFires() {
+  for (const f of state.fires) {
+    if (!visible({ x: f.x - f.r, y: f.y - f.r, w: f.r * 2, h: f.r * 2 })) continue;
+    const fade = clamp(f.life / CONFIG.FIRE.fade, 0, 1);
+    ctx.fillStyle = COLORS.fire;
+    ctx.globalAlpha = 0.16 * fade;
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = COLORS.fire;
+    ctx.globalAlpha = 0.5 * fade;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.globalAlpha = 0.7 * fade;
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + f.t * 1.4;
       ctx.beginPath();
-      ctx.moveTo(allies[i].x, allies[i].y);
-      ctx.lineTo(allies[j].x, allies[j].y);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
+      ctx.arc(f.x + Math.cos(a) * f.r * 0.5, f.y + Math.sin(a) * f.r * 0.5, 4 + 2.5 * Math.sin(f.t * 9 + i * 2), 0, Math.PI * 2);
+      ctx.fill();
     }
+    ctx.globalAlpha = 1;
   }
 }
 
-// цепочка: с хвоста, чтобы ведущий оказался сверху
+// цепочка: с хвоста, чтобы ведущий оказался сверху; у ведущего над плечом язычок факела
 function drawChain() {
   for (let i = state.party.length - 1; i >= 0; i--) {
     const a = state.party[i];
     drawUnitBody(a, allyColor(a.type), true);
-    drawMark(a, allyTypes[a.type].mark);
+    drawMark(a, allyTypes[a.type].mark, i === 0 ? 'lead' : 'chain');
     drawHpBar(a);
   }
+  const lead = state.party[0];
+  ctx.fillStyle = '#ffb347';
+  ctx.beginPath();
+  ctx.arc(lead.x + lead.r * 0.8, lead.y - lead.r * 0.9, 3.5 + Math.sin(state.lightTime * 9) * 0.8, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// оружие поверх тел: щиты, луч, кольца умений
+function drawWeapons() {
+  for (const u of state.party) {
+    for (const w of activeWeapons(u)) {
+      const def = weapons[w.type];
+      if (def.draw) def.draw(u, w, shapes);
+    }
+  }
+}
+
+// горшок Факира летит по дуге в точку падения
+function drawFirebomb(p) {
+  const k = Math.min(1, p.t / p.flight);
+  const height = Math.sin(k * Math.PI) * 45;
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.beginPath();
+  ctx.ellipse(p.x, p.y, p.r * 1.2, p.r * 0.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = COLORS.fire;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y - height, p.r + 1, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function drawProjectiles() {
   for (const p of state.projectiles) {
     if (p.kind === 'mortar') { drawMortar(p); continue; }
+    if (p.kind === 'firebomb') { drawFirebomb(p); continue; }
     if (p.kind === 'hook') { drawHook(p); continue; }
     if (!isLit(p)) continue;
     ctx.fillStyle = p.team === 'ally' ? COLORS.allyShot : COLORS.enemyShot;
@@ -322,8 +358,9 @@ function drawScene() {
   drawWarnings();
   drawEnemies();
   drawClouds();
-  drawBoosterLinks();
+  drawFires();
   drawChain();
+  drawWeapons();
   drawProjectiles();
   drawEffects();
 }

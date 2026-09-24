@@ -5,7 +5,7 @@
 
 const { CONFIG, COLORS, state } = G;
 const { clamp } = G.math;
-const { leader, currentRoom, lightRadius, isSpotted, maxParty } = G.session;
+const { currentRoom, lightSources, isSpotted, maxParty } = G.session;
 const { roomCount, roomIndexAt } = G.world;
 const { nearestPickup, MENU, menuRect, menuRowY, menuPreviewOrder } = G.chain;
 const { ctx, allyColor } = G.shapes;
@@ -90,7 +90,7 @@ function drawHud() {
   let y = 44;
   for (const a of state.party) {
     ctx.fillStyle = allyColor(a.type);
-    ctx.fillText(`${a.cfg.name.padEnd(9, ' ')} ${Math.max(0, Math.ceil(a.hp))}/${a.maxHp}`, 12, y);
+    ctx.fillText(`${a === state.party[0] ? '*' : ' '} ${a.cfg.name.padEnd(9, ' ')} ${Math.max(0, Math.ceil(a.hp))}/${a.maxHp}`, 12, y);
     y += 16;
   }
 
@@ -119,15 +119,29 @@ function drawHud() {
   ctx.restore();
 }
 
-// темнота за пределами фонаря
+// темнота вне света: на отдельном слое заливаем всё тьмой и вырезаем круг у каждого источника света
+// (факел ведущего, огни Факира), затем накладываем слой на сцену
+const dark = document.createElement('canvas');
+dark.width = CONFIG.VIEW.w;
+dark.height = CONFIG.VIEW.h;
+const dctx = dark.getContext('2d');
+
 function drawLight() {
-  const r = lightRadius();
-  const g = ctx.createRadialGradient(leader().x, leader().y, r * CONFIG.VISION.innerRatio,
-    leader().x, leader().y, r);
-  g.addColorStop(0, 'rgba(6,6,8,0)');
-  g.addColorStop(1, `rgba(6,6,8,${CONFIG.VISION.darkness})`);
-  ctx.fillStyle = g;
-  ctx.fillRect(state.camera.x, state.camera.y, CONFIG.VIEW.w, CONFIG.VIEW.h);
+  const { w, h } = { w: CONFIG.VIEW.w, h: CONFIG.VIEW.h };
+  dctx.globalCompositeOperation = 'source-over';
+  dctx.clearRect(0, 0, w, h);
+  dctx.fillStyle = `rgba(6,6,8,${CONFIG.VISION.darkness})`;
+  dctx.fillRect(0, 0, w, h);
+  dctx.globalCompositeOperation = 'destination-out';
+  for (const s of lightSources()) {
+    const x = s.x - state.camera.x, y = s.y - state.camera.y;
+    const g = dctx.createRadialGradient(x, y, s.r * CONFIG.VISION.innerRatio, x, y, s.r);
+    g.addColorStop(0, 'rgba(0,0,0,1)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    dctx.fillStyle = g;
+    dctx.fillRect(0, 0, w, h);
+  }
+  ctx.drawImage(dark, state.camera.x, state.camera.y);
 }
 
 G.hud = { drawLight, drawHud };

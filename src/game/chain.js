@@ -56,16 +56,6 @@ function followChain(a, dt, i) {
   }
 }
 
-// соседи по цепочке с rateBonus (Усилок) ускоряют звено: каждый примыкающий даёт свой бонус к темпу
-function attackRateMul(index) {
-  let bonus = 0;
-  for (const j of [index - 1, index + 1]) {
-    if (j < 0 || j >= state.party.length) continue;
-    bonus += allyTypes[state.party[j].type].stats.rateBonus || 0;
-  }
-  return 1 + bonus;
-}
-
 // --- вербовка, бросок, выбивание ---
 
 // ближайший, кого можно подобрать: нейтрал или выбитый из цепочки союзник
@@ -154,12 +144,12 @@ function applyOrder(newOrder) {
   const lead = old[0], next = newOrder[0];
   if (next !== lead) {
     const slots = old.map((u) => ({ x: u.x, y: u.y }));
-    const { vx, vy, facing } = lead;
+    const { vx, vy, facing, heading } = lead;
     newOrder.forEach((u, i) => {
       if (old[i] !== u) { u.x = slots[i].x; u.y = slots[i].y; }
     });
     lead.vx = 0; lead.vy = 0;
-    next.vx = vx; next.vy = vy; next.facing = facing;
+    next.vx = vx; next.vy = vy; next.facing = facing; next.heading = heading;
     state.effects.push({ type: 'beam', x1: slots[0].x, y1: slots[0].y, x2: lead.x, y2: lead.y,
                          life: 0.25, color: COLORS.hero });
     state.swapCd = CONFIG.CHAIN.swapCooldown;
@@ -205,7 +195,7 @@ function menuPreviewOrder() {
 
 G.chain = {
   applyOrder, swapWithLeader,
-  pushTrail, rebuildTrail, trailPointAt, followChain, attackRateMul,
+  pushTrail, rebuildTrail, trailPointAt, followChain,
   nearestPickup, tryRecruit, canBeDisplaced, knockOutAlly, dropLastAlly, hookAlly, updateDowned,
   MENU, menuRect, menuRowY, menuSlotAt, menuPreviewOrder,
 };

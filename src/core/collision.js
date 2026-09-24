@@ -65,20 +65,33 @@ function slideAlongWall(unit, normal, friction) {
   unit.vy *= friction;
 }
 
-// пересечение отрезка с прямоугольником (slab method)
-function segmentHitsRect(x1, y1, x2, y2, rect) {
+// пересечение отрезка с прямоугольником (slab method): доля отрезка (0..1), на которой он входит
+// в прямоугольник, или null, если не пересекает
+function segmentHitT(x1, y1, x2, y2, rect) {
   const dx = x2 - x1, dy = y2 - y1;
   let t0 = 0, t1 = 1;
   const p = [-dx, dx, -dy, dy];
   const q = [x1 - rect.x, rect.x + rect.w - x1, y1 - rect.y, rect.y + rect.h - y1];
   for (let i = 0; i < 4; i++) {
-    if (Math.abs(p[i]) < 1e-9) { if (q[i] < 0) return false; continue; }
+    if (Math.abs(p[i]) < 1e-9) { if (q[i] < 0) return null; continue; }
     const t = q[i] / p[i];
-    if (p[i] < 0) { if (t > t1) return false; if (t > t0) t0 = t; }
-    else { if (t < t0) return false; if (t < t1) t1 = t; }
+    if (p[i] < 0) { if (t > t1) return null; if (t > t0) t0 = t; }
+    else { if (t < t0) return null; if (t < t1) t1 = t; }
   }
-  return true;
+  return t0;
 }
 
-G.collision = { circleRectOverlap, moveAndCollide, slideAlongWall, segmentHitsRect };
+function segmentHitsRect(x1, y1, x2, y2, rect) {
+  return segmentHitT(x1, y1, x2, y2, rect) !== null;
+}
+
+// расстояние от точки до отрезка
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 > 0 ? clamp(((px - x1) * dx + (py - y1) * dy) / len2, 0, 1) : 0;
+  return Math.hypot(px - (x1 + dx * t), py - (y1 + dy * t));
+}
+
+G.collision = { circleRectOverlap, moveAndCollide, slideAlongWall, segmentHitT, segmentHitsRect, distToSegment };
 })(window.Game = window.Game || {});

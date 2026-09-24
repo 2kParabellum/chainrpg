@@ -37,11 +37,12 @@ function drawUnitBody(u, color, filled) {
   ctx.stroke();
 }
 
-// знак на теле: общая заготовка линии, а сам рисунок задаёт paint(u, f, ctx), f — направление взгляда
-function drawMark(u, paint) {
+// знак на теле: общая заготовка линии, а сам рисунок задаёт paint(u, f, ctx, mode):
+// f — направление взгляда, mode — 'lead' (с факелом) или 'chain' (в цепи)
+function drawMark(u, paint, mode) {
   ctx.lineWidth = 2;
   ctx.strokeStyle = '#0e0e10';
-  paint(u, u.facing || 0, ctx);
+  paint(u, u.facing || 0, ctx, mode);
 }
 
 function allyColor(type) {
