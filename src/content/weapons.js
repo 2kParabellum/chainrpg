@@ -16,7 +16,6 @@
 
 const { COLORS } = G;
 const { dist } = G.math;
-const { distToSegment } = G.collision;
 
 // перезарядка: true, когда оружие готово действовать
 function ready(w, dt) {
@@ -55,33 +54,33 @@ function shootUpdate(fire) {
 const arrow = (u, w, foe, game) => game.spawnProjectile(u, foe.x, foe.y, w.projSpeed, w.dmg, 'ally', w.projRadius);
 
 const sword = {
-  stats: { reach: 30, dmg: 8, cooldown: 1.0, color: COLORS.hero },
+  stats: { reach: 30, dmg: 16, cooldown: 1.0, color: COLORS.hero },
   update: meleeUpdate,
 };
 
 const revolver = {
-  stats: { range: 280, dmg: 4, cooldown: 0.9, projSpeed: 520, projRadius: 3 },
+  stats: { range: 280, dmg: 8, cooldown: 0.9, projSpeed: 520, projRadius: 3 },
   update: shootUpdate(arrow),
 };
 
 const bow = {
-  stats: { range: 560, dmg: 14, cooldown: 1.3, projSpeed: 620, projRadius: 4 },
+  stats: { range: 560, dmg: 28, cooldown: 1.3, projSpeed: 620, projRadius: 4 },
   update: shootUpdate(arrow),
 };
 
 const knives = {
-  stats: { range: 190, dmg: 9, cooldown: 0.7, projSpeed: 480, projRadius: 4 },
+  stats: { range: 190, dmg: 18, cooldown: 0.7, projSpeed: 480, projRadius: 4 },
   update: shootUpdate(arrow),
 };
 
 const spear = {
-  stats: { reach: 45, dmg: 16, cooldown: 1.1, color: COLORS.warrior },
+  stats: { reach: 45, dmg: 32, cooldown: 1.1, color: COLORS.warrior },
   update: meleeUpdate,
 };
 
 // пассивная регенерация всей цепочки
 const regen = {
-  stats: { rate: 1.2 },      // HP в секунду каждому звену
+  stats: { rate: 2.4 },      // HP в секунду каждому звену
   update(u, w, dt, game) {
     for (const m of game.state.party) {
       if (m.hp < m.maxHp) m.hp = Math.min(m.maxHp, m.hp + w.rate * dt);
@@ -181,7 +180,7 @@ const ironBoots = {
 
 // бросок огня: неточный навесной снаряд; на месте падения бьёт по площади и оставляет светящийся огонь
 const firebomb = {
-  stats: { range: 360, cooldown: 2.6, flight: 0.6, miss: 45, radius: 50, dmg: 16, edgeDmg: 8,
+  stats: { range: 360, cooldown: 2.6, flight: 0.6, miss: 45, radius: 50, dmg: 32, edgeDmg: 16,
            fireRadius: 45, fireLife: 4, fireLight: 130, burnDps: 0 },
   update: shootUpdate((u, w, foe, game) => {
     const a = Math.random() * Math.PI * 2, d = Math.random() * w.miss;
@@ -189,37 +188,54 @@ const firebomb = {
   }),
 };
 
-// огненный луч ведущего: короткий, всегда горит вперёд по направлению движения и упирается в стены
+// огненный конус ведущего: горит вперёд по направлению движения, расходится веером и упирается в стены
 const flameBeam = {
-  stats: { length: 80, width: 8, dps: 14 },
+  stats: { length: 130, arc: 0.4, dps: 28, rays: 7 },   // длина, половина угла раствора, урон в секунду
   update(u, w, dt, game) {
-    const len = game.rayLength(u.x, u.y, u.heading, w.length);
-    const x2 = u.x + Math.cos(u.heading) * len, y2 = u.y + Math.sin(u.heading) * len;
-    u.beam = { x2, y2 };
+    // контур конуса: лучи веером, каждый обрезан о стены и колонны
+    const pts = [];
+    for (let i = 0; i < w.rays; i++) {
+      const a = u.heading + (i / (w.rays - 1) - 0.5) * 2 * w.arc;
+      const len = game.rayLength(u.x, u.y, a, w.length);
+      pts.push({ x: u.x + Math.cos(a) * len, y: u.y + Math.sin(a) * len });
+    }
+    u.beam = { pts };
     for (const e of game.state.enemies.slice()) {
       if (!game.isSpotted(e)) continue;
-      if (distToSegment(e.x, e.y, u.x, u.y, x2, y2) <= e.r + w.width / 2) game.damageUnit(e, w.dps * dt);
+      const d = dist(u, e);
+      if (d > w.length + e.r) continue;
+      // цель в конусе, если её центр (с учётом размера) попадает в угол, и до неё нет стены
+      const a = Math.atan2(e.y - u.y, e.x - u.x);
+      const diff = Math.abs(Math.atan2(Math.sin(a - u.heading), Math.cos(a - u.heading)));
+      if (diff > w.arc + Math.asin(Math.min(1, e.r / Math.max(d, e.r)))) continue;
+      if (game.rayLength(u.x, u.y, a, d) < d - e.r) continue;
+      game.damageUnit(e, w.dps * dt);
     }
   },
   draw(u, w, g) {
     if (!u.beam) return;
     const { ctx } = g;
-    ctx.lineCap = 'round';
+    const { pts } = u.beam;
+    ctx.beginPath();
+    ctx.moveTo(u.x, u.y);
+    for (const p of pts) ctx.lineTo(p.x, p.y);
+    ctx.closePath();
+    ctx.fillStyle = COLORS.fire;
+    ctx.globalAlpha = 0.32;
+    ctx.fill();
     ctx.strokeStyle = COLORS.fire;
     ctx.globalAlpha = 0.85;
-    ctx.lineWidth = w.width;
-    ctx.beginPath();
-    ctx.moveTo(u.x, u.y);
-    ctx.lineTo(u.beam.x2, u.beam.y2);
+    ctx.lineWidth = 2;
     ctx.stroke();
+    // яркая жила по центру
+    const mid = pts[Math.floor(pts.length / 2)];
     ctx.strokeStyle = '#ffe9a0';
-    ctx.lineWidth = w.width * 0.4;
+    ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(u.x, u.y);
-    ctx.lineTo(u.beam.x2, u.beam.y2);
+    ctx.lineTo(mid.x, mid.y);
     ctx.stroke();
     ctx.globalAlpha = 1;
-    ctx.lineCap = 'butt';
   },
 };
 

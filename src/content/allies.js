@@ -23,7 +23,7 @@ const { COLORS } = G;
 const hero = {
   color: COLORS.hero,
   anchor: true,
-  stats: { name: 'Герой', hp: 75, radius: 14 },
+  stats: { name: 'Герой', hp: 150, radius: 14 },
   lead: { light: 300, weapons: { sword: {} } },
   chain: { weapons: { sword: {}, revolver: {} } },
   // треугольник-«нос» показывает направление; в цепи добавлен ствол револьвера
@@ -46,7 +46,7 @@ const hero = {
 // Лучник: в цепи — лук на очень большую дальность; с факелом — только метательные ножи
 const archer = {
   color: COLORS.archer,
-  stats: { name: 'Лучник', hp: 50, radius: 13 },
+  stats: { name: 'Лучник', hp: 100, radius: 13 },
   lead: { light: 210, weapons: { knives: {} } },
   chain: { weapons: { bow: {} } },
   mark(u, f, ctx, mode) {
@@ -68,7 +68,7 @@ const archer = {
 // Медик: регенерация цепочки в любом режиме; в цепи ещё лечит активно, с факелом — рассеивает облака
 const medic = {
   color: COLORS.medic,
-  stats: { name: 'Медик', hp: 49, radius: 13 },
+  stats: { name: 'Медик', hp: 98, radius: 13 },
   lead: { light: 210, weapons: { regen: {}, dispel: {} } },
   chain: { weapons: { regen: {}, heal: {} } },
   mark(u, f, ctx, mode) {
@@ -87,8 +87,8 @@ const medic = {
 // Воин: копьё и щит вокруг цепочки; с факелом — только щит перед лицом. Железные сапоги топчут шипы
 const warrior = {
   color: COLORS.warrior,
-  stats: { name: 'Воин', hp: 95, radius: 16 },
-  lead: { light: 190, weapons: { shieldFront: {} } },
+  stats: { name: 'Воин', hp: 190, radius: 16 },
+  lead: { light: 170, weapons: { shieldFront: {} } },
   chain: { weapons: { spear: {}, shieldAura: {} } },
   traits: { ironBoots: {} },
   mark(u, f, ctx, mode) {
@@ -109,7 +109,7 @@ const warrior = {
 // Факир: в цепи бросает огонь; с факелом — короткий огненный луч вперёд
 const fakir = {
   color: COLORS.fakir,
-  stats: { name: 'Факир', hp: 55, radius: 13 },
+  stats: { name: 'Факир', hp: 110, radius: 13 },
   lead: { light: 240, weapons: { flameBeam: {} } },
   chain: { weapons: { firebomb: {} } },
   // язычок пламени; с факелом добавлена линия луча
