@@ -37,12 +37,12 @@ initInput(canvas, {
   onPointerUp() {
     mouseDown = false;
   },
-  onCommand(name) {
+  onCommand(name, arg) {
+    if (name === 'padHold') { state.padHeld = !!arg; return; }
     if (state.status === 'menu') return;
     if (name === 'restart') resetGame(state.level);
     else if (name === 'recruit') tryRecruit();
     else if (name === 'drop') dropLastAlly();
-    else if (name === 'lock') state.padLock = !state.padLock;
   },
 });
 

@@ -76,10 +76,19 @@ function followChain(a, dt, i) {
   if (normal) slideAlongWall(a, normal, 1);
 }
 
-// временное усиление: повторный подиум обновляет таймер, но не умножает HP второй раз
+// снять усиление key: множители сбрасываются, HP возвращается к обычному пределу
+function endBuff(u, key) {
+  u.buffs[key] = 0;
+  if (key === 'power') { u.dmgMul = 1; u.maxHp = u.baseMaxHp; u.hp = Math.min(u.hp, u.maxHp); }
+  if (key === 'speed') { u.moveMul = 1; u.rateMul = 1; }
+}
+
+// временное усиление; у звена не больше одного: новое перезаписывает старое.
+// Повторный подиум того же усиления обновляет таймер, но не умножает HP второй раз
 function giveBuff(u, key) {
   const def = G.buffs[key];
   if (!u.buffs) u.buffs = {};
+  for (const other of Object.keys(u.buffs)) if (other !== key && u.buffs[other] > 0) endBuff(u, other);
   const fresh = !(u.buffs[key] > 0);
   u.buffs[key] = def.duration;
   if (fresh) {
@@ -89,26 +98,23 @@ function giveBuff(u, key) {
   }
 }
 
-// таймеры усилений: по окончании множители снимаются, HP возвращается к обычному пределу
+// таймеры усилений
 function updateBuffs(dt) {
   for (const u of state.party) {
     if (!u.buffs) continue;
     for (const key of Object.keys(u.buffs)) {
       if (!(u.buffs[key] > 0)) continue;
       u.buffs[key] -= dt;
-      if (u.buffs[key] > 0) continue;
-      u.buffs[key] = 0;
-      if (key === 'power') { u.dmgMul = 1; u.maxHp = u.baseMaxHp; u.hp = Math.min(u.hp, u.maxHp); }
-      if (key === 'speed') { u.moveMul = 1; u.rateMul = 1; }
+      if (u.buffs[key] <= 0) endBuff(u, key);
     }
   }
 }
 
 // проехав по подиуму, звено (и Герой) получает его способность вместо текущей
 function touchPads() {
+  if (!state.padHeld) return;
   for (const u of state.party) {
     const pad = padUnder(u);
-    if (state.padLock && allyTypes[u.type].anchor !== true) continue;
     if (pad && G.buffs[pad.ability]) { giveBuff(u, pad.ability); continue; }
     if (!pad || u.ability === pad.ability) continue;
     setAbility(u, pad.ability);

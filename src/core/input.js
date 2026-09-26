@@ -4,7 +4,7 @@
 //
 // handlers:
 //   onPointerDown(p), onPointerMove(p), onPointerUp(p)   p = { x, y } в пикселях канваса
-//   onCommand(name)   'restart' | 'recruit' | 'drop' | 'lock'
+//   onCommand(name)   'restart' | 'recruit' | 'drop' | 'padHold' (arg — зажата ли клавиша)
 (function (G) {
 'use strict';
 
@@ -12,7 +12,7 @@ const KEY_COMMANDS = {
   KeyR: { name: 'restart', repeatable: true },
   Space: { name: 'recruit', repeatable: true, preventDefault: true },
   KeyX: { name: 'drop' },
-  KeyC: { name: 'lock' },
+  KeyC: { name: 'padHold', hold: true },   // пока зажата, звенья берут подиумы
 };
 
 function initInput(canvas, handlers) {
@@ -37,8 +37,13 @@ function initInput(canvas, handlers) {
     if (!cmd) return;
     if (cmd.preventDefault) ev.preventDefault();
     if (ev.repeat && !cmd.repeatable) return;
-    handlers.onCommand(cmd.name);
+    handlers.onCommand(cmd.name, cmd.hold ? true : undefined);
   });
+  window.addEventListener('keyup', (ev) => {
+    const cmd = KEY_COMMANDS[ev.code];
+    if (cmd && cmd.hold) handlers.onCommand(cmd.name, false);
+  });
+  window.addEventListener('blur', () => handlers.onCommand('padHold', false));
 }
 
 G.input = { initInput };

@@ -27,8 +27,8 @@ function drawHud() {
   ctx.fillStyle = '#c8c8d2';
   ctx.fillText(`${where}   ВРАГОВ ЗДЕСЬ: ${inRoom}${goal}   ЦЕПОЧКА: ${state.party.length}/${maxParty()}`, 12, 22);
 
-  ctx.fillStyle = state.padLock ? '#e0a040' : '#8a8a95';
-  ctx.fillText(`C: подиумы для дружочков — ${state.padLock ? 'LOCK (не меняют)' : 'UNLOCK (меняют)'}`, 12, 38);
+  ctx.fillStyle = state.padHeld ? '#e0a040' : '#8a8a95';
+  ctx.fillText(`Удерживай C, чтобы брать подиумы — ${state.padHeld ? 'БЕРУТ' : 'не берут'}`, 12, 38);
   let y = 58;
   for (const a of state.party) {
     ctx.fillStyle = allyColor(a);
