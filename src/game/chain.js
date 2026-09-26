@@ -65,7 +65,8 @@ function followChain(a, dt, i) {
   const tvy = clamp((target.y - prev.y) / dt, -cap, cap);
   const t = (i - 1) / Math.max(1, maxParty() - 2);
   const k = whip.stiffness * (1 - whip.tailSoftness * clamp(t, 0, 1));
-  const c = 2 * whip.damping * Math.sqrt(k);
+  // затухание тоже слабеет к хвосту: поворот доходит до дальних звеньев и раскачивает их сильнее
+  const c = 2 * (whip.dampingHead + (whip.dampingTail - whip.dampingHead) * clamp(t, 0, 1)) * Math.sqrt(k);
   a.vx += (k * (target.x - a.x) + c * (tvx - a.vx)) * dt;
   a.vy += (k * (target.y - a.y) + c * (tvy - a.vy)) * dt;
   const sp = Math.hypot(a.vx, a.vy);
@@ -126,7 +127,6 @@ function knockOutAlly(a, angle, speed) {
   a.vy = Math.sin(angle) * speed;
   a.cd = 0;
   a.prevTarget = null;
-  setAbility(a, null); // способность живёт, пока звено в цепи
   state.downed.push(a);
 }
 

@@ -207,7 +207,7 @@ function drawDowned() {
     ctx.fillStyle = color;
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(d.cfg.name, d.x, d.y + d.r + 14);
+    ctx.fillText(d.cfg.name + (d.ability ? ` (${abilities[d.ability].name})` : ''), d.x, d.y + d.r + 14);
   }
 }
 
