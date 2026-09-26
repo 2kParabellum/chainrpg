@@ -112,7 +112,8 @@ function updateBuffs(dt) {
 
 // проехав по подиуму, звено (и Герой) получает его способность вместо текущей
 function touchPads() {
-  if (!state.padHeld) return;
+  if (!state.padRequest) return;
+  state.padRequest = false;
   for (const u of state.party) {
     const pad = padUnder(u);
     if (pad && G.buffs[pad.ability]) { giveBuff(u, pad.ability); continue; }
