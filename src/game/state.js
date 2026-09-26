@@ -24,6 +24,7 @@ const state = {
   camera: { x: 0, y: 0 },
   status: 'play',    // menu | play | dead | win
   lightTime: 0,
+  padLock: false,    // клавиша C: true — дружочки не меняют способность на подиумах
   visibleEnemies: [], // освещённые враги: считаются раз за кадр, по ним стреляют союзники
 };
 

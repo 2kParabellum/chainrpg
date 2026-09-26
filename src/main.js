@@ -42,6 +42,7 @@ initInput(canvas, {
     if (name === 'restart') resetGame(state.level);
     else if (name === 'recruit') tryRecruit();
     else if (name === 'drop') dropLastAlly();
+    else if (name === 'lock') state.padLock = !state.padLock;
   },
 });
 

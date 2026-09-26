@@ -79,6 +79,7 @@ function followChain(a, dt, i) {
 function touchPads() {
   for (const u of state.party) {
     const pad = padUnder(u);
+    if (state.padLock && allyTypes[u.type].anchor !== true) continue;
     if (!pad || u.ability === pad.ability) continue;
     setAbility(u, pad.ability);
     state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 8, life: 0.4, color: G.abilities[pad.ability].color });

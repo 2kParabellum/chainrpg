@@ -4,7 +4,7 @@
 //
 // handlers:
 //   onPointerDown(p), onPointerMove(p), onPointerUp(p)   p = { x, y } в пикселях канваса
-//   onCommand(name)   'restart' | 'recruit' | 'drop'
+//   onCommand(name)   'restart' | 'recruit' | 'drop' | 'lock'
 (function (G) {
 'use strict';
 
@@ -12,6 +12,7 @@ const KEY_COMMANDS = {
   KeyR: { name: 'restart', repeatable: true },
   Space: { name: 'recruit', repeatable: true, preventDefault: true },
   KeyX: { name: 'drop' },
+  KeyC: { name: 'lock' },
 };
 
 function initInput(canvas, handlers) {

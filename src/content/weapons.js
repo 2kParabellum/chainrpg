@@ -51,23 +51,23 @@ function shootUpdate(fire) {
 const arrow = (u, w, foe, game) => game.spawnProjectile(u, foe.x, foe.y, w.projSpeed, w.dmg, 'ally', w.projRadius);
 
 const sword = {
-  stats: { reach: 30, dmg: 16, cooldown: 1.0, color: COLORS.hero },
+  stats: { reach: 30, dmg: 12.8, cooldown: 1.0, color: COLORS.hero },
   update: meleeUpdate,
 };
 
 const fist = {
-  stats: { reach: 26, dmg: 12, cooldown: 0.9, color: COLORS.buddy },
+  stats: { reach: 26, dmg: 9.6, cooldown: 0.9, color: COLORS.buddy },
   update: meleeUpdate,
 };
 
 const bow = {
-  stats: { range: 300, dmg: 12, cooldown: 1.0, projSpeed: 560, projRadius: 4 },
+  stats: { range: 300, dmg: 9.6, cooldown: 1.0, projSpeed: 560, projRadius: 4 },
   update: shootUpdate(arrow),
 };
 
 // активное лечение: раз в перезарядку лечит того, у кого ниже всего доля HP
 const heal = {
-  stats: { range: 220, cooldown: 2.0, heal: 10 },
+  stats: { range: 220, cooldown: 2.0, heal: 8 },
   update(u, w, dt, game) {
     if (!ready(w, dt)) return;
     let worst = null;
