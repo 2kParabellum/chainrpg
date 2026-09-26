@@ -178,10 +178,10 @@ function spikeRectAt(u) {
   return null;
 }
 
-// подиум, на котором стоит центр юнита (или null)
+// подиум, которого касается тело юнита (или null): берётся, если круги пересекаются
 function padUnder(u) {
   for (const pad of world.pads) {
-    if (Math.hypot(u.x - pad.x, u.y - pad.y) <= pad.r) return pad;
+    if (Math.hypot(u.x - pad.x, u.y - pad.y) <= pad.r + u.r) return pad;
   }
   return null;
 }
