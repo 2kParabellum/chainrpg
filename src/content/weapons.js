@@ -31,7 +31,7 @@ function meleeUpdate(u, w, dt, game) {
   }
   if (!foe) return;
   u.facing = Math.atan2(foe.y - u.y, foe.x - u.x);
-  game.damageUnit(foe, w.dmg);
+  game.damageUnit(foe, w.dmg * (u.dmgMul || 1));
   w.cd = w.cooldown;
   game.state.effects.push({ type: 'beam', x1: u.x, y1: u.y, x2: foe.x, y2: foe.y, life: 0.12, color: w.color });
 }
@@ -48,7 +48,7 @@ function shootUpdate(fire) {
   };
 }
 
-const arrow = (u, w, foe, game) => game.spawnProjectile(u, foe.x, foe.y, w.projSpeed, w.dmg, 'ally', w.projRadius);
+const arrow = (u, w, foe, game) => game.spawnProjectile(u, foe.x, foe.y, w.projSpeed, w.dmg * (u.dmgMul || 1), 'ally', w.projRadius);
 
 const sword = {
   stats: { reach: 30, dmg: 12.8, cooldown: 1.0, color: COLORS.hero },

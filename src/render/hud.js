@@ -32,8 +32,9 @@ function drawHud() {
   let y = 58;
   for (const a of state.party) {
     ctx.fillStyle = allyColor(a);
-    const label = a.cfg.name + (a.ability ? ` (${abilities[a.ability].name})` : '');
-    ctx.fillText(`${label.padEnd(18, ' ')} ${Math.max(0, Math.ceil(a.hp))}/${a.maxHp}`, 12, y);
+    const bf = Object.entries(a.buffs || {}).filter(([, t]) => t > 0).map(([k, t]) => ` ${G.buffs[k].name} ${Math.ceil(t)}с`).join('');
+    const label = a.cfg.name + (a.ability ? ` (${abilities[a.ability].name})` : '') + bf;
+    ctx.fillText(`${label.padEnd(34, ' ')} ${Math.max(0, Math.ceil(a.hp))}/${a.maxHp}`, 12, y);
     y += 16;
   }
 

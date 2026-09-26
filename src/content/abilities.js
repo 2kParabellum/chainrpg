@@ -55,5 +55,47 @@ const medic = {
   },
 };
 
+// Временные усиления (подиумы скорости и силы): у звена, проехавшего по подиуму, на `duration` секунд
+// включаются множители. Ключ записи — тип подиума. Не заменяют способность и не зависят от Lock.
+//   move  — множитель скорости и разворота Героя; rate — множитель скорости атаки (перезарядка идёт быстрее);
+//   dmg   — множитель урона; hp — множитель текущего и максимального HP (на время действия)
+const speed = {
+  name: 'скорость',
+  color: COLORS.speed,
+  duration: 30,
+  move: 1.3, rate: 1.25,
+  icon(ctx, x, y, s) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.15, y - s * 0.6);
+    ctx.lineTo(x - s * 0.35, y + s * 0.1);
+    ctx.lineTo(x, y + s * 0.1);
+    ctx.lineTo(x - s * 0.15, y + s * 0.6);
+    ctx.lineTo(x + s * 0.35, y - s * 0.1);
+    ctx.lineTo(x, y - s * 0.1);
+    ctx.closePath();
+    ctx.stroke();
+  },
+};
+
+const power = {
+  name: 'сила',
+  color: COLORS.power,
+  duration: 30,
+  dmg: 1.3, hp: 1.3,
+  icon(ctx, x, y, s) {
+    ctx.beginPath();
+    ctx.moveTo(x, y - s * 0.6);
+    ctx.lineTo(x + s * 0.5, y);
+    ctx.lineTo(x + s * 0.2, y);
+    ctx.lineTo(x + s * 0.2, y + s * 0.6);
+    ctx.lineTo(x - s * 0.2, y + s * 0.6);
+    ctx.lineTo(x - s * 0.2, y);
+    ctx.lineTo(x - s * 0.5, y);
+    ctx.closePath();
+    ctx.stroke();
+  },
+};
+
 G.abilities = { shooter, medic };
+G.buffs = { speed, power };
 })(window.Game = window.Game || {});

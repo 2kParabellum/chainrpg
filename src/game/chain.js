@@ -76,10 +76,39 @@ function followChain(a, dt, i) {
   if (normal) slideAlongWall(a, normal, 1);
 }
 
+// временное усиление: повторный подиум обновляет таймер, но не умножает HP второй раз
+function giveBuff(u, key) {
+  const def = G.buffs[key];
+  if (!u.buffs) u.buffs = {};
+  const fresh = !(u.buffs[key] > 0);
+  u.buffs[key] = def.duration;
+  if (fresh) {
+    if (key === 'power') { u.dmgMul = def.dmg; u.baseMaxHp = u.maxHp; u.maxHp *= def.hp; u.hp *= def.hp; }
+    if (key === 'speed') { u.moveMul = def.move; u.rateMul = def.rate; }
+    state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 8, life: 0.4, color: def.color });
+  }
+}
+
+// таймеры усилений: по окончании множители снимаются, HP возвращается к обычному пределу
+function updateBuffs(dt) {
+  for (const u of state.party) {
+    if (!u.buffs) continue;
+    for (const key of Object.keys(u.buffs)) {
+      if (!(u.buffs[key] > 0)) continue;
+      u.buffs[key] -= dt;
+      if (u.buffs[key] > 0) continue;
+      u.buffs[key] = 0;
+      if (key === 'power') { u.dmgMul = 1; u.maxHp = u.baseMaxHp; u.hp = Math.min(u.hp, u.maxHp); }
+      if (key === 'speed') { u.moveMul = 1; u.rateMul = 1; }
+    }
+  }
+}
+
 // проехав по подиуму, звено (и Герой) получает его способность вместо текущей
 function touchPads() {
   for (const u of state.party) {
     const pad = padUnder(u);
+    if (pad && G.buffs[pad.ability]) { giveBuff(u, pad.ability); continue; }
     if (state.padLock && allyTypes[u.type].anchor !== true) continue;
     if (!pad || u.ability === pad.ability) continue;
     setAbility(u, pad.ability);
@@ -168,7 +197,7 @@ function updateDowned(d, dt) {
 }
 
 G.chain = {
-  pushTrail, trailPointAt, followChain, touchPads,
+  pushTrail, trailPointAt, followChain, touchPads, updateBuffs,
   nearestPickup, tryRecruit, canBeDisplaced, knockOutAlly, dropLastAlly, hookAlly, updateDowned,
 };
 })(window.Game = window.Game || {});

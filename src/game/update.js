@@ -9,7 +9,7 @@ const { moveAndCollide, slideAlongWall } = G.collision;
 const { world } = G.world;
 const { leader, isLit, currentRoom, chainUnits, isSpotted, spawnEnemy } = G.session;
 const { freeSpotNear } = G.world;
-const { pushTrail, followChain, touchPads, updateDowned, knockOutAlly } = G.chain;
+const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly } = G.chain;
 const combat = G.combat;
 const { updateProjectiles, updateClouds, applySpikes, updateEffects } = combat;
 const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
@@ -33,7 +33,8 @@ const game = {
 // движение Героя с инерцией: разгон к точке и накат после отпускания газа
 function updateLeader(dt) {
   const lead = leader();
-  const cfg = CONFIG.LEADER;
+  const mv = lead.moveMul || 1;   // усиление подиума скорости: быстрее ход и разворот
+  const cfg = { ...CONFIG.LEADER, speed: CONFIG.LEADER.speed * mv, accel: CONFIG.LEADER.accel * mv, brake: CONFIG.LEADER.brake * mv };
   let ax = 0, ay = 0;
 
   if (state.moveTarget) {
@@ -70,7 +71,7 @@ function updateLeader(dt) {
 // звено цепочки: Герой идёт сам, остальные бегут за ним; работает оружие текущей способности звена
 function updateAlly(a, dt, i) {
   if (i > 0) followChain(a, dt, i);
-  for (const w of a.gear) weapons[w.type].update(a, w, dt, game);
+  for (const w of a.gear) weapons[w.type].update(a, w, dt * (a.rateMul || 1), game);
 }
 
 // общая часть любого врага: регенерация и активация, дальше — поведение по типу
@@ -124,6 +125,7 @@ function update(dt) {
     if (i >= 0) updateAlly(a, dt, i);
   }
   touchPads();
+  updateBuffs(dt);
   for (const d of state.downed) updateDowned(d, dt);
   for (const e of state.enemies.slice()) updateEnemy(e, dt);
   updateProjectiles(dt);

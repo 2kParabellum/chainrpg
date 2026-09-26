@@ -230,28 +230,65 @@ function drawClouds() {
   for (const c of state.clouds) drawCloud(c);
 }
 
-// подиумы способностей: светящийся квадрат на полу; alpha — общая яркость (в темноте слабее)
+// подиумы: светящийся круг на полу; alpha — общая яркость (в темноте слабее).
+// Подиумы усилений (скорость, сила) окружены ещё и широким мягким свечением
 function drawPads(alpha) {
-  const { size, pulse } = CONFIG.PADS;
-  const glow = 0.25 + 0.1 * Math.sin((state.lightTime / pulse) * Math.PI * 2);
+  const { pulse } = CONFIG.PADS;
+  const wave = Math.sin((state.lightTime / pulse) * Math.PI * 2);
+  const glow = 0.25 + 0.1 * wave;
   for (const pad of world.pads) {
-    if (!visible(pad)) continue;
-    const def = abilities[pad.ability];
+    const buff = G.buffs[pad.ability];
+    const def = buff || abilities[pad.ability];
+    const halo = pad.r * (buff ? 2.6 : 1);
+    if (!visible({ x: pad.x - halo, y: pad.y - halo, w: halo * 2, h: halo * 2 })) continue;
+    if (buff) {
+      const g = ctx.createRadialGradient(pad.x, pad.y, pad.r * 0.6, pad.x, pad.y, halo * (1 + 0.06 * wave));
+      g.addColorStop(0, def.color);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.globalAlpha = (0.45 + 0.15 * wave) * alpha;
+      ctx.beginPath();
+      ctx.arc(pad.x, pad.y, halo * 1.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.fillStyle = def.color;
     ctx.globalAlpha = glow * alpha;
-    ctx.fillRect(pad.x, pad.y, pad.w, pad.h);
+    ctx.beginPath();
+    ctx.arc(pad.x, pad.y, pad.r, 0, Math.PI * 2);
+    ctx.fill();
     ctx.strokeStyle = def.color;
     ctx.globalAlpha = 0.9 * alpha;
     ctx.lineWidth = 2;
-    ctx.strokeRect(pad.x + 1, pad.y + 1, pad.w - 2, pad.h - 2);
-    ctx.lineWidth = 2.5;
-    def.icon(ctx, pad.x + size / 2, pad.y + size / 2, size * 0.4);
+    ctx.beginPath();
+    ctx.arc(pad.x, pad.y, pad.r - 1, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    def.icon(ctx, pad.x, pad.y, pad.r * 0.75);
     ctx.globalAlpha = 1;
   }
 }
 
 // подиумы видны и в темноте: второй проход поверх затемнения
 function drawPadsInDark() { drawPads(CONFIG.PADS.darkAlpha); }
+
+// кольца временных усилений вокруг тела: по одному на каждое действующее
+function drawBuffRings(u) {
+  if (!u.buffs) return;
+  let k = 0;
+  for (const [key, left] of Object.entries(u.buffs)) {
+    if (!(left > 0)) continue;
+    // за 5 секунд до конца кольцо мигает
+    if (left < 5 && Math.floor(left * 4) % 2 === 0) continue;
+    ctx.strokeStyle = G.buffs[key].color;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.arc(u.x, u.y, u.r + 3 + k * 3, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    k++;
+  }
+}
 
 // цепочка: с хвоста, чтобы Герой оказался сверху; у Героя над плечом язычок факела.
 // Знаки на теле: сначала знак типа, затем знак способности
@@ -261,6 +298,7 @@ function drawChain() {
     drawUnitBody(a, allyColor(a), true);
     drawMark(a, allyTypes[a.type].mark);
     if (a.ability) drawMark(a, abilities[a.ability].mark);
+    drawBuffRings(a);
     drawHpBar(a);
   }
   const lead = state.party[0];

@@ -60,11 +60,10 @@ function addRoomContent(plan, i) {
   for (const p of plan.pillars) world.pillars.push(toRect(p));
   for (const p of plan.pits) world.pits.push(toRect(p));
   for (const p of plan.spikes) world.spikes.push(toRect(p));
-  // подиумы способностей: квадрат PADS.size с центром в точке плана, ничего не блокируют
-  const size = CONFIG.PADS.size;
+  // подиумы: круг PADS.radius с центром в точке плана, ничего не блокируют
   for (const [cx, cy, ability] of plan.pads || []) {
     const c = localToWorld(i, cx, cy);
-    world.pads.push({ x: c.x - size / 2, y: c.y - size / 2, w: size, h: size, ability });
+    world.pads.push({ x: c.x, y: c.y, r: CONFIG.PADS.radius, ability });
   }
   // в заминированных комнатах на полу у входа нарисованы предупреждающие знаки
   if ((plan.mines || []).length) {
@@ -182,14 +181,14 @@ function spikeRectAt(u) {
 // подиум, на котором стоит центр юнита (или null)
 function padUnder(u) {
   for (const pad of world.pads) {
-    if (u.x >= pad.x && u.x <= pad.x + pad.w && u.y >= pad.y && u.y <= pad.y + pad.h) return pad;
+    if (Math.hypot(u.x - pad.x, u.y - pad.y) <= pad.r) return pad;
   }
   return null;
 }
 
 // пересекает ли круг какой-нибудь подиум: по ним не расставляют нейтралов
 function overlapsPad(x, y, r) {
-  return world.pads.some((pad) => circleRectOverlap(x, y, r, pad));
+  return world.pads.some((pad) => Math.hypot(x - pad.x, y - pad.y) < pad.r + r);
 }
 
 function standsOnSpikes(u) { return spikeRectAt(u) !== null; }
