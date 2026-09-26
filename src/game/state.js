@@ -8,26 +8,23 @@ const { CONFIG } = G;
 const { clamp, dist } = G.math;
 const { world, localToWorld, buildWorld, roomIndexAt, scatterSpot } = G.world;
 const { rollEnemies, rollLevelAllies } = G.populate;
-const { allyTypes, enemyTypes, weapons } = G;
+const { allyTypes, enemyTypes, weapons, abilities } = G;
 
 const state = {
   level: null,       // данные текущего уровня
-  party: [],         // вся цепочка по порядку: [0] — ведущий (им управляет игрок), остальные бегут по его следу
-  moveTarget: null,  // куда идёт ведущий: цель управления, при смене ведущего она остаётся
+  party: [],         // вся цепочка по порядку: [0] — Герой (им управляет игрок), остальные бегут по его следу
+  moveTarget: null,  // куда идёт Герой: цель управления
   neutrals: [],      // ждут вербовки
   downed: [],        // выбитые из цепочки, лежат до подбора
   enemies: [],
   projectiles: [],
   effects: [],
   clouds: [],
-  fires: [],         // огонь Факира на земле: светит и держится несколько секунд
-  trail: [],         // след ведущего, по которому бегут остальные звенья
+  trail: [],         // след Героя, по которому бегут остальные звенья
   camera: { x: 0, y: 0 },
   status: 'play',    // menu | play | dead | win
   lightTime: 0,
-  swapCd: 0,         // сколько ещё нельзя менять ведущего
   visibleEnemies: [], // освещённые враги: считаются раз за кадр, по ним стреляют союзники
-  menu: { open: false, drag: null }, // меню порядка цепочки; drag: { from, y }
 };
 
 function makeUnit(kind, type, x, y, cfg) {
@@ -45,18 +42,27 @@ function makeWeapon(name, over) {
   return w;
 }
 
-// союзник (в цепи, нейтрал или лежачий): тело + оружие обоих режимов; одно имя оружия — одна копия
+// оружие юнита плоским списком: личные копии оружия способности key или, если её нет, базового
+function makeGear(u, key) {
+  const spec = key ? abilities[key] : allyTypes[u.type].base;
+  return Object.entries((spec && spec.weapons) || {}).map(([name, over]) => makeWeapon(name, over));
+}
+
+// союзник (в цепи, нейтрал или лежачий): тело + базовое оружие без способности
 function makeAlly(kind, type, x, y) {
   const t = allyTypes[type];
   const u = makeUnit(kind, type, x, y, t.stats);
-  u.heading = 0;                 // направление движения ведущего: по нему смотрят щит и луч
-  u.light = t.lead.light;        // радиус факела, когда звено идёт первым
-  u.beam = null;
-  const made = {};
-  const gear = (spec) => Object.entries((spec && spec.weapons) || {})
-    .map(([name, over]) => made[name] || (made[name] = makeWeapon(name, over)));
-  u.gear = { lead: gear(t.lead), chain: gear(t.chain), passive: gear({ weapons: t.traits }) };
+  u.light = t.light || 0;        // радиус факела: только у Героя
+  u.ability = null;              // ключ способности от подиума; null — базовое оружие
+  u.prevTarget = null;           // прошлая точка следа: по ней плётка считает скорость точки
+  u.gear = makeGear(u, null);
   return u;
+}
+
+// сменить способность звена: оружие пересобирается новыми личными копиями; null — снова базовое
+function setAbility(u, key) {
+  u.ability = key;
+  u.gear = makeGear(u, key);
 }
 
 function makeEnemy(type, x, y, room) {
@@ -81,10 +87,9 @@ function resetGame(level) {
   buildWorld(level);
   state.party = []; state.moveTarget = null; state.neutrals = []; state.downed = []; state.enemies = [];
   state.projectiles = []; state.effects = []; state.trail = [];
-  state.clouds = []; state.fires = [];
+  state.clouds = [];
   state.status = 'play';
-  state.menu.open = false; state.menu.drag = null;
-  state.lightTime = 0; state.swapCd = 0;
+  state.lightTime = 0;
   state.visibleEnemies = [];
 
   const spawn = localToWorld(level.spawn.room, level.spawn.at[0], level.spawn.at[1]);
@@ -136,49 +141,37 @@ function resetGame(level) {
   state.camera.y = clamp(state.party[0].y - CONFIG.VIEW.h / 2, 0, world.height - CONFIG.VIEW.h);
 }
 
-// ведущий: первое звено цепочки, от него считаются свет, камера, активация врагов и цель охотников
+// ведущий — всегда Герой, первое звено цепочки: от него считаются свет, камера, активация врагов и цель охотников
 function leader() { return state.party[0]; }
 
 function chainUnits() { return state.party.slice(); }
 
-// режим звена: первое несёт факел, остальные идут в цепи; у каждого режима своё оружие
-function modeOf(u) { return state.party[0] === u ? 'lead' : 'chain'; }
-
-function activeWeapons(u) { return u.gear[modeOf(u)]; }
-
-// радиус факела ведущего (у каждого персонажа свой) с лёгким дрожанием пламени
+// радиус факела Героя с лёгким дрожанием пламени
 function lightRadius() {
   const v = CONFIG.VISION;
   return leader().light + Math.sin(state.lightTime * v.flickerSpeed) * v.flicker
                   + Math.sin(state.lightTime * v.flickerSpeed * 2.7) * v.flicker * 0.5;
 }
 
-// огонь светит вполсилы, пока не погаснет: радиус света падает за последние секунды жизни
-function fireLightRadius(f) { return f.light * Math.min(1, f.life / CONFIG.FIRE.fade); }
-
-// источники света: факел ведущего и огни Факира
+// единственный источник света — факел Героя
 function lightSources() {
   const lead = leader();
-  const out = [{ x: lead.x, y: lead.y, r: lightRadius() }];
-  for (const f of state.fires) out.push({ x: f.x, y: f.y, r: fireLightRadius(f) });
-  return out;
+  return [{ x: lead.x, y: lead.y, r: lightRadius() }];
 }
 
-// освещён ли юнит хоть одним источником; pad — запас по радиусу (у облаков и снарядов)
+// освещён ли юнит факелом; pad — запас по радиусу (у облаков и снарядов)
 function isLit(u, pad = 0) {
-  if (dist(leader(), u) <= lightRadius() + pad) return true;
-  for (const f of state.fires) if (dist(f, u) <= fireLightRadius(f) + pad) return true;
-  return false;
+  return dist(leader(), u) <= lightRadius() + pad;
 }
 
 // враг, которого уже можно видеть, целить и рубить: скрытые типы (мина) — только после обнаружения
 function isSpotted(e) { return !enemyTypes[e.type].hiddenUntilRevealed || e.revealed; }
 
-// сколько тел в цепочке вместе с ведущим: уровень может задать свой предел, иначе общий
+// сколько тел в цепочке вместе с Героем: уровень может задать свой предел, иначе общий
 function maxParty() { return state.level.maxParty || CONFIG.CHAIN.maxParty; }
 
 function currentRoom() { return roomIndexAt(leader().x, leader().y); }
 
 G.state = state;
-G.session = { makeUnit, makeAlly, spawnEnemy, resetGame, leader, chainUnits, modeOf, activeWeapons, lightRadius, lightSources, isLit, isSpotted, currentRoom, maxParty };
+G.session = { makeUnit, makeAlly, setAbility, spawnEnemy, resetGame, leader, chainUnits, lightRadius, lightSources, isLit, isSpotted, currentRoom, maxParty };
 })(window.Game = window.Game || {});

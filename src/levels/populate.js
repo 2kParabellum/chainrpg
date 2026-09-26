@@ -31,53 +31,26 @@ function rollEnemies(plan, level) {
   return types.map((type, k) => (spec.spots ? [type, ...spec.spots[k]] : [type]));
 }
 
-// состав союзников уровня одним броском: каждый персонаж существует в одном экземпляре.
-// Сначала расставляются обязательные типы комнат (require), затем остальные места берут случайный
-// ещё не занятый тип из своего набора (pool комнаты или allyPool уровня); если типов не хватило,
-// место остаётся пустым. Комнаты с собственным pool выбирают раньше прочих, чтобы им хватило.
+// дружочки уровня: каждая точка allies.spots комнаты (с учётом необязательного chance — вероятности
+// появления) даёт одного, scatterAllies.count дают ещё столько же по зонам (зоны по кругу перемешанного списка).
 // Возвращает { rooms: [[тип, cx, cy], ... по комнатам], scatter: [[тип, номер зоны], ...] };
-// точку разбросанного союзника внутри зоны подбирает state.js.
-// С `chance` каждая точка комнаты занята лишь с этой вероятностью.
+// точку разбросанного дружочка внутри зоны подбирает state.js.
 function rollLevelAllies(level) {
-  const slots = [];   // { room, at: [cx, cy] | null, zone, pool, restricted, type }
-  const used = new Set();
+  const out = { rooms: level.rooms.map(() => []), scatter: [] };
 
   level.rooms.forEach((plan, room) => {
     const spec = plan.allies;
-    if (!spec || !spec.spots.length) return;
-    const spots = spec.chance === undefined
-      ? spec.spots : spec.spots.filter(() => Math.random() < spec.chance);
-    const mine = shuffled(spots).map((at) => ({
-      room, at, pool: spec.pool || level.allyPool, restricted: !!spec.pool, type: null,
-    }));
-    (spec.require || []).forEach((type, k) => {
-      if (k < mine.length && !used.has(type)) { mine[k].type = type; used.add(type); }
-    });
-    slots.push(...mine);
+    if (!spec) return;
+    for (const at of spec.spots) {
+      if (spec.chance === undefined || Math.random() < spec.chance) out.rooms[room].push(['buddy', at[0], at[1]]);
+    }
   });
 
   const scatter = level.scatterAllies;
   if (scatter) {
     const zones = [];
     while (zones.length < scatter.count) zones.push(...shuffled(scatter.zones));
-    for (let k = 0; k < scatter.count; k++) {
-      slots.push({ zone: zones[k], pool: level.allyPool, restricted: false, type: null });
-    }
-  }
-
-  const free = shuffled(slots.filter((s) => !s.type)).sort((a, b) => b.restricted - a.restricted);
-  for (const slot of free) {
-    const options = slot.pool.filter((t) => !used.has(t));
-    if (!options.length) continue;
-    slot.type = pickOne(options);
-    used.add(slot.type);
-  }
-
-  const out = { rooms: level.rooms.map(() => []), scatter: [] };
-  for (const s of slots) {
-    if (!s.type) continue;
-    if (s.at) out.rooms[s.room].push([s.type, s.at[0], s.at[1]]);
-    else out.scatter.push([s.type, s.zone]);
+    for (let k = 0; k < scatter.count; k++) out.scatter.push(['buddy', zones[k]]);
   }
   return out;
 }

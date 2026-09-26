@@ -9,10 +9,10 @@
 const { state } = G;
 const { initInput } = G.input;
 const { resetGame } = G.session;
-const { tryRecruit, dropLastAlly, applyOrder, swapWithLeader, MENU, menuRect, menuRowY, menuPreviewOrder } = G.chain;
+const { tryRecruit, dropLastAlly } = G.chain;
 const { update } = G.update;
 const { canvas } = G.shapes;
-const { drawScene } = G.renderer;
+const { drawScene, drawPadsInDark } = G.renderer;
 const { drawLight, drawHud } = G.hud;
 
 // уровни в порядке их показа в меню; за фоном меню при запуске стоит первый
@@ -26,47 +26,22 @@ let mouseDown = false;
 // координаты канваса -> координаты мира
 function toWorld(p) { return { x: p.x + state.camera.x, y: p.y + state.camera.y }; }
 
-function toggleMenu() {
-  if (state.menu.open) { state.menu.open = false; state.menu.drag = null; return; }
-  if (state.status !== 'play') return;
-  state.menu.open = true;
-  state.menu.drag = null;
-  mouseDown = false;
-}
-
 initInput(canvas, {
   onPointerDown(p) {
-    if (state.menu.open) {
-      const row = Math.floor((p.y - menuRowY(0)) / MENU.rowH);
-      const r = menuRect();
-      if (row >= 0 && row <= state.party.length - 1 && p.x >= r.x && p.x <= r.x + r.w) {
-        state.menu.drag = { from: row, y: p.y };
-      }
-      return;
-    }
     mouseDown = true;
     state.moveTarget = toWorld(p);
   },
   onPointerMove(p) {
-    if (state.menu.open) { if (state.menu.drag) state.menu.drag.y = p.y; return; }
     if (mouseDown) state.moveTarget = toWorld(p);
   },
-  onPointerUp(p) {
+  onPointerUp() {
     mouseDown = false;
-    if (state.menu.drag) {
-      state.menu.drag.y = p.y;
-      applyOrder(menuPreviewOrder());
-      state.menu.drag = null;
-    }
   },
-  onCommand(name, arg) {
+  onCommand(name) {
     if (state.status === 'menu') return;
     if (name === 'restart') resetGame(state.level);
-    else if (name === 'recruit') { if (!state.menu.open) tryRecruit(); }
-    else if (name === 'toggleMenu') toggleMenu();
-    else if (name === 'cancel') { if (state.menu.open) toggleMenu(); }
+    else if (name === 'recruit') tryRecruit();
     else if (name === 'drop') dropLastAlly();
-    else if (name === 'swap') swapWithLeader(arg);
   },
 });
 
@@ -109,7 +84,6 @@ LEVELS.forEach((level, i) => {
 onClick('restart', () => { if (state.status !== 'menu') resetGame(state.level); });
 // возврат в меню посреди партии: пока меню открыто, игра стоит на паузе
 onClick('menuBtn', () => {
-  state.menu.open = false; state.menu.drag = null;
   mouseDown = false;
   state.status = 'menu';
   showPanel('main');
@@ -125,6 +99,7 @@ onClick('backBtn', () => showPanel('main'));
 function draw() {
   drawScene();
   drawLight();
+  drawPadsInDark();
   drawHud();
 }
 

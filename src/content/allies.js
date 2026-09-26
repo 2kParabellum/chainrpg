@@ -1,132 +1,51 @@
-// Реестр типов союзников. Один тип = одна запись: характеристики тела, набор оружия по режимам,
-// метка на теле. Все союзники уникальны: в партии каждый тип встречается не больше одного раза.
-// Новый союзник добавляется записью сюда (плюс цвет в палитре и строка в пуле уровня),
-// остальной код не меняется. Оружие описано в content/weapons.js.
+// Реестр типов союзников. Один тип = одна запись: характеристики тела, базовое оружие, знак на теле.
+// Союзники не уникальны: дружочков на карте много. Способности выдают подиумы (content/abilities.js),
+// а не сам тип. Оружие описано в content/weapons.js.
 //
 // Поля записи:
 //   color    — цвет тела и подписей
 //   anchor   — нельзя выбить, утащить и бросить; смерть такого звена — поражение (Герой)
+//   light    — радиус факела (есть только у Героя: он всегда ведёт)
 //   stats    — характеристики тела: имя, HP, радиус; юнит получает их как cfg
-//   lead     — режим «с факелом» (звено идёт первым): light — радиус факела,
-//              weapons — { имя оружия: {переопределения его характеристик} }
-//   chain    — режим «в цепи» (звено идёт следом): weapons — как выше
-//   traits   — пассивные особенности, которые работают в любом режиме (тот же формат, что weapons)
-//   mark     — (u, f, ctx, mode): рисует знак на теле; f — направление взгляда, mode — 'lead' | 'chain'
+//   base     — оружие без способности: weapons — { имя оружия: {переопределения его характеристик} }
+//   mark     — (u, f, ctx): рисует знак на теле; f — направление взгляда
 // Всё, что нужно от игры, оружие получает параметром game и никогда не подключает game/ само.
 (function (G) {
 'use strict';
 
 const { COLORS } = G;
 
-// Герой: с него начинается партия, всегда в цепочке (его нельзя выбить и бросить), его смерть — поражение.
-// С факелом — самый большой обзор и меч; в цепи — меч и слабый револьвер
+// Герой: с него начинается партия, всегда ведёт цепочку и несёт единственный факел; его нельзя выбить
+// и бросить, его смерть — поражение. Подиумы действуют и на него
 const hero = {
   color: COLORS.hero,
   anchor: true,
+  light: 300,
   stats: { name: 'Герой', hp: 150, radius: 14 },
-  lead: { light: 300, weapons: { sword: {} } },
-  chain: { weapons: { sword: {}, revolver: {} } },
-  // треугольник-«нос» показывает направление; в цепи добавлен ствол револьвера
-  mark(u, f, ctx, mode) {
+  base: { weapons: { sword: {} } },
+  // треугольник-«нос» показывает направление
+  mark(u, f, ctx) {
     ctx.beginPath();
     ctx.moveTo(u.x + Math.cos(f) * u.r * 0.9, u.y + Math.sin(f) * u.r * 0.9);
     ctx.lineTo(u.x + Math.cos(f + 2.5) * u.r * 0.7, u.y + Math.sin(f + 2.5) * u.r * 0.7);
     ctx.lineTo(u.x + Math.cos(f - 2.5) * u.r * 0.7, u.y + Math.sin(f - 2.5) * u.r * 0.7);
     ctx.closePath();
     ctx.stroke();
-    if (mode === 'chain') {
-      ctx.beginPath();
-      ctx.moveTo(u.x, u.y);
-      ctx.lineTo(u.x + Math.cos(f) * u.r * 1.25, u.y + Math.sin(f) * u.r * 1.25);
-      ctx.stroke();
-    }
   },
 };
 
-// Лучник: в цепи — лук на очень большую дальность; с факелом — только метательные ножи
-const archer = {
-  color: COLORS.archer,
-  stats: { name: 'Лучник', hp: 100, radius: 13 },
-  lead: { light: 210, weapons: { knives: {} } },
-  chain: { weapons: { bow: {} } },
-  mark(u, f, ctx, mode) {
+// Дружочек: обычный союзник, в базовом виде бьёт кулаком в ближнем бою
+const buddy = {
+  color: COLORS.buddy,
+  stats: { name: 'Дружочек', hp: 100, radius: 12 },
+  base: { weapons: { fist: {} } },
+  // точка-«кулачок» впереди
+  mark(u, f, ctx) {
     ctx.beginPath();
-    if (mode === 'chain') {
-      ctx.arc(u.x, u.y, u.r * 0.95, f - 1.0, f + 1.0);
-      ctx.moveTo(u.x + Math.cos(f - 1.0) * u.r * 0.95, u.y + Math.sin(f - 1.0) * u.r * 0.95);
-      ctx.lineTo(u.x + Math.cos(f + 1.0) * u.r * 0.95, u.y + Math.sin(f + 1.0) * u.r * 0.95);
-    } else {
-      ctx.moveTo(u.x - Math.cos(f) * u.r * 0.4, u.y - Math.sin(f) * u.r * 0.4);
-      ctx.lineTo(u.x + Math.cos(f) * u.r * 0.9, u.y + Math.sin(f) * u.r * 0.9);
-      ctx.moveTo(u.x + Math.cos(f + 1.6) * u.r * 0.45, u.y + Math.sin(f + 1.6) * u.r * 0.45);
-      ctx.lineTo(u.x + Math.cos(f - 1.6) * u.r * 0.45, u.y + Math.sin(f - 1.6) * u.r * 0.45);
-    }
+    ctx.arc(u.x + Math.cos(f) * u.r * 0.5, u.y + Math.sin(f) * u.r * 0.5, u.r * 0.28, 0, Math.PI * 2);
     ctx.stroke();
   },
 };
 
-// Медик: регенерация цепочки в любом режиме; в цепи ещё лечит активно, с факелом — рассеивает облака
-const medic = {
-  color: COLORS.medic,
-  stats: { name: 'Медик', hp: 98, radius: 13 },
-  lead: { light: 210, weapons: { regen: {}, dispel: {} } },
-  chain: { weapons: { regen: {}, heal: {} } },
-  mark(u, f, ctx, mode) {
-    ctx.beginPath();
-    ctx.moveTo(u.x - u.r * 0.55, u.y); ctx.lineTo(u.x + u.r * 0.55, u.y);
-    ctx.moveTo(u.x, u.y - u.r * 0.55); ctx.lineTo(u.x, u.y + u.r * 0.55);
-    ctx.stroke();
-    if (mode === 'lead') {
-      ctx.beginPath();
-      ctx.arc(u.x, u.y, u.r * 0.85, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-  },
-};
-
-// Воин: копьё и щит вокруг цепочки; с факелом — только щит перед лицом. Железные сапоги топчут шипы
-const warrior = {
-  color: COLORS.warrior,
-  stats: { name: 'Воин', hp: 190, radius: 16 },
-  lead: { light: 170, weapons: { shieldFront: {} } },
-  chain: { weapons: { spear: {}, shieldAura: {} } },
-  traits: { ironBoots: {} },
-  mark(u, f, ctx, mode) {
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(u.x, u.y, u.r * 0.85, f - 0.9, f + 0.9);
-    ctx.stroke();
-    ctx.lineWidth = 2;
-    if (mode === 'chain') {
-      ctx.beginPath();
-      ctx.moveTo(u.x - Math.cos(f) * u.r * 0.2, u.y - Math.sin(f) * u.r * 0.2);
-      ctx.lineTo(u.x + Math.cos(f) * u.r * 1.3, u.y + Math.sin(f) * u.r * 1.3);
-      ctx.stroke();
-    }
-  },
-};
-
-// Факир: в цепи бросает огонь; с факелом — короткий огненный луч вперёд
-const fakir = {
-  color: COLORS.fakir,
-  stats: { name: 'Факир', hp: 110, radius: 13 },
-  lead: { light: 240, weapons: { flameBeam: {} } },
-  chain: { weapons: { firebomb: {} } },
-  // язычок пламени; с факелом добавлена линия луча
-  mark(u, f, ctx, mode) {
-    ctx.beginPath();
-    ctx.moveTo(u.x, u.y - u.r * 0.6);
-    ctx.quadraticCurveTo(u.x + u.r * 0.55, u.y - u.r * 0.05, u.x, u.y + u.r * 0.55);
-    ctx.quadraticCurveTo(u.x - u.r * 0.55, u.y - u.r * 0.05, u.x, u.y - u.r * 0.6);
-    ctx.stroke();
-    if (mode === 'lead') {
-      ctx.beginPath();
-      ctx.moveTo(u.x + Math.cos(f) * u.r * 0.5, u.y + Math.sin(f) * u.r * 0.5);
-      ctx.lineTo(u.x + Math.cos(f) * u.r * 1.1, u.y + Math.sin(f) * u.r * 1.1);
-      ctx.stroke();
-    }
-  },
-};
-
-G.allyTypes = { hero, archer, medic, warrior, fakir };
+G.allyTypes = { hero, buddy };
 })(window.Game = window.Game || {});

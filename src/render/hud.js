@@ -1,73 +1,13 @@
-// Интерфейс поверх сцены: затемнение за границей фонаря, HUD, меню порядка цепочки,
-// экраны победы и поражения. Состояние только читается.
+// Интерфейс поверх сцены: затемнение за границей фонаря, HUD, экраны победы и поражения. Состояние только читается.
 (function (G) {
 'use strict';
 
-const { CONFIG, COLORS, state } = G;
-const { clamp } = G.math;
+const { CONFIG, state } = G;
+const { abilities } = G;
 const { currentRoom, lightSources, isSpotted, maxParty } = G.session;
 const { roomCount, roomIndexAt } = G.world;
-const { nearestPickup, MENU, menuRect, menuRowY, menuPreviewOrder } = G.chain;
+const { nearestPickup } = G.chain;
 const { ctx, allyColor } = G.shapes;
-
-function drawMenuRow(u, y, label, alpha) {
-  const r = menuRect();
-  const x = r.x + 10, w = r.w - 20, h = MENU.rowH - 6;
-  const color = allyColor(u.type);
-  ctx.globalAlpha = alpha;
-  ctx.fillStyle = '#23232a';
-  ctx.fillRect(x, y + 3, w, h);
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(x + 0.5, y + 3.5, w - 1, h - 1);
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(x + 20, y + 3 + h / 2, 10, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.textAlign = 'left';
-  ctx.font = '13px monospace';
-  ctx.fillText(label, x + 40, y + 3 + h / 2 + 4);
-  ctx.textAlign = 'right';
-  ctx.fillText(`${Math.max(0, Math.ceil(u.hp))}/${u.maxHp}`, x + w - 10, y + 3 + h / 2 + 4);
-  ctx.globalAlpha = 1;
-}
-
-// меню порядка цепочки: игрок сверху, союзники ниже в том порядке, в каком они бегут за ним
-function drawMenu() {
-  const r = menuRect();
-  ctx.fillStyle = 'rgba(10,10,12,0.6)';
-  ctx.fillRect(0, 0, CONFIG.VIEW.w, CONFIG.VIEW.h);
-  ctx.fillStyle = '#16161b';
-  ctx.fillRect(r.x, r.y, r.w, r.h);
-  ctx.strokeStyle = '#45454f';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
-
-  ctx.fillStyle = '#c8c8d2';
-  ctx.font = '14px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText('ПОРЯДОК ЦЕПОЧКИ', r.x + r.w / 2, r.y + 22);
-  ctx.font = '11px monospace';
-  ctx.fillStyle = '#8a8a95';
-  ctx.fillText(state.party.length > 1 ? 'перетащи мышью; первый в списке несёт факел' : 'пока переставлять некого',
-    r.x + r.w / 2, r.y + 38);
-
-  const order = menuPreviewOrder();
-  const dragged = state.menu.drag ? state.party[state.menu.drag.from] : null;
-  order.forEach((a, i) => {
-    const y = menuRowY(i);
-    drawMenuRow(a, y, `${i + 1}. ${a.cfg.name}${i === 0 ? ' — факел' : ''}`, a === dragged ? 0.25 : 1);
-  });
-  if (dragged) {
-    const y = clamp(state.menu.drag.y - MENU.rowH / 2, menuRowY(0), menuRowY(state.party.length - 1));
-    drawMenuRow(dragged, y, dragged.cfg.name, 1);
-  }
-
-  ctx.fillStyle = '#8a8a95';
-  ctx.font = '11px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText('C / ESC — закрыть, игра на паузе', r.x + r.w / 2, r.y + r.h - 10);
-}
 
 function drawHud() {
   ctx.save();
@@ -89,8 +29,9 @@ function drawHud() {
 
   let y = 44;
   for (const a of state.party) {
-    ctx.fillStyle = allyColor(a.type);
-    ctx.fillText(`${a === state.party[0] ? '*' : ' '} ${a.cfg.name.padEnd(9, ' ')} ${Math.max(0, Math.ceil(a.hp))}/${a.maxHp}`, 12, y);
+    ctx.fillStyle = allyColor(a);
+    const label = a.cfg.name + (a.ability ? ` (${abilities[a.ability].name})` : '');
+    ctx.fillText(`${label.padEnd(18, ' ')} ${Math.max(0, Math.ceil(a.hp))}/${a.maxHp}`, 12, y);
     y += 16;
   }
 
@@ -102,8 +43,6 @@ function drawHud() {
       : pickup.kind === 'downed' ? 'ПРОБЕЛ — ПОДНЯТЬ' : 'ПРОБЕЛ — ПРИСОЕДИНИТЬ';
     ctx.fillText(msg, CONFIG.VIEW.w / 2, CONFIG.VIEW.h - 30);
   }
-
-  if (state.menu.open) drawMenu();
 
   if (state.status === 'dead' || state.status === 'win') {
     ctx.fillStyle = 'rgba(10,10,12,0.75)';
@@ -120,7 +59,7 @@ function drawHud() {
 }
 
 // темнота вне света: на отдельном слое заливаем всё тьмой и вырезаем круг у каждого источника света
-// (факел ведущего, огни Факира), затем накладываем слой на сцену
+// (факел Героя), затем накладываем слой на сцену
 const dark = document.createElement('canvas');
 dark.width = CONFIG.VIEW.w;
 dark.height = CONFIG.VIEW.h;

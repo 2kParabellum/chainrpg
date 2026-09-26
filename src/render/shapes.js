@@ -4,7 +4,7 @@
 
 const { CONFIG, COLORS, state } = G;
 const { clamp } = G.math;
-const { allyTypes } = G;
+const { allyTypes, abilities } = G;
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -37,16 +37,17 @@ function drawUnitBody(u, color, filled) {
   ctx.stroke();
 }
 
-// знак на теле: общая заготовка линии, а сам рисунок задаёт paint(u, f, ctx, mode):
-// f — направление взгляда, mode — 'lead' (с факелом) или 'chain' (в цепи)
-function drawMark(u, paint, mode) {
+// знак на теле: общая заготовка линии, а сам рисунок задаёт paint(u, f, ctx): f — направление взгляда
+function drawMark(u, paint) {
   ctx.lineWidth = 2;
   ctx.strokeStyle = '#0e0e10';
-  paint(u, u.facing || 0, ctx, mode);
+  paint(u, u.facing || 0, ctx);
 }
 
-function allyColor(type) {
-  return allyTypes[type].color;
+// цвет тела союзника: Герой всегда голубой, остальные — цветом способности, а без неё цветом типа
+function allyColor(u) {
+  const t = allyTypes[u.type];
+  return u.ability && !t.anchor ? abilities[u.ability].color : t.color;
 }
 
 G.shapes = { canvas, ctx, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor };

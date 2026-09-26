@@ -32,7 +32,7 @@
   <div id="bar">
     <button id="restart">RESTART (R)</button>
     <button id="menuBtn">МЕНЮ</button>
-    <span>ЛКМ — идти &nbsp;|&nbsp; ПРОБЕЛ — присоединить союзника &nbsp;|&nbsp; 2–5 — сделать ведущим &nbsp;|&nbsp; X — бросить последнего &nbsp;|&nbsp; C — порядок цепочки</span>
+    <span>ЛКМ — идти &nbsp;|&nbsp; ПРОБЕЛ — присоединить дружочка &nbsp;|&nbsp; X — бросить последнего &nbsp;|&nbsp; подиумы дают способности</span>
   </div>
   <div id="stage">
     <canvas id="c" width="960" height="640"></canvas>
@@ -51,10 +51,8 @@
         <h2>Управление</h2>
         <table id="controlsList">
           <tr><td>ЛКМ</td><td>идти в точку (можно удерживать и вести курсор)</td></tr>
-          <tr><td>ПРОБЕЛ</td><td>присоединить союзника или поднять выбитого</td></tr>
-          <tr><td>2–5</td><td>сделать звено с этим номером ведущим (несёт факел, обмен с первым)</td></tr>
-          <tr><td>X</td><td>бросить последнего союзника цепочки (Героя бросить нельзя)</td></tr>
-          <tr><td>C</td><td>порядок цепочки (пауза), C / ESC — закрыть</td></tr>
+          <tr><td>ПРОБЕЛ</td><td>присоединить дружочка или поднять выбитого</td></tr>
+          <tr><td>X</td><td>бросить последнего дружочка цепочки (Героя бросить нельзя)</td></tr>
           <tr><td>R</td><td>начать заново</td></tr>
         </table>
         <button id="backBtn">Назад</button>
@@ -67,6 +65,7 @@
   <script src="src/core/collision.js"></script>
   <script src="src/core/input.js"></script>
   <script src="src/content/weapons.js"></script>
+  <script src="src/content/abilities.js"></script>
   <script src="src/content/allies.js"></script>
   <script src="src/content/enemies.js"></script>
   <script src="src/levels/level1.js"></script>

@@ -8,10 +8,10 @@ const { clamp, dist, removeFrom, pickWeighted } = G.math;
 const { moveAndCollide, slideAlongWall } = G.collision;
 const { world } = G.world;
 const { leader, isLit, currentRoom, chainUnits, isSpotted, spawnEnemy } = G.session;
-const { freeSpotNear, trampleSpikes, rayLength } = G.world;
-const { pushTrail, followChain, updateDowned, knockOutAlly } = G.chain;
+const { freeSpotNear } = G.world;
+const { pushTrail, followChain, touchPads, updateDowned, knockOutAlly } = G.chain;
 const combat = G.combat;
-const { updateProjectiles, updateClouds, updateFires, applySpikes, updateEffects } = combat;
+const { updateProjectiles, updateClouds, applySpikes, updateEffects } = combat;
 const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
 const { enemyTypes, weapons } = G;
 
@@ -26,12 +26,11 @@ const game = {
   state, world, chainUnits, isSpotted,
   nearestTarget: combat.nearestTarget, damageUnit: combat.damageUnit, blast: combat.blast,
   spawnProjectile: combat.spawnProjectile, spawnMortar: combat.spawnMortar, spawnHook: combat.spawnHook,
-  spawnFirebomb: combat.spawnFirebomb, trampleSpikes, rayLength,
   knockOutAlly, wanderStep, stepOffSpikes, chaseStep, removeFrom,
   spawnEnemy, freeSpotNear, pickChaser,
 };
 
-// движение ведущего с инерцией: разгон к точке и накат после отпускания газа
+// движение Героя с инерцией: разгон к точке и накат после отпускания газа
 function updateLeader(dt) {
   const lead = leader();
   const cfg = CONFIG.LEADER;
@@ -61,21 +60,17 @@ function updateLeader(dt) {
 
   const sp = Math.hypot(lead.vx, lead.vy);
   if (sp > 0.5) {
-    lead.facing = lead.heading = Math.atan2(lead.vy, lead.vx);
+    lead.facing = Math.atan2(lead.vy, lead.vx);
     // упёршись в стену, не тормозим в ноль, а скользим вдоль неё
     const normal = moveAndCollide(lead, lead.vx * dt, lead.vy * dt, world.moveBlockers);
     if (normal) slideAlongWall(lead, normal, cfg.wallFriction);
   }
 }
 
-// звено цепочки: ведущий идёт сам, остальные бегут за ним; оружие работает по режиму звена
-// (ведущий — «с факелом», остальные — «в цепи»), пассивные особенности — всегда
+// звено цепочки: Герой идёт сам, остальные бегут за ним; работает оружие текущей способности звена
 function updateAlly(a, dt, i) {
   if (i > 0) followChain(a, dt, i);
-
-  a.beam = null;
-  for (const w of a.gear.passive) weapons[w.type].update(a, w, dt, game);
-  for (const w of a.gear[i === 0 ? 'lead' : 'chain']) weapons[w.type].update(a, w, dt, game);
+  for (const w of a.gear) weapons[w.type].update(a, w, dt, game);
 }
 
 // общая часть любого врага: регенерация и активация, дальше — поведение по типу
@@ -115,25 +110,24 @@ function updateLate() {
 }
 
 function update(dt) {
-  if (state.status !== 'play' || state.menu.open) return;
+  if (state.status !== 'play') return;
 
   state.lightTime += dt;
-  state.swapCd = Math.max(0, state.swapCd - dt);
   updateLeader(dt);
   pushTrail();
 
-  // союзники бьют только по освещённому (факелом ведущего или огнём Факира), а мину — ещё и только после обнаружения
+  // дальнее оружие бьёт только по освещённому (факелом Героя), а мину — ещё и только после обнаружения
   state.visibleEnemies = state.enemies.filter((e) => isLit(e) && isSpotted(e));
 
   for (const a of state.party.slice()) {
     const i = state.party.indexOf(a);
     if (i >= 0) updateAlly(a, dt, i);
   }
+  touchPads();
   for (const d of state.downed) updateDowned(d, dt);
   for (const e of state.enemies.slice()) updateEnemy(e, dt);
   updateProjectiles(dt);
   updateClouds(dt);
-  updateFires(dt);
   applySpikes(dt);
   updateLate();
   updateEffects(dt);

@@ -1,13 +1,13 @@
-// Цепочка как механика: след ведущего, следование звеньев, вербовка, бросок,
-// выбивание и протяжка лежачих, бонус соседей, модель меню порядка.
+// Цепочка как механика: след Героя, следование звеньев «плёткой», вербовка, бросок,
+// выбивание и протяжка лежачих, выдача способностей подиумами.
 (function (G) {
 'use strict';
 
 const { CONFIG, COLORS, state } = G;
 const { clamp, dist, removeFrom } = G.math;
-const { moveAndCollide } = G.collision;
-const { world } = G.world;
-const { leader, maxParty } = G.session;
+const { moveAndCollide, slideAlongWall } = G.collision;
+const { world, padUnder } = G.world;
+const { leader, maxParty, setAbility } = G.session;
 const { allyTypes } = G;
 
 // --- след ---
@@ -20,12 +20,6 @@ function pushTrail() {
     const maxLen = Math.ceil((maxParty() * CONFIG.CHAIN.spacing + 200) / CONFIG.CHAIN.trailStep);
     if (state.trail.length > maxLen) state.trail.pop();
   }
-}
-
-// после гибели ведущего след старого ведущего уходит вперёд от нового: строим его заново
-// по положению звеньев (новый ведущий — первое звено, за ним остальные)
-function rebuildTrail() {
-  state.trail = state.party.slice(1).map((u) => ({ x: u.x, y: u.y }));
 }
 
 function trailPointAt(distBack) {
@@ -44,15 +38,50 @@ function trailPointAt(distBack) {
   return prev;
 }
 
-// звено i (i ≥ 1) бежит к своей точке на следе ведущего; отставшее подтягивается быстрее
+// звено i (i ≥ 1) тянется к своей точке на следе Героя пружиной с затуханием: на поворотах
+// хвост заносит, при остановке звенья проскакивают вперёд и возвращаются («плётка»)
 function followChain(a, dt, i) {
-  const target = trailPointAt(i * CONFIG.CHAIN.spacing);
-  const dx = target.x - a.x, dy = target.y - a.y;
-  const d = Math.hypot(dx, dy);
-  if (d > 0.5) {
-    const speed = Math.max(CONFIG.CHAIN.followSpeed, d * CONFIG.CHAIN.catchUpGain);
-    const step = Math.min(d, speed * dt);
-    moveAndCollide(a, (dx / d) * step, (dy / d) * step, world.moveBlockers);
+  const cfg = CONFIG.CHAIN, whip = cfg.whip;
+  const target = trailPointAt(i * cfg.spacing);
+  const prev = a.prevTarget;
+  a.prevTarget = target;
+  if (dt <= 0) return;
+  const d = Math.hypot(target.x - a.x, target.y - a.y);
+
+  // старое жёсткое следование: пружина выключена или звено слишком далеко от своей точки
+  if (!whip.enabled || !prev || d > whip.maxLag) {
+    if (d > 0.5) {
+      const speed = Math.max(cfg.followSpeed, d * cfg.catchUpGain);
+      const step = Math.min(d, speed * dt);
+      moveAndCollide(a, ((target.x - a.x) / d) * step, ((target.y - a.y) / d) * step, world.moveBlockers);
+    }
+    a.vx *= 0.5; a.vy *= 0.5;
+    return;
+  }
+
+  // скорость самой точки следа; затухание считается относительно неё, а не абсолютной скорости
+  const cap = whip.maxSpeed * 2;
+  const tvx = clamp((target.x - prev.x) / dt, -cap, cap);
+  const tvy = clamp((target.y - prev.y) / dt, -cap, cap);
+  const t = (i - 1) / Math.max(1, maxParty() - 2);
+  const k = whip.stiffness * (1 - whip.tailSoftness * clamp(t, 0, 1));
+  const c = 2 * whip.damping * Math.sqrt(k);
+  a.vx += (k * (target.x - a.x) + c * (tvx - a.vx)) * dt;
+  a.vy += (k * (target.y - a.y) + c * (tvy - a.vy)) * dt;
+  const sp = Math.hypot(a.vx, a.vy);
+  if (sp > whip.maxSpeed) { a.vx = (a.vx / sp) * whip.maxSpeed; a.vy = (a.vy / sp) * whip.maxSpeed; }
+
+  const normal = moveAndCollide(a, a.vx * dt, a.vy * dt, world.moveBlockers);
+  if (normal) slideAlongWall(a, normal, 1);
+}
+
+// проехав по подиуму, звено (и Герой) получает его способность вместо текущей
+function touchPads() {
+  for (const u of state.party) {
+    const pad = padUnder(u);
+    if (!pad || u.ability === pad.ability) continue;
+    setAbility(u, pad.ability);
+    state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 8, life: 0.4, color: G.abilities[pad.ability].color });
   }
 }
 
@@ -77,13 +106,14 @@ function tryRecruit() {
   u.kind = 'ally';
   u.cd = 0;
   u.vx = 0; u.vy = 0;
+  u.prevTarget = null;
   u.drag = null;
   state.party.push(u);
 }
 
-// выбить из цепочки или утащить можно только рядового союзника: ведущего и Героя — нельзя
+// выбить из цепочки или утащить можно только рядового союзника: Героя — нельзя
 function canBeDisplaced(u) {
-  return u.kind === 'ally' && u !== leader() && !allyTypes[u.type].anchor;
+  return u.kind === 'ally' && !allyTypes[u.type].anchor;
 }
 
 // бычок выбивает союзника из цепочки: тот отлетает и лежит, пока его не подберут
@@ -94,12 +124,14 @@ function knockOutAlly(a, angle, speed) {
   a.vx = Math.cos(angle) * speed;
   a.vy = Math.sin(angle) * speed;
   a.cd = 0;
+  a.prevTarget = null;
+  setAbility(a, null); // способность живёт, пока звено в цепи
   state.downed.push(a);
 }
 
 // сбросить последнего союзника: он остаётся лежать на месте, поднять его можно ПРОБЕЛОМ
 function dropLastAlly() {
-  if (state.status !== 'play' || state.menu.open) return;
+  if (state.status !== 'play') return;
   for (let i = state.party.length - 1; i > 0; i--) {
     if (canBeDisplaced(state.party[i])) { knockOutAlly(state.party[i], 0, 0); return; }
   }
@@ -134,69 +166,8 @@ function updateDowned(d, dt) {
   moveAndCollide(d, d.vx * dt, d.vy * dt, world.moveBlockers);
 }
 
-// --- порядок цепочки ---
-
-// поставить цепочку в новый порядок newOrder (те же юниты). Если сменился ведущий, звенья
-// меняются местами на полу: каждое встаёт на место своей новой позиции, а скорость и взгляд
-// ведущего переходят новому — цепочка не рвётся и след остаётся верным
-function applyOrder(newOrder) {
-  const old = state.party;
-  const lead = old[0], next = newOrder[0];
-  if (next !== lead) {
-    const slots = old.map((u) => ({ x: u.x, y: u.y }));
-    const { vx, vy, facing, heading } = lead;
-    newOrder.forEach((u, i) => {
-      if (old[i] !== u) { u.x = slots[i].x; u.y = slots[i].y; }
-    });
-    lead.vx = 0; lead.vy = 0;
-    next.vx = vx; next.vy = vy; next.facing = facing; next.heading = heading;
-    state.effects.push({ type: 'beam', x1: slots[0].x, y1: slots[0].y, x2: lead.x, y2: lead.y,
-                         life: 0.25, color: COLORS.hero });
-    state.swapCd = CONFIG.CHAIN.swapCooldown;
-  }
-  state.party = newOrder;
-}
-
-// клавиши 2..9: звено k меняется местами с ведущим
-function swapWithLeader(k) {
-  if (state.status !== 'play' || state.menu.open || state.swapCd > 0) return;
-  if (k < 1 || k >= state.party.length) return;
-  const order = state.party.slice();
-  [order[0], order[k]] = [order[k], order[0]];
-  applyOrder(order);
-}
-
-// --- меню порядка цепочки (модель и раскладка; рисует его render/hud.js) ---
-
-const MENU = { w: 360, rowH: 38, head: 46, foot: 30 };
-
-function menuRect() {
-  const h = MENU.head + state.party.length * MENU.rowH + MENU.foot;
-  return { x: (CONFIG.VIEW.w - MENU.w) / 2, y: (CONFIG.VIEW.h - h) / 2, w: MENU.w, h };
-}
-
-// y-координата верха строки: строки идут по порядку цепочки, 0 — ведущий
-function menuRowY(row) { return menuRect().y + MENU.head + row * MENU.rowH; }
-
-// в какую позицию цепочки (0..party.length-1) попадает курсор на высоте y
-function menuSlotAt(y) {
-  const slot = Math.floor((y - menuRowY(0)) / MENU.rowH);
-  return clamp(slot, 0, state.party.length - 1);
-}
-
-// порядок цепочки с учётом перетаскиваемого прямо сейчас
-function menuPreviewOrder() {
-  const order = state.party.slice();
-  if (!state.menu.drag) return order;
-  const [moved] = order.splice(state.menu.drag.from, 1);
-  order.splice(menuSlotAt(state.menu.drag.y), 0, moved);
-  return order;
-}
-
 G.chain = {
-  applyOrder, swapWithLeader,
-  pushTrail, rebuildTrail, trailPointAt, followChain,
+  pushTrail, trailPointAt, followChain, touchPads,
   nearestPickup, tryRecruit, canBeDisplaced, knockOutAlly, dropLastAlly, hookAlly, updateDowned,
-  MENU, menuRect, menuRowY, menuSlotAt, menuPreviewOrder,
 };
 })(window.Game = window.Game || {});
