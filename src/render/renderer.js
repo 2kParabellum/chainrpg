@@ -5,7 +5,7 @@
 
 const { CONFIG, COLORS, state } = G;
 const { clamp, dist } = G.math;
-const { world } = G.world;
+const { world, padUnder } = G.world;
 const { isLit, isSpotted } = G.session;
 const { allyTypes, enemyTypes, weapons, abilities } = G;
 const shapes = G.shapes;
@@ -230,46 +230,61 @@ function drawClouds() {
   for (const c of state.clouds) drawCloud(c);
 }
 
-// подиумы: светящийся круг на полу; alpha — общая яркость (в темноте слабее).
+// подиумы: светящийся квадрат на полу; alpha — общая яркость (в темноте слабее).
 // Подиумы усилений (скорость, сила) окружены ещё и широким мягким свечением
 function drawPads(alpha) {
   const { pulse } = CONFIG.PADS;
   const wave = Math.sin((state.lightTime / pulse) * Math.PI * 2);
   const glow = 0.25 + 0.1 * wave;
   for (const pad of world.pads) {
+    if (!visible(pad)) continue;
     const buff = G.buffs[pad.ability];
     const def = buff || abilities[pad.ability];
-    const halo = pad.r * (buff ? 2.6 : 1);
-    if (!visible({ x: pad.x - halo, y: pad.y - halo, w: halo * 2, h: halo * 2 })) continue;
+    const cx = pad.x + pad.w / 2, cy = pad.y + pad.h / 2;
+    const halo = pad.w * (buff ? 1.5 : 0);
     if (buff) {
-      const g = ctx.createRadialGradient(pad.x, pad.y, pad.r * 0.6, pad.x, pad.y, halo * (1 + 0.06 * wave));
+      const g = ctx.createRadialGradient(cx, cy, pad.w * 0.4, cx, cy, halo * (1 + 0.06 * wave));
       g.addColorStop(0, def.color);
       g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = g;
       ctx.globalAlpha = (0.45 + 0.15 * wave) * alpha;
       ctx.beginPath();
-      ctx.arc(pad.x, pad.y, halo * 1.1, 0, Math.PI * 2);
+      ctx.arc(cx, cy, halo * 1.1, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.fillStyle = def.color;
     ctx.globalAlpha = glow * alpha;
-    ctx.beginPath();
-    ctx.arc(pad.x, pad.y, pad.r, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillRect(pad.x, pad.y, pad.w, pad.h);
     ctx.strokeStyle = def.color;
     ctx.globalAlpha = 0.9 * alpha;
     ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(pad.x, pad.y, pad.r - 1, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.strokeRect(pad.x + 1, pad.y + 1, pad.w - 2, pad.h - 2);
     ctx.lineWidth = 2;
-    def.icon(ctx, pad.x, pad.y, pad.r * 0.75);
+    def.icon(ctx, cx, cy, pad.w * 0.36);
     ctx.globalAlpha = 1;
   }
 }
 
 // подиумы видны и в темноте: второй проход поверх затемнения
 function drawPadsInDark() { drawPads(CONFIG.PADS.darkAlpha); }
+
+// подсказка «кто подберёт»: пока звено касается подиума, от подиума к нему тянется лучик его цвета
+function drawPadLinks() {
+  for (const u of state.party) {
+    const pad = padUnder(u);
+    if (!pad) continue;
+    const def = G.buffs[pad.ability] || abilities[pad.ability];
+    const cx = pad.x + pad.w / 2, cy = pad.y + pad.h / 2;
+    ctx.strokeStyle = def.color;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.55 + 0.25 * Math.sin(state.lightTime * 6);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(u.x, u.y);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+}
 
 // кольца временных усилений вокруг тела: по одному на каждое действующее
 function drawBuffRings(u) {
@@ -376,6 +391,7 @@ function drawScene() {
 
   drawTerrain();
   drawPads(1);
+  drawPadLinks();
   drawTargetMarker();
   drawNeutrals();
   drawDowned();
