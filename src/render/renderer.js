@@ -241,13 +241,13 @@ function drawPads(alpha) {
     const buff = G.buffs[pad.ability];
     const def = buff || abilities[pad.ability];
     const cx = pad.x + pad.w / 2, cy = pad.y + pad.h / 2;
-    const halo = pad.w * (buff ? 1.5 : 0);
+    const halo = pad.w * (buff ? 0.75 : 0);
     if (buff) {
       const g = ctx.createRadialGradient(cx, cy, pad.w * 0.4, cx, cy, halo * (1 + 0.06 * wave));
       g.addColorStop(0, def.color);
       g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = g;
-      ctx.globalAlpha = (0.45 + 0.15 * wave) * alpha;
+      ctx.globalAlpha = (0.22 + 0.08 * wave) * alpha;
       ctx.beginPath();
       ctx.arc(cx, cy, halo * 1.1, 0, Math.PI * 2);
       ctx.fill();
@@ -268,20 +268,35 @@ function drawPads(alpha) {
 // подиумы видны и в темноте: второй проход поверх затемнения
 function drawPadsInDark() { drawPads(CONFIG.PADS.darkAlpha); }
 
-// подсказка «кто подберёт»: пока звено касается подиума, от подиума к нему тянется лучик его цвета
+// подсказка «кто подберёт»: пока звено касается подиума, от подиума к нему тянется яркий луч
+// его цвета — толстая мягкая подложка снизу и бегущий пунктир поверх, чтобы луч не терялся на полу
 function drawPadLinks() {
   for (const u of state.party) {
     const pad = padUnder(u);
     if (!pad) continue;
     const def = G.buffs[pad.ability] || abilities[pad.ability];
     const cx = pad.x + pad.w / 2, cy = pad.y + pad.h / 2;
+    const pulse = 0.75 + 0.25 * Math.sin(state.lightTime * 6);
+
     ctx.strokeStyle = def.color;
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.55 + 0.25 * Math.sin(state.lightTime * 6);
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 7;
+    ctx.globalAlpha = 0.35 * pulse;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.lineTo(u.x, u.y);
     ctx.stroke();
+
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.95 * pulse;
+    ctx.setLineDash([10, 8]);
+    ctx.lineDashOffset = -state.lightTime * 90;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(u.x, u.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineCap = 'butt';
     ctx.globalAlpha = 1;
   }
 }
