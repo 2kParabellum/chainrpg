@@ -407,7 +407,7 @@ const portal = {
 // стенку огня, и вызов подкрепления. Между атаками — короткий замах (see TELEGRAPH), по цвету
 // тела видно, что сейчас готовится.
 const BOSS_ATTACKS = ['barrage', 'mega', 'beam', 'summon'];
-const BOSS_TELEGRAPH = { barrage: 0.6, mega: 1.1, beam: 0.55, summon: 0.5 };
+const BOSS_TELEGRAPH = { barrage: 0.6, mega: 1.1, summon: 0.5 };
 const BOSS_ATTACK_COLOR = { barrage: COLORS.blast, mega: COLORS.bossGlow, beam: COLORS.fire, summon: COLORS.portal };
 
 function pickBossAttack(e) {
@@ -440,12 +440,6 @@ function bossExecuteAttack(e, game, lead) {
     game.spawnBigMortar(e, tx, ty,
       { flightTime: cfg.megaFlight, dmg: cfg.megaDmg, edgeDmg: cfg.megaEdgeDmg,
         blastRadius: cfg.megaBlast, knockback: cfg.megaKnockback });
-  } else if (e.attack === 'beam') {
-    const a = Math.atan2(lead.y - e.y, lead.x - e.x);
-    const tx = e.x + Math.cos(a) * cfg.beamRange, ty = e.y + Math.sin(a) * cfg.beamRange;
-    game.beamHit(e.x, e.y, tx, ty, cfg.beamRadius, cfg.beamDmg, game.chainUnits().concat(game.state.downed));
-    game.spawnFirewall(e.x, e.y, tx, ty, cfg.beamRadius, cfg.fireDps, cfg.fireLife);
-    game.state.effects.push({ type: 'beam', x1: e.x, y1: e.y, x2: tx, y2: ty, life: 0.4, color: COLORS.fire });
   } else if (e.attack === 'summon') {
     const n = cfg.summonMin + Math.floor(Math.random() * (cfg.summonMax - cfg.summonMin + 1));
     for (let i = 0; i < n; i++) {
@@ -463,21 +457,21 @@ function bossExecuteAttack(e, game, lead) {
 }
 
 const boss = {
-  stats: { name: 'Демон', hp: 900, radius: 50, walkSpeed: 40, approachStop: 260,
+  stats: { name: 'Демон', hp: 1800, radius: 50, walkSpeed: 40, approachStop: 260,
            attackCooldownMin: 2.6, attackCooldownMax: 4.2,
            // атака 1 — катапультный обстрел: много снарядов по случайным точкам арены, долгий подлёт
            barrageCount: 20, barrageDmg: 18, barrageEdgeDmg: 6, barrageBlast: 70, barrageFlight: 2.2,
            // атака 2 — один огромный снаряд в игрока: выбивает задетых из цепочки; прицел неточный —
            // ложится в случайной точке в пределах megaAimError от игрока, а не точно в него
            megaDmg: 26, megaEdgeDmg: 10, megaBlast: 190, megaFlight: 1.8, megaKnockback: 420, megaAimError: 90,
-           // атака 3 — луч в игрока, оставляющий стенку огня
-           beamDmg: 16, beamRadius: 24, beamRange: 1400, fireDps: 11, fireLife: 10,
+           // атака 3 — луч: сперва секунда прицеливания (боссу видно, куда целится), затем луч растёт
+           // от босса с постоянной скоростью 820 px/с — ровно столько, чтобы из центра арены (её радиус
+           // тоже 820) дойти до стены за секунду; на прожаренной земле остаётся стена огня на 10 с
+           beamAimTime: 1, beamSpeed: 820, beamRange: 820, beamRadius: 24, fireDps: 11, fireLife: 10,
            // атака 4 — вызов подкрепления
            summonMin: 4, summonMax: 6, summonTypes: ['zombie', 'shooter'],
-           // щит: активен почти всё время, но периодически ненадолго отключается (в среднем раз в минуту);
-           // пока активен, ранит выстрелами не достать (кроме усиления «сила»), а тем, кто подошёл
-           // слишком близко, наносит урон сам
-           shieldActiveMin: 35, shieldActiveMax: 55, shieldDownTime: 15,
+           // щит: включён постоянно. Ранит выстрелами босса не достать (кроме усиления «сила»),
+           // а тот, кто подошёл слишком близко, получает урон сам
            shieldAuraExtra: 55, shieldContactDmg: 14, shieldContactInterval: 0.4 },
   noRegen: true,
   alwaysActive: true,
@@ -485,8 +479,8 @@ const boss = {
   init(e) {
     e.state = 'idle'; e.timer = 2; e.attack = null; e.lastAttack = null; e.age = 0;
     e.shielded = true;
-    e.shieldTimer = e.cfg.shieldActiveMin + Math.random() * (e.cfg.shieldActiveMax - e.cfg.shieldActiveMin);
     e.shieldContactCd = 0;
+    e.beam = null;
   },
   update(e, dt, chain, game) {
     const cfg = e.cfg;
@@ -494,47 +488,68 @@ const boss = {
     const lead = chain[0];
     e.facing = Math.atan2(lead.y - e.y, lead.x - e.x);
 
-    // щит то включается, то ненадолго гаснет — по случайному таймеру, независимо от атак
-    e.shieldTimer -= dt;
-    if (e.shieldTimer <= 0) {
-      e.shielded = !e.shielded;
-      e.shieldTimer = e.shielded
-        ? cfg.shieldActiveMin + Math.random() * (cfg.shieldActiveMax - cfg.shieldActiveMin)
-        : cfg.shieldDownTime;
-    }
-    // пока щит держится, всё, что подошло слишком близко, получает урон сам
-    if (e.shielded) {
-      e.shieldContactCd -= dt;
-      if (e.shieldContactCd <= 0) {
-        let hit = false;
-        for (const u of chain) {
-          if (dist(e, u) <= e.r + cfg.shieldAuraExtra + u.r) { game.damageUnit(u, cfg.shieldContactDmg); hit = true; }
-        }
-        if (hit) e.shieldContactCd = cfg.shieldContactInterval;
+    // щит держится постоянно: всё, что подошло слишком близко, получает урон сам
+    e.shieldContactCd -= dt;
+    if (e.shieldContactCd <= 0) {
+      let hit = false;
+      for (const u of chain) {
+        if (dist(e, u) <= e.r + cfg.shieldAuraExtra + u.r) { game.damageUnit(u, cfg.shieldContactDmg); hit = true; }
       }
+      if (hit) e.shieldContactCd = cfg.shieldContactInterval;
     }
 
     if (e.state === 'idle') {
-      if (dist(e, lead) > e.cfg.approachStop) {
-        moveAndCollide(e, Math.cos(e.facing) * e.cfg.walkSpeed * dt, Math.sin(e.facing) * e.cfg.walkSpeed * dt,
+      if (dist(e, lead) > cfg.approachStop) {
+        moveAndCollide(e, Math.cos(e.facing) * cfg.walkSpeed * dt, Math.sin(e.facing) * cfg.walkSpeed * dt,
           game.world.moveBlockers);
       }
       e.timer -= dt;
       if (e.timer <= 0) {
         e.attack = pickBossAttack(e);
-        e.state = 'telegraph';
-        e.timer = BOSS_TELEGRAPH[e.attack];
+        if (e.attack === 'beam') { e.state = 'beamAim'; e.timer = cfg.beamAimTime; }
+        else { e.state = 'telegraph'; e.timer = BOSS_TELEGRAPH[e.attack]; }
       }
       return;
     }
 
-    // telegraph: короткий замах перед атакой, тело светится цветом готовящейся атаки
+    // прицеливание луча: секунда, в течение которой прицел (e.facing) следит за игроком
+    if (e.state === 'beamAim') {
+      e.timer -= dt;
+      if (e.timer <= 0) {
+        // растущая стенка огня: полыхает по мере роста и ещё fireLife секунд после того, как дорос до конца
+        const fw = game.spawnFirewall(e.x, e.y, e.x, e.y, cfg.beamRadius, cfg.fireDps, cfg.fireLife, true);
+        e.beam = { dir: e.facing, len: 0, fw };
+        e.state = 'beamFire';
+      }
+      return;
+    }
+
+    // луч растёт от босса с постоянной скоростью, прожигая всё по пути (урон даёт applyFirewalls)
+    if (e.state === 'beamFire') {
+      const b = e.beam;
+      b.len = Math.min(cfg.beamRange, b.len + cfg.beamSpeed * dt);
+      b.fw.x1 = e.x; b.fw.y1 = e.y;
+      b.fw.x2 = e.x + Math.cos(b.dir) * b.len;
+      b.fw.y2 = e.y + Math.sin(b.dir) * b.len;
+      if (b.len >= cfg.beamRange) {
+        b.fw.growing = false; // дорос до конца — теперь fireLife секунд догорает на месте
+        e.beam = null;
+        e.lastAttack = 'beam';
+        e.attack = null;
+        e.state = 'idle';
+        e.timer = cfg.attackCooldownMin + Math.random() * (cfg.attackCooldownMax - cfg.attackCooldownMin);
+      }
+      return;
+    }
+
+    // telegraph: короткий замах перед атакой (обстрел/большой снаряд/вызов), тело светится её цветом
     e.timer -= dt;
     if (e.timer <= 0) bossExecuteAttack(e, game, lead);
   },
   draw(e, g) {
     const { ctx } = g;
-    const color = e.state === 'telegraph' ? BOSS_ATTACK_COLOR[e.attack] : COLORS.boss;
+    const glowing = e.state === 'telegraph' || e.state === 'beamAim' || e.state === 'beamFire';
+    const color = glowing ? BOSS_ATTACK_COLOR[e.attack] : COLORS.boss;
     g.drawUnitBody(e, color, true);
     ctx.strokeStyle = '#0e0e10';
     ctx.lineWidth = 3;
@@ -545,25 +560,33 @@ const boss = {
       ctx.lineTo(e.x + Math.cos(f + s) * e.r * 1.25, e.y + Math.sin(f + s) * e.r * 1.25);
       ctx.stroke();
     }
-    ctx.fillStyle = e.state === 'telegraph' ? '#fff3c0' : COLORS.bossGlow;
+    ctx.fillStyle = glowing ? '#fff3c0' : COLORS.bossGlow;
     for (const s of [0.35, -0.35]) {
       ctx.beginPath();
       ctx.arc(e.x + Math.cos(f + s) * e.r * 0.5, e.y + Math.sin(f + s) * e.r * 0.5, e.r * 0.13, 0, Math.PI * 2);
       ctx.fill();
     }
-    // щит: пульсирующее кольцо; за 2 секунды до отключения — мигает пунктиром
-    if (e.shielded) {
-      const soon = e.shieldTimer < 2 && Math.floor(e.shieldTimer * 6) % 2 === 0;
-      ctx.strokeStyle = COLORS.shield;
-      ctx.lineWidth = 3;
-      ctx.globalAlpha = soon ? 0.25 : 0.65 + 0.2 * Math.sin(e.age * 4);
-      if (soon) ctx.setLineDash([5, 5]);
+    // прицел луча: пока целится, видно линию, куда он выстрелит
+    if (e.state === 'beamAim') {
+      ctx.strokeStyle = COLORS.fire;
+      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 6]);
       ctx.beginPath();
-      ctx.arc(e.x, e.y, e.r + 10, 0, Math.PI * 2);
+      ctx.moveTo(e.x, e.y);
+      ctx.lineTo(e.x + Math.cos(f) * e.cfg.beamRange, e.y + Math.sin(f) * e.cfg.beamRange);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.globalAlpha = 1;
     }
+    // щит: включён постоянно, вокруг тела пульсирующее кольцо
+    ctx.strokeStyle = COLORS.shield;
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.65 + 0.2 * Math.sin(e.age * 4);
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.r + 10, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
   },
 };
 

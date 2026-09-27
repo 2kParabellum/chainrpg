@@ -201,16 +201,13 @@ function updateClouds(dt) {
   }
 }
 
-// луч босса: мгновенно ранит всех, кто в момент выстрела оказался на линии
-function beamHit(x1, y1, x2, y2, radius, dmg, victims) {
-  for (const u of victims) {
-    if (distToSegment(u.x, u.y, x1, y1, x2, y2) < radius + u.r) damageUnit(u, dmg);
-  }
-}
-
-// стенка огня, которую луч босса оставляет после себя: горит life секунд, дальше решает applyFirewalls
-function spawnFirewall(x1, y1, x2, y2, radius, dps, life) {
-  state.firewalls.push({ x1, y1, x2, y2, r: radius, dps, life, maxLife: life });
+// стенка огня: жжёт всех, кто её касается. growing — пока true, жизнь не убывает и урон уже идёт
+// (так луч босса прожигает свою линию по мере роста), а когда growing снимают — начинается 10-секундный
+// отсчёт «дожигания» на месте. Возвращает созданный объект: вызывающий сам обновляет его x2/y2 по кадрам
+function spawnFirewall(x1, y1, x2, y2, radius, dps, life, growing) {
+  const f = { x1, y1, x2, y2, r: radius, dps, life, maxLife: life, growing: !!growing };
+  state.firewalls.push(f);
+  return f;
 }
 
 // стенки огня наносят урон всем, кто их касается, пока не прогорят
@@ -218,7 +215,7 @@ function applyFirewalls(dt) {
   const victims = chainUnits().concat(state.downed);
   for (let i = state.firewalls.length - 1; i >= 0; i--) {
     const f = state.firewalls[i];
-    f.life -= dt;
+    if (!f.growing) f.life -= dt;
     if (f.life <= 0) { state.firewalls.splice(i, 1); continue; }
     for (const u of victims) {
       if (distToSegment(u.x, u.y, f.x1, f.y1, f.x2, f.y2) < f.r + u.r) damageUnit(u, f.dps * dt);
@@ -236,7 +233,7 @@ function updateEffects(dt) {
 G.combat = {
   nearestTarget, damageUnit,
   spawnProjectile, spawnMortar, spawnBigMortar, spawnHook,
-  beamHit, spawnFirewall, applyFirewalls,
+  spawnFirewall, applyFirewalls,
   blast, updateProjectiles, applySpikes, updateClouds, updateEffects,
 };
 })(window.Game = window.Game || {});

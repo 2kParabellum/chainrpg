@@ -27,7 +27,7 @@ const game = {
   nearestTarget: combat.nearestTarget, damageUnit: combat.damageUnit, blast: combat.blast,
   spawnProjectile: combat.spawnProjectile, spawnMortar: combat.spawnMortar,
   spawnBigMortar: combat.spawnBigMortar, spawnHook: combat.spawnHook,
-  beamHit: combat.beamHit, spawnFirewall: combat.spawnFirewall,
+  spawnFirewall: combat.spawnFirewall,
   knockOutAlly, wanderStep, stepOffSpikes, chaseStep, removeFrom,
   spawnEnemy, freeSpotNear, pickChaser,
 };
