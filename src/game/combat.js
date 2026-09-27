@@ -2,12 +2,12 @@
 (function (G) {
 'use strict';
 
-const { CONFIG, state } = G;
+const { CONFIG, COLORS, state } = G;
 const { dist, removeFrom } = G.math;
-const { circleRectOverlap } = G.collision;
+const { circleRectOverlap, distToSegment } = G.collision;
 const { world, hasLineOfSight, standsOnSpikes } = G.world;
 const { chainUnits } = G.session;
-const { hookAlly } = G.chain;
+const { hookAlly, knockOutAlly } = G.chain;
 const { allyTypes, enemyTypes } = G;
 
 // --- цели и урон ---
@@ -64,13 +64,28 @@ function spawnProjectile(from, tx, ty, speed, dmg, team, radius) {
   });
 }
 
-// навесной снаряд катапульты: летит по дуге в точку, где цель была в момент выстрела
-function spawnMortar(from, tx, ty) {
+// навесной снаряд катапульты: летит по дуге в точку, где цель была в момент выстрела.
+// stats — необязательное переопределение урона/радиуса/времени полёта (иначе берутся из from.cfg);
+// так им может стрелять не только сама катапульта, но и другая атака с иными числами (босс)
+function spawnMortar(from, tx, ty, stats) {
+  const s = stats || from.cfg;
   state.projectiles.push({
     kind: 'mortar', team: 'enemy', r: 5,
     sx: from.x, sy: from.y, x: from.x, y: from.y,
-    tx, ty, t: 0, flight: from.cfg.flightTime,
-    dmg: from.cfg.dmg, edgeDmg: from.cfg.edgeDmg, blast: from.cfg.blastRadius,
+    tx, ty, t: 0, flight: s.flightTime,
+    dmg: s.dmg, edgeDmg: s.edgeDmg, blast: s.blastRadius,
+  });
+}
+
+// огромный навесной снаряд босса: как обычный, но при попадании выбивает задетых союзников
+// из цепочки (см. explodeBigMortar), а не просто ранит
+function spawnBigMortar(from, tx, ty, stats) {
+  const s = stats || from.cfg;
+  state.projectiles.push({
+    kind: 'bigMortar', team: 'enemy', r: 9, color: COLORS.bossGlow,
+    sx: from.x, sy: from.y, x: from.x, y: from.y,
+    tx, ty, t: 0, flight: s.flightTime,
+    dmg: s.dmg, edgeDmg: s.edgeDmg, blast: s.blastRadius, knockback: s.knockback,
   });
 }
 
@@ -89,19 +104,35 @@ function explodeMortar(p) {
   blast({ x: p.tx, y: p.ty }, p.blast, p.dmg, chainUnits().concat(state.downed), undefined, p.edgeDmg);
 }
 
+// взрыв большого снаряда босса: тот же урон по площади, что и у обычного, но каждого задетого
+// и выжившего союзника ещё и вышибает из цепочки — как таран бычка, только без шанса, всегда
+function explodeBigMortar(p) {
+  const center = { x: p.tx, y: p.ty };
+  state.effects.push({ type: 'blast', x: center.x, y: center.y, r: p.blast, life: 0.5 });
+  for (const u of chainUnits().concat(state.downed)) {
+    const d = dist(center, u);
+    if (d >= p.blast + u.r) continue;
+    damageUnit(u, p.dmg + (p.edgeDmg - p.dmg) * Math.min(1, d / p.blast));
+    if (u.kind === 'ally' && u.hp > 0) {
+      const angle = d > 1 ? Math.atan2(u.y - center.y, u.x - center.x) : Math.random() * Math.PI * 2;
+      knockOutAlly(u, angle, p.knockback);
+    }
+  }
+}
+
 function updateProjectiles(dt) {
   const chain = chainUnits();
   for (let i = state.projectiles.length - 1; i >= 0; i--) {
     const p = state.projectiles[i];
 
-    // снаряд катапульты летит поверх стен и взрывается в точке прицеливания
-    if (p.kind === 'mortar') {
+    // снаряд катапульты (и большой снаряд босса) летит поверх стен и взрывается в точке прицеливания
+    if (p.kind === 'mortar' || p.kind === 'bigMortar') {
       p.t += dt;
       const k = Math.min(1, p.t / p.flight);
       p.x = p.sx + (p.tx - p.sx) * k;
       p.y = p.sy + (p.ty - p.sy) * k;
       if (k >= 1) {
-        explodeMortar(p);
+        if (p.kind === 'bigMortar') explodeBigMortar(p); else explodeMortar(p);
         state.projectiles.splice(i, 1);
       }
       continue;
@@ -164,6 +195,31 @@ function updateClouds(dt) {
   }
 }
 
+// луч босса: мгновенно ранит всех, кто в момент выстрела оказался на линии
+function beamHit(x1, y1, x2, y2, radius, dmg, victims) {
+  for (const u of victims) {
+    if (distToSegment(u.x, u.y, x1, y1, x2, y2) < radius + u.r) damageUnit(u, dmg);
+  }
+}
+
+// стенка огня, которую луч босса оставляет после себя: горит life секунд, дальше решает applyFirewalls
+function spawnFirewall(x1, y1, x2, y2, radius, dps, life) {
+  state.firewalls.push({ x1, y1, x2, y2, r: radius, dps, life, maxLife: life });
+}
+
+// стенки огня наносят урон всем, кто их касается, пока не прогорят
+function applyFirewalls(dt) {
+  const victims = chainUnits().concat(state.downed);
+  for (let i = state.firewalls.length - 1; i >= 0; i--) {
+    const f = state.firewalls[i];
+    f.life -= dt;
+    if (f.life <= 0) { state.firewalls.splice(i, 1); continue; }
+    for (const u of victims) {
+      if (distToSegment(u.x, u.y, f.x1, f.y1, f.x2, f.y2) < f.r + u.r) damageUnit(u, f.dps * dt);
+    }
+  }
+}
+
 function updateEffects(dt) {
   for (let i = state.effects.length - 1; i >= 0; i--) {
     state.effects[i].life -= dt;
@@ -173,7 +229,8 @@ function updateEffects(dt) {
 
 G.combat = {
   nearestTarget, damageUnit,
-  spawnProjectile, spawnMortar, spawnHook,
+  spawnProjectile, spawnMortar, spawnBigMortar, spawnHook,
+  beamHit, spawnFirewall, applyFirewalls,
   blast, updateProjectiles, applySpikes, updateClouds, updateEffects,
 };
 })(window.Game = window.Game || {});

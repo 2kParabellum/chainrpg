@@ -20,6 +20,7 @@ const state = {
   projectiles: [],
   effects: [],
   clouds: [],
+  firewalls: [],     // стенки огня от луча босса: горят некоторое время на месте
   trail: [],         // след Героя, по которому бегут остальные звенья
   camera: { x: 0, y: 0 },
   status: 'play',    // menu | play | dead | win
@@ -88,7 +89,7 @@ function resetGame(level) {
   buildWorld(level);
   state.party = []; state.moveTarget = null; state.neutrals = []; state.downed = []; state.enemies = [];
   state.projectiles = []; state.effects = []; state.trail = [];
-  state.clouds = [];
+  state.clouds = []; state.firewalls = [];
   state.status = 'play';
   state.lightTime = 0;
   state.visibleEnemies = [];

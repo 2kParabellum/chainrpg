@@ -11,7 +11,7 @@ const { leader, isLit, currentRoom, chainUnits, isSpotted, spawnEnemy } = G.sess
 const { freeSpotNear } = G.world;
 const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly } = G.chain;
 const combat = G.combat;
-const { updateProjectiles, updateClouds, applySpikes, updateEffects } = combat;
+const { updateProjectiles, updateClouds, applySpikes, applyFirewalls, updateEffects } = combat;
 const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
 const { enemyTypes, weapons } = G;
 
@@ -25,7 +25,9 @@ function pickChaser() { return pickWeighted(chaserTypes, state.level.enemyWeight
 const game = {
   state, world, chainUnits, isSpotted,
   nearestTarget: combat.nearestTarget, damageUnit: combat.damageUnit, blast: combat.blast,
-  spawnProjectile: combat.spawnProjectile, spawnMortar: combat.spawnMortar, spawnHook: combat.spawnHook,
+  spawnProjectile: combat.spawnProjectile, spawnMortar: combat.spawnMortar,
+  spawnBigMortar: combat.spawnBigMortar, spawnHook: combat.spawnHook,
+  beamHit: combat.beamHit, spawnFirewall: combat.spawnFirewall,
   knockOutAlly, wanderStep, stepOffSpikes, chaseStep, removeFrom,
   spawnEnemy, freeSpotNear, pickChaser,
 };
@@ -148,6 +150,7 @@ function update(dt) {
   updateProjectiles(dt);
   updateClouds(dt);
   applySpikes(dt);
+  applyFirewalls(dt);
   updateLate();
   updateEffects(dt);
 

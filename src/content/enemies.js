@@ -23,7 +23,7 @@
 
 const { COLORS } = G;
 const { dist, pickOne } = G.math;
-const { moveAndCollide } = G.collision;
+const { moveAndCollide, circleRectOverlap } = G.collision;
 
 // общий шаблон стрелка, катапульты и скорпиона: блуждать, целиться, стрелять по перезарядке;
 // охотник (порождён порталом) вместо блуждания идёт к игроку и держит дистанцию 0.6 дальности
@@ -401,5 +401,122 @@ const portal = {
   },
 };
 
-G.enemyTypes = { shooter, bull, tower, scorpion, zombie, mine, portal };
+// Демон: единственный враг боссовой арены. Медленно идёт к игроку и держит дистанцию, а раз
+// в несколько секунд бьёт одной из четырёх атак: обстрел множеством снарядов по случайным точкам
+// арены, один огромный снаряд, который вышибает задетых союзников из цепочки, луч, оставляющий
+// стенку огня, и вызов подкрепления. Между атаками — короткий замах (see TELEGRAPH), по цвету
+// тела видно, что сейчас готовится.
+const BOSS_ATTACKS = ['barrage', 'mega', 'beam', 'summon'];
+const BOSS_TELEGRAPH = { barrage: 0.6, mega: 1.1, beam: 0.55, summon: 0.5 };
+const BOSS_ATTACK_COLOR = { barrage: COLORS.blast, mega: COLORS.bossGlow, beam: COLORS.fire, summon: COLORS.portal };
+
+function pickBossAttack(e) {
+  const options = BOSS_ATTACKS.filter((a) => a !== e.lastAttack);
+  return pickOne(options);
+}
+
+// случайная точка в границах арены, не в стене и не в колонне — для обстрела барражом
+function randomArenaSpot(game, r) {
+  const w = game.world;
+  for (let tries = 0; tries < 10; tries++) {
+    const p = { x: r + Math.random() * (w.width - 2 * r), y: r + Math.random() * (w.height - 2 * r) };
+    if (!w.moveBlockers.some((rect) => circleRectOverlap(p.x, p.y, r, rect))) return p;
+  }
+  return { x: w.width / 2, y: w.height / 2 };
+}
+
+function bossExecuteAttack(e, game, lead) {
+  const cfg = e.cfg;
+  if (e.attack === 'barrage') {
+    for (let i = 0; i < cfg.barrageCount; i++) {
+      const t = randomArenaSpot(game, 40);
+      game.spawnMortar(e, t.x, t.y,
+        { flightTime: cfg.barrageFlight, dmg: cfg.barrageDmg, edgeDmg: cfg.barrageEdgeDmg, blastRadius: cfg.barrageBlast });
+    }
+  } else if (e.attack === 'mega') {
+    game.spawnBigMortar(e, lead.x, lead.y,
+      { flightTime: cfg.megaFlight, dmg: cfg.megaDmg, edgeDmg: cfg.megaEdgeDmg,
+        blastRadius: cfg.megaBlast, knockback: cfg.megaKnockback });
+  } else if (e.attack === 'beam') {
+    const a = Math.atan2(lead.y - e.y, lead.x - e.x);
+    const tx = e.x + Math.cos(a) * cfg.beamRange, ty = e.y + Math.sin(a) * cfg.beamRange;
+    game.beamHit(e.x, e.y, tx, ty, cfg.beamRadius, cfg.beamDmg, game.chainUnits().concat(game.state.downed));
+    game.spawnFirewall(e.x, e.y, tx, ty, cfg.beamRadius, cfg.fireDps, cfg.fireLife);
+    game.state.effects.push({ type: 'beam', x1: e.x, y1: e.y, x2: tx, y2: ty, life: 0.4, color: COLORS.fire });
+  } else if (e.attack === 'summon') {
+    const n = cfg.summonMin + Math.floor(Math.random() * (cfg.summonMax - cfg.summonMin + 1));
+    for (let i = 0; i < n; i++) {
+      const type = pickOne(cfg.summonTypes);
+      const spot = game.freeSpotNear(e.x, e.y, e.r + 30, e.r + 160, 20);
+      if (!spot) continue;
+      game.spawnEnemy(type, spot.x, spot.y, e.room, {});
+      game.state.effects.push({ type: 'ring', x: spot.x, y: spot.y, r: 26, life: 0.4, color: COLORS.boss });
+    }
+  }
+  e.lastAttack = e.attack;
+  e.attack = null;
+  e.state = 'idle';
+  e.timer = cfg.attackCooldownMin + Math.random() * (cfg.attackCooldownMax - cfg.attackCooldownMin);
+}
+
+const boss = {
+  stats: { name: 'Демон', hp: 900, radius: 50, walkSpeed: 40, approachStop: 260,
+           attackCooldownMin: 2.6, attackCooldownMax: 4.2,
+           // атака 1 — катапультный обстрел: много слабых снарядов по случайным точкам арены
+           barrageCount: 11, barrageDmg: 9, barrageEdgeDmg: 3, barrageBlast: 70, barrageFlight: 1.3,
+           // атака 2 — один огромный снаряд в игрока: большой урон и выбивает задетых из цепочки
+           megaDmg: 26, megaEdgeDmg: 10, megaBlast: 150, megaFlight: 1.8, megaKnockback: 420,
+           // атака 3 — луч в игрока, оставляющий стенку огня
+           beamDmg: 16, beamRadius: 24, beamRange: 1400, fireDps: 11, fireLife: 10,
+           // атака 4 — вызов подкрепления
+           summonMin: 4, summonMax: 6, summonTypes: ['zombie', 'shooter'] },
+  noRegen: true,
+  alwaysActive: true,
+  deathFlash: 220,
+  init(e) { e.state = 'idle'; e.timer = 2; e.attack = null; e.lastAttack = null; },
+  update(e, dt, chain, game) {
+    const lead = chain[0];
+    e.facing = Math.atan2(lead.y - e.y, lead.x - e.x);
+
+    if (e.state === 'idle') {
+      if (dist(e, lead) > e.cfg.approachStop) {
+        moveAndCollide(e, Math.cos(e.facing) * e.cfg.walkSpeed * dt, Math.sin(e.facing) * e.cfg.walkSpeed * dt,
+          game.world.moveBlockers);
+      }
+      e.timer -= dt;
+      if (e.timer <= 0) {
+        e.attack = pickBossAttack(e);
+        e.state = 'telegraph';
+        e.timer = BOSS_TELEGRAPH[e.attack];
+      }
+      return;
+    }
+
+    // telegraph: короткий замах перед атакой, тело светится цветом готовящейся атаки
+    e.timer -= dt;
+    if (e.timer <= 0) bossExecuteAttack(e, game, lead);
+  },
+  draw(e, g) {
+    const { ctx } = g;
+    const color = e.state === 'telegraph' ? BOSS_ATTACK_COLOR[e.attack] : COLORS.boss;
+    g.drawUnitBody(e, color, true);
+    ctx.strokeStyle = '#0e0e10';
+    ctx.lineWidth = 3;
+    const f = e.facing || -Math.PI / 2;
+    for (const s of [0.75, -0.75]) {
+      ctx.beginPath();
+      ctx.moveTo(e.x + Math.cos(f + s) * e.r * 0.55, e.y + Math.sin(f + s) * e.r * 0.55);
+      ctx.lineTo(e.x + Math.cos(f + s) * e.r * 1.25, e.y + Math.sin(f + s) * e.r * 1.25);
+      ctx.stroke();
+    }
+    ctx.fillStyle = e.state === 'telegraph' ? '#fff3c0' : COLORS.bossGlow;
+    for (const s of [0.35, -0.35]) {
+      ctx.beginPath();
+      ctx.arc(e.x + Math.cos(f + s) * e.r * 0.5, e.y + Math.sin(f + s) * e.r * 0.5, e.r * 0.13, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  },
+};
+
+G.enemyTypes = { shooter, bull, tower, scorpion, zombie, mine, portal, boss };
 })(window.Game = window.Game || {});

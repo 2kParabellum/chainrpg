@@ -18,6 +18,7 @@ const world = {
 // раскладка текущего уровня; задаётся в buildWorld
 //   line:  комнаты стоят в ряд слева направо и соединены проходами
 //   field: одно поле из сетки cols × rows зон (по строкам слева направо, сверху вниз)
+//   arena: одна круглая комната (боссовая арена)
 let layout = { kind: 'line', wall: 0, count: 0 };
 
 function roomOriginX(i) { return i * (layout.roomW + layout.corridorLen); }
@@ -26,6 +27,7 @@ function roomCount() { return layout.count; }
 
 // в какой комнате (зоне) находится точка; проход между комнатами относится к ближайшей комнате
 function roomIndexAt(x, y) {
+  if (layout.kind === 'arena') return 0;
   if (layout.kind === 'field') {
     const col = clamp(Math.floor((x - layout.wall) / layout.cellW), 0, layout.cols - 1);
     const row = clamp(Math.floor((y - layout.wall) / layout.cellH), 0, layout.rows - 1);
@@ -36,6 +38,11 @@ function roomIndexAt(x, y) {
 }
 
 function roomInterior(i) {
+  if (layout.kind === 'arena') {
+    // квадрат, описанный вокруг круга арены: координаты плана (0..1) ложатся на него,
+    // как на прямоугольник обычной комнаты — автор плана сам следит, чтобы точки попали в круг
+    return { x: layout.margin, y: layout.margin, w: layout.radius * 2, h: layout.radius * 2 };
+  }
   if (layout.kind === 'field') {
     const col = i % layout.cols, row = Math.floor(i / layout.cols);
     return { x: layout.wall + col * layout.cellW, y: layout.wall + row * layout.cellH,
@@ -155,10 +162,37 @@ function buildField(level) {
   }
 }
 
+// круглая арена: одна большая круглая комната. Стена — не тонкий контур, а сплошная заливка
+// всего, что снаружи круга, полосами по строкам (ширина полосы каждой строки — по формуле окружности);
+// с шагом строк в десяток-другой пикселей это на глаз неотличимо от настоящей круглой стены,
+// а столкновения по-прежнему считаются обычной геометрией круг-прямоугольник, без новых примитивов
+function buildArena(level) {
+  const g = level.geometry;
+  const R = g.radius, M = g.margin, S = 2 * (R + M);
+  const cx = R + M, cy = R + M;
+  layout = { kind: 'arena', cx, cy, radius: R, margin: M, count: 1 };
+  world.width = S; world.height = S;
+
+  world.floors.push({ x: M, y: M, w: 2 * R, h: 2 * R });
+
+  const rowH = g.rowStep || 20;
+  for (let y = 0; y < S; y += rowH) {
+    const h = Math.min(rowH, S - y);
+    const dy = Math.max(Math.abs(y - cy), Math.abs(y + h - cy));
+    const half = dy < R ? Math.sqrt(R * R - dy * dy) : 0;
+    const left = cx - half, right = cx + half;
+    if (left > 0) world.walls.push({ x: 0, y, w: left, h });
+    if (right < S) world.walls.push({ x: right, y, w: S - right, h });
+  }
+
+  addRoomContent(level.rooms[0], 0);
+}
+
 function buildWorld(level) {
   world.walls = []; world.pillars = []; world.pits = []; world.spikes = [];
   world.floors = []; world.warnings = []; world.pads = [];
   if (level.geometry.kind === 'field') buildField(level);
+  else if (level.geometry.kind === 'arena') buildArena(level);
   else buildLine(level);
   world.sightBlockers = world.walls.concat(world.pillars);
   world.moveBlockers = world.sightBlockers.concat(world.pits);

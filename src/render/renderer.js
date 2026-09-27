@@ -93,8 +93,9 @@ function drawMortar(p) {
   const k = Math.min(1, p.t / p.flight);
 
   // круг на земле показывает, куда прилетит: успеть выйти можно только заранее
+  const color = p.color || COLORS.blast;
   if (isLit({ x: p.tx, y: p.ty, r: 0 })) {
-    ctx.strokeStyle = COLORS.blast;
+    ctx.strokeStyle = color;
     ctx.globalAlpha = 0.25 + k * 0.55;
     ctx.lineWidth = 2;
     ctx.setLineDash([6, 6]);
@@ -114,10 +115,31 @@ function drawMortar(p) {
   ctx.beginPath();
   ctx.ellipse(p.x, p.y, p.r * 1.2, p.r * 0.6, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = COLORS.blast;
+  ctx.fillStyle = color;
   ctx.beginPath();
   ctx.arc(p.x, p.y - height, p.r + 2, 0, Math.PI * 2);
   ctx.fill();
+}
+
+// стенка огня: толстая тускнеющая полоса вдоль отрезка, горит, пока не истечёт срок
+function drawFirewall(f) {
+  const mx = (f.x1 + f.x2) / 2, my = (f.y1 + f.y2) / 2;
+  if (!isLit({ x: mx, y: my, r: 0 }, f.r)) return;
+  const fade = clamp(f.life / f.maxLife, 0.15, 1);
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = COLORS.fire;
+  ctx.globalAlpha = 0.22 * fade;
+  ctx.lineWidth = f.r * 2;
+  ctx.beginPath();
+  ctx.moveTo(f.x1, f.y1); ctx.lineTo(f.x2, f.y2);
+  ctx.stroke();
+  ctx.globalAlpha = 0.8 * fade;
+  ctx.lineWidth = f.r * 0.7;
+  ctx.beginPath();
+  ctx.moveTo(f.x1, f.y1); ctx.lineTo(f.x2, f.y2);
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+  ctx.globalAlpha = 1;
 }
 
 function drawTerrain() {
@@ -228,6 +250,10 @@ function drawEnemies() {
 
 function drawClouds() {
   for (const c of state.clouds) drawCloud(c);
+}
+
+function drawFirewalls() {
+  for (const f of state.firewalls) drawFirewall(f);
 }
 
 // подиумы: светящийся квадрат на полу; alpha — общая яркость (в темноте слабее).
@@ -350,7 +376,7 @@ function drawWeapons() {
 
 function drawProjectiles() {
   for (const p of state.projectiles) {
-    if (p.kind === 'mortar') { drawMortar(p); continue; }
+    if (p.kind === 'mortar' || p.kind === 'bigMortar') { drawMortar(p); continue; }
     if (p.kind === 'hook') { drawHook(p); continue; }
     if (!isLit(p)) continue;
     ctx.fillStyle = p.team === 'ally' ? COLORS.allyShot : COLORS.enemyShot;
@@ -413,6 +439,7 @@ function drawScene() {
   drawWarnings();
   drawEnemies();
   drawClouds();
+  drawFirewalls();
   drawChain();
   drawWeapons();
   drawProjectiles();
