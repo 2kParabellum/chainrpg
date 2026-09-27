@@ -415,28 +415,36 @@ function pickBossAttack(e) {
   return pickOne(options);
 }
 
-// случайная точка в границах арены, не в стене и не в колонне — для обстрела барражом
-function randomArenaSpot(game, r) {
+// случайная точка рядом с (cx, cy) в пределах radius, не в стене и не в колонне —
+// для обстрела барражом: снаряды ложатся близко к игроку, а не по всей арене
+function randomSpotNear(game, cx, cy, radius, r) {
   const w = game.world;
   for (let tries = 0; tries < 10; tries++) {
-    const p = { x: r + Math.random() * (w.width - 2 * r), y: r + Math.random() * (w.height - 2 * r) };
+    const a = Math.random() * Math.PI * 2, d = Math.random() * radius;
+    const p = { x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d };
+    if (p.x < r || p.y < r || p.x > w.width - r || p.y > w.height - r) continue;
     if (!w.moveBlockers.some((rect) => circleRectOverlap(p.x, p.y, r, rect))) return p;
   }
-  return { x: w.width / 2, y: w.height / 2 };
+  return { x: cx, y: cy };
 }
 
 function bossExecuteAttack(e, game, lead) {
   const cfg = e.cfg;
   if (e.attack === 'barrage') {
-    for (let i = 0; i < cfg.barrageCount; i++) {
-      const t = randomArenaSpot(game, 40);
+    // случайное число снарядов на каждый обстрел, все ложатся близко к игроку
+    const count = cfg.barrageMinCount + Math.floor(Math.random() * (cfg.barrageMaxCount - cfg.barrageMinCount + 1));
+    for (let i = 0; i < count; i++) {
+      const t = randomSpotNear(game, lead.x, lead.y, cfg.barrageSpread, 40);
       game.spawnMortar(e, t.x, t.y,
         { flightTime: cfg.barrageFlight, dmg: cfg.barrageDmg, edgeDmg: cfg.barrageEdgeDmg, blastRadius: cfg.barrageBlast });
     }
   } else if (e.attack === 'mega') {
-    // прицел намеренно неточный: снаряд ложится не точно в игрока, а где-то рядом со случайным сдвигом
+    // прицел ведётся по ходу игрока (чуть предсказывает, куда тот идёт), сверху ещё случайный сдвиг —
+    // точнее, чем стрельба по текущей точке, но всё равно не гарантированное попадание
+    const px = lead.x + (lead.vx || 0) * cfg.megaFlight * cfg.megaLeadFactor;
+    const py = lead.y + (lead.vy || 0) * cfg.megaFlight * cfg.megaLeadFactor;
     const aimA = Math.random() * Math.PI * 2, aimD = Math.random() * cfg.megaAimError;
-    const tx = lead.x + Math.cos(aimA) * aimD, ty = lead.y + Math.sin(aimA) * aimD;
+    const tx = px + Math.cos(aimA) * aimD, ty = py + Math.sin(aimA) * aimD;
     game.spawnBigMortar(e, tx, ty,
       { flightTime: cfg.megaFlight, dmg: cfg.megaDmg, edgeDmg: cfg.megaEdgeDmg,
         blastRadius: cfg.megaBlast, knockback: cfg.megaKnockback });
@@ -459,11 +467,15 @@ function bossExecuteAttack(e, game, lead) {
 const boss = {
   stats: { name: 'Демон', hp: 1800, radius: 50, walkSpeed: 40, approachStop: 260,
            attackCooldownMin: 2.6, attackCooldownMax: 4.2,
-           // атака 1 — катапультный обстрел: много снарядов по случайным точкам арены, долгий подлёт
-           barrageCount: 20, barrageDmg: 18, barrageEdgeDmg: 6, barrageBlast: 70, barrageFlight: 2.2,
-           // атака 2 — один огромный снаряд в игрока: выбивает задетых из цепочки; прицел неточный —
-           // ложится в случайной точке в пределах megaAimError от игрока, а не точно в него
-           megaDmg: 26, megaEdgeDmg: 10, megaBlast: 190, megaFlight: 1.8, megaKnockback: 420, megaAimError: 90,
+           // атака 1 — катапультный обстрел: от 1 до 7 снарядов (каждый раз случайно), ложатся
+           // кучно рядом с игроком (в пределах barrageSpread), а не по всей арене; долгий подлёт
+           barrageMinCount: 1, barrageMaxCount: 7, barrageSpread: 200,
+           barrageDmg: 18, barrageEdgeDmg: 6, barrageBlast: 70, barrageFlight: 2.2,
+           // атака 2 — один огромный снаряд в игрока: выбивает задетых из цепочки; прицел ведётся
+           // с упреждением по скорости игрока (megaLeadFactor — доля предсказанного смещения),
+           // сверху ещё случайный сдвиг в пределах megaAimError — не гарантированное попадание, но точнее «в лоб»
+           megaDmg: 26, megaEdgeDmg: 10, megaBlast: 190, megaFlight: 1.8, megaKnockback: 420,
+           megaLeadFactor: 0.5, megaAimError: 90,
            // атака 3 — луч: сперва секунда прицеливания (боссу видно, куда целится), затем луч растёт
            // от босса с постоянной скоростью 820 px/с — ровно столько, чтобы из центра арены (её радиус
            // тоже 820) дойти до стены за секунду; на прожаренной земле остаётся стена огня на 10 с
