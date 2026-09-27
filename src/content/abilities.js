@@ -55,10 +55,16 @@ const medic = {
   },
 };
 
-// Временные усиления (подиумы скорости и силы): у звена, проехавшего по подиуму, на `duration` секунд
-// включаются множители. Ключ записи — тип подиума. Не заменяют способность и не зависят от Lock.
+// Временные усиления: у звена, коснувшегося подиума и нажавшего пробел, на `duration` секунд
+// включается эффект. Ключ записи — тип подиума. Не заменяют способность; у звена не больше
+// одного усиления разом — новое перезаписывает старое (см. giveBuff в game/chain.js).
 //   move  — множитель скорости и разворота Героя; rate — множитель скорости атаки (перезарядка идёт быстрее);
 //   dmg   — множитель урона; hp — множитель текущего и максимального HP (на время действия)
+//   regenRate  — сколько HP в секунду восстанавливает себе звено, пока действует
+//   sturdy     — true: звено нельзя выбить из цепочки (таран, гарпун, X), пока действует
+//   contactDmg, contactInterval — звено наносит этот урон каждому врагу, который его касается,
+//                                 не чаще, чем раз в contactInterval секунд
+//   revive     — true: если HP звена падает до 0, оно не погибает, а остаётся с 1 HP
 const speed = {
   name: 'скорость',
   color: COLORS.speed,
@@ -96,6 +102,73 @@ const power = {
   },
 };
 
+// Регенерация: сильно лечит себя, пока действует
+const regen = {
+  name: 'регенерация',
+  color: COLORS.regen,
+  duration: 15,
+  regenRate: 18,
+  icon(ctx, x, y, s) {
+    ctx.beginPath();
+    ctx.arc(x, y, s * 0.55, 0.6, -0.6, true);
+    ctx.moveTo(x - s * 0.5, y); ctx.lineTo(x + s * 0.5, y);
+    ctx.moveTo(x, y - s * 0.3); ctx.lineTo(x, y + s * 0.3);
+    ctx.stroke();
+  },
+};
+
+// Крепкость: пока действует, звено нельзя выбить из цепочки никаким способом
+const sturdy = {
+  name: 'крепкость',
+  color: COLORS.sturdy,
+  duration: 30,
+  sturdy: true,
+  icon(ctx, x, y, s) {
+    ctx.beginPath();
+    ctx.moveTo(x, y - s * 0.6);
+    ctx.lineTo(x + s * 0.55, y - s * 0.3);
+    ctx.lineTo(x + s * 0.55, y + s * 0.25);
+    ctx.lineTo(x, y + s * 0.6);
+    ctx.lineTo(x - s * 0.55, y + s * 0.25);
+    ctx.lineTo(x - s * 0.55, y - s * 0.3);
+    ctx.closePath();
+    ctx.stroke();
+  },
+};
+
+// Шипастость: наносит урон каждому врагу, который касается тела
+const spiky = {
+  name: 'шипастость',
+  color: COLORS.spiky,
+  duration: 30,
+  contactDmg: 40,
+  contactInterval: 0.35,
+  icon(ctx, x, y, s) {
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(a) * s * 0.25, y + Math.sin(a) * s * 0.25);
+      ctx.lineTo(x + Math.cos(a) * s * 0.65, y + Math.sin(a) * s * 0.65);
+      ctx.stroke();
+    }
+  },
+};
+
+// Воля: пока действует, смертельный урон не убивает звено — оно остаётся с 1 HP
+const will = {
+  name: 'воля',
+  color: COLORS.will,
+  duration: 20,
+  revive: true,
+  icon(ctx, x, y, s) {
+    ctx.beginPath();
+    ctx.moveTo(x, y - s * 0.6);
+    ctx.quadraticCurveTo(x + s * 0.65, y - s * 0.1, x, y + s * 0.6);
+    ctx.quadraticCurveTo(x - s * 0.65, y - s * 0.1, x, y - s * 0.6);
+    ctx.stroke();
+  },
+};
+
 G.abilities = { shooter, medic };
-G.buffs = { speed, power };
+G.buffs = { speed, power, regen, sturdy, spiky, will };
 })(window.Game = window.Game || {});

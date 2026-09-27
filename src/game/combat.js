@@ -27,6 +27,8 @@ function damageUnit(u, dmg) {
   u.regenTimer = 0;
   if (u.hp <= 0) {
     if (u.kind === 'ally') {
+      // усиление «воля»: смертельный урон не убивает, звено остаётся с 1 HP
+      if (u.buffs && Object.keys(u.buffs).some((k) => u.buffs[k] > 0 && G.buffs[k].revive)) { u.hp = 1; return; }
       // гибель Героя — конец партии; его тело остаётся в цепочке, чтобы сцена и камера не остались без ведущего
       if (allyTypes[u.type].anchor) { state.status = 'dead'; return; }
       removeFrom(state.party, u);

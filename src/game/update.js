@@ -68,10 +68,27 @@ function updateLeader(dt) {
   }
 }
 
+// усиление «шипастость»: раз в contactInterval бьёт всех врагов, которых сейчас касается тело
+function applySpikyContact(a, dt) {
+  a.spikyCd = (a.spikyCd || 0) - dt;
+  if (a.spikyCd > 0) return;
+  const def = G.buffs.spiky;
+  let hit = false;
+  for (const e of state.enemies) {
+    if (!isSpotted(e)) continue;
+    if (dist(a, e) <= a.r + e.r) { combat.damageUnit(e, def.contactDmg); hit = true; }
+  }
+  if (hit) {
+    a.spikyCd = def.contactInterval;
+    state.effects.push({ type: 'ring', x: a.x, y: a.y, r: a.r + 6, life: 0.15, color: def.color });
+  }
+}
+
 // звено цепочки: Герой идёт сам, остальные бегут за ним; работает оружие текущей способности звена
 function updateAlly(a, dt, i) {
   if (i > 0) followChain(a, dt, i);
   for (const w of a.gear) weapons[w.type].update(a, w, dt * (a.rateMul || 1), game);
+  if (a.buffs && a.buffs.spiky > 0) applySpikyContact(a, dt);
 }
 
 // общая часть любого врага: регенерация и активация, дальше — поведение по типу

@@ -76,11 +76,13 @@ function followChain(a, dt, i) {
   if (normal) slideAlongWall(a, normal, 1);
 }
 
-// снять усиление key: множители сбрасываются, HP возвращается к обычному пределу
+// снять усиление key: множители сбрасываются, HP возвращается к обычному пределу.
+// sturdy, contactDmg и revive работают, только пока таймер u.buffs[key] > 0, и снятия не требуют
 function endBuff(u, key) {
+  const def = G.buffs[key];
   u.buffs[key] = 0;
-  if (key === 'power') { u.dmgMul = 1; u.maxHp = u.baseMaxHp; u.hp = Math.min(u.hp, u.maxHp); }
-  if (key === 'speed') { u.moveMul = 1; u.rateMul = 1; }
+  if (def.dmg || def.hp) { u.dmgMul = 1; u.maxHp = u.baseMaxHp; u.hp = Math.min(u.hp, u.maxHp); }
+  if (def.move || def.rate) { u.moveMul = 1; u.rateMul = 1; }
 }
 
 // временное усиление; у звена не больше одного: новое перезаписывает старое.
@@ -92,22 +94,29 @@ function giveBuff(u, key) {
   const fresh = !(u.buffs[key] > 0);
   u.buffs[key] = def.duration;
   if (fresh) {
-    if (key === 'power') { u.dmgMul = def.dmg; u.baseMaxHp = u.maxHp; u.maxHp *= def.hp; u.hp *= def.hp; }
-    if (key === 'speed') { u.moveMul = def.move; u.rateMul = def.rate; }
+    if (def.dmg || def.hp) { u.dmgMul = def.dmg || 1; u.baseMaxHp = u.maxHp; u.maxHp *= def.hp || 1; u.hp *= def.hp || 1; }
+    if (def.move || def.rate) { u.moveMul = def.move || 1; u.rateMul = def.rate || 1; }
     state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 8, life: 0.4, color: def.color });
   }
 }
 
-// таймеры усилений
+// таймеры усилений; регенерация тикает каждый кадр, пока активна
 function updateBuffs(dt) {
   for (const u of state.party) {
     if (!u.buffs) continue;
     for (const key of Object.keys(u.buffs)) {
       if (!(u.buffs[key] > 0)) continue;
+      const def = G.buffs[key];
+      if (def.regenRate) u.hp = Math.min(u.maxHp, u.hp + def.regenRate * dt);
       u.buffs[key] -= dt;
       if (u.buffs[key] <= 0) endBuff(u, key);
     }
   }
+}
+
+// звено защищено усилением «крепкость» (или другим с флагом sturdy), пока таймер не истёк
+function isSturdy(u) {
+  return !!(u.buffs && Object.keys(u.buffs).some((k) => u.buffs[k] > 0 && G.buffs[k].sturdy));
 }
 
 // проехав по подиуму, звено (и Герой) получает его способность вместо текущей
@@ -149,9 +158,10 @@ function tryRecruit() {
   state.party.push(u);
 }
 
-// выбить из цепочки или утащить можно только рядового союзника: Героя — нельзя
+// выбить из цепочки или утащить можно только рядового союзника: Героя — нельзя,
+// и нельзя того, кого сейчас защищает усиление «крепкость»
 function canBeDisplaced(u) {
-  return u.kind === 'ally' && !allyTypes[u.type].anchor;
+  return u.kind === 'ally' && !allyTypes[u.type].anchor && !isSturdy(u);
 }
 
 // бычок выбивает союзника из цепочки: тот отлетает и лежит, пока его не подберут
