@@ -434,7 +434,10 @@ function bossExecuteAttack(e, game, lead) {
         { flightTime: cfg.barrageFlight, dmg: cfg.barrageDmg, edgeDmg: cfg.barrageEdgeDmg, blastRadius: cfg.barrageBlast });
     }
   } else if (e.attack === 'mega') {
-    game.spawnBigMortar(e, lead.x, lead.y,
+    // прицел намеренно неточный: снаряд ложится не точно в игрока, а где-то рядом со случайным сдвигом
+    const aimA = Math.random() * Math.PI * 2, aimD = Math.random() * cfg.megaAimError;
+    const tx = lead.x + Math.cos(aimA) * aimD, ty = lead.y + Math.sin(aimA) * aimD;
+    game.spawnBigMortar(e, tx, ty,
       { flightTime: cfg.megaFlight, dmg: cfg.megaDmg, edgeDmg: cfg.megaEdgeDmg,
         blastRadius: cfg.megaBlast, knockback: cfg.megaKnockback });
   } else if (e.attack === 'beam') {
@@ -462,21 +465,54 @@ function bossExecuteAttack(e, game, lead) {
 const boss = {
   stats: { name: 'Демон', hp: 900, radius: 50, walkSpeed: 40, approachStop: 260,
            attackCooldownMin: 2.6, attackCooldownMax: 4.2,
-           // атака 1 — катапультный обстрел: много слабых снарядов по случайным точкам арены
-           barrageCount: 11, barrageDmg: 9, barrageEdgeDmg: 3, barrageBlast: 70, barrageFlight: 1.3,
-           // атака 2 — один огромный снаряд в игрока: большой урон и выбивает задетых из цепочки
-           megaDmg: 26, megaEdgeDmg: 10, megaBlast: 150, megaFlight: 1.8, megaKnockback: 420,
+           // атака 1 — катапультный обстрел: много снарядов по случайным точкам арены, долгий подлёт
+           barrageCount: 20, barrageDmg: 18, barrageEdgeDmg: 6, barrageBlast: 70, barrageFlight: 2.2,
+           // атака 2 — один огромный снаряд в игрока: выбивает задетых из цепочки; прицел неточный —
+           // ложится в случайной точке в пределах megaAimError от игрока, а не точно в него
+           megaDmg: 26, megaEdgeDmg: 10, megaBlast: 190, megaFlight: 1.8, megaKnockback: 420, megaAimError: 90,
            // атака 3 — луч в игрока, оставляющий стенку огня
            beamDmg: 16, beamRadius: 24, beamRange: 1400, fireDps: 11, fireLife: 10,
            // атака 4 — вызов подкрепления
-           summonMin: 4, summonMax: 6, summonTypes: ['zombie', 'shooter'] },
+           summonMin: 4, summonMax: 6, summonTypes: ['zombie', 'shooter'],
+           // щит: активен почти всё время, но периодически ненадолго отключается (в среднем раз в минуту);
+           // пока активен, ранит выстрелами не достать (кроме усиления «сила»), а тем, кто подошёл
+           // слишком близко, наносит урон сам
+           shieldActiveMin: 35, shieldActiveMax: 55, shieldDownTime: 15,
+           shieldAuraExtra: 55, shieldContactDmg: 14, shieldContactInterval: 0.4 },
   noRegen: true,
   alwaysActive: true,
   deathFlash: 220,
-  init(e) { e.state = 'idle'; e.timer = 2; e.attack = null; e.lastAttack = null; },
+  init(e) {
+    e.state = 'idle'; e.timer = 2; e.attack = null; e.lastAttack = null; e.age = 0;
+    e.shielded = true;
+    e.shieldTimer = e.cfg.shieldActiveMin + Math.random() * (e.cfg.shieldActiveMax - e.cfg.shieldActiveMin);
+    e.shieldContactCd = 0;
+  },
   update(e, dt, chain, game) {
+    const cfg = e.cfg;
+    e.age += dt;
     const lead = chain[0];
     e.facing = Math.atan2(lead.y - e.y, lead.x - e.x);
+
+    // щит то включается, то ненадолго гаснет — по случайному таймеру, независимо от атак
+    e.shieldTimer -= dt;
+    if (e.shieldTimer <= 0) {
+      e.shielded = !e.shielded;
+      e.shieldTimer = e.shielded
+        ? cfg.shieldActiveMin + Math.random() * (cfg.shieldActiveMax - cfg.shieldActiveMin)
+        : cfg.shieldDownTime;
+    }
+    // пока щит держится, всё, что подошло слишком близко, получает урон сам
+    if (e.shielded) {
+      e.shieldContactCd -= dt;
+      if (e.shieldContactCd <= 0) {
+        let hit = false;
+        for (const u of chain) {
+          if (dist(e, u) <= e.r + cfg.shieldAuraExtra + u.r) { game.damageUnit(u, cfg.shieldContactDmg); hit = true; }
+        }
+        if (hit) e.shieldContactCd = cfg.shieldContactInterval;
+      }
+    }
 
     if (e.state === 'idle') {
       if (dist(e, lead) > e.cfg.approachStop) {
@@ -514,6 +550,19 @@ const boss = {
       ctx.beginPath();
       ctx.arc(e.x + Math.cos(f + s) * e.r * 0.5, e.y + Math.sin(f + s) * e.r * 0.5, e.r * 0.13, 0, Math.PI * 2);
       ctx.fill();
+    }
+    // щит: пульсирующее кольцо; за 2 секунды до отключения — мигает пунктиром
+    if (e.shielded) {
+      const soon = e.shieldTimer < 2 && Math.floor(e.shieldTimer * 6) % 2 === 0;
+      ctx.strokeStyle = COLORS.shield;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = soon ? 0.25 : 0.65 + 0.2 * Math.sin(e.age * 4);
+      if (soon) ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r + 10, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
     }
   },
 };

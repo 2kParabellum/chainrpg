@@ -48,7 +48,9 @@ function shootUpdate(fire) {
   };
 }
 
-const arrow = (u, w, foe, game) => game.spawnProjectile(u, foe.x, foe.y, w.projSpeed, w.dmg * (u.dmgMul || 1), 'ally', w.projRadius);
+// усиление «сила» пробивает выстрелом щит босса насквозь (см. game/combat.js)
+const arrow = (u, w, foe, game) => game.spawnProjectile(u, foe.x, foe.y, w.projSpeed, w.dmg * (u.dmgMul || 1),
+  'ally', w.projRadius, { pierceShield: !!(u.buffs && u.buffs.power > 0) });
 
 const sword = {
   stats: { reach: 30, dmg: 15.4, cooldown: 1.0, color: COLORS.hero },

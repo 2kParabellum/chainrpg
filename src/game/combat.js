@@ -56,11 +56,12 @@ function blast(center, radius, dmg, victims, fxAt = center, edgeDmg = dmg) {
 
 // --- снаряды ---
 
-function spawnProjectile(from, tx, ty, speed, dmg, team, radius) {
+// extra — необязательные дополнительные поля снаряда (например, pierceShield — пробивает щит босса)
+function spawnProjectile(from, tx, ty, speed, dmg, team, radius, extra) {
   const a = Math.atan2(ty - from.y, tx - from.x);
   state.projectiles.push({
     x: from.x, y: from.y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed,
-    dmg, team, r: radius, life: 3,
+    dmg, team, r: radius, life: 3, ...extra,
   });
 }
 
@@ -150,7 +151,12 @@ function updateProjectiles(dt) {
       const targets = p.team === 'ally' ? state.enemies : chain;
       for (const t of targets) {
         if (dist(p, t) >= p.r + t.r) continue;
-        damageUnit(t, p.dmg);
+        // щит босса гасит выстрелы, пока активен; усиление «сила» пробивает его насквозь
+        if (t.type === 'boss' && t.shielded && !p.pierceShield) {
+          state.effects.push({ type: 'ring', x: t.x, y: t.y, r: t.r + 6, life: 0.2, color: COLORS.shield });
+        } else {
+          damageUnit(t, p.dmg);
+        }
         // игрока гарпун только ранит, а вот союзника уносит к Скорпиону
         if (p.kind === 'hook' && t.kind === 'ally' && t.hp > 0) hookAlly(t, p.owner);
         dead = true;
