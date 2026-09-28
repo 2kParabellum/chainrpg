@@ -16,7 +16,7 @@ const COLORS = {
   hpBack: '#2a2a32', hpAlly: '#7ae07a', hpEnemy: '#e07a7a',
   // двери, кнопки и неуязвимая пушка-ловушка (уровень «Тропа над пропастью»)
   door: '#6b4a4a', doorEdge: '#c07a5c', button: '#4a4a55', buttonEdge: '#8a8a9a', buttonPressed: '#8ce27a',
-  cannon: '#3a3a44', finish: '#63d2ff',
+  cannon: '#3a3a44', cannonShot: '#ff7a2e', finish: '#63d2ff', bridge: '#24242b',
 };
 
 G.COLORS = COLORS;

@@ -68,6 +68,22 @@ function updateLeader(dt) {
     const normal = moveAndCollide(lead, lead.vx * dt, lead.vy * dt, world.moveBlockers);
     if (normal) slideAlongWall(lead, normal, cfg.wallFriction);
   }
+  if (state.level.solidEnemies) pushOutOfEnemies(lead);
+}
+
+// уровень с твёрдыми врагами: Герой не проходит сквозь тела врагов — на узкой тропе один
+// враг перекрывает её целиком, пока его не убьют или не оттеснят
+function pushOutOfEnemies(u) {
+  for (const e of state.enemies) {
+    if (!isSpotted(e)) continue;
+    const dx = u.x - e.x, dy = u.y - e.y;
+    const d = Math.hypot(dx, dy), min = u.r + e.r;
+    if (d >= min) continue;
+    const nx = d > 0.01 ? dx / d : 1, ny = d > 0.01 ? dy / d : 0;
+    moveAndCollide(u, nx * (min - d), ny * (min - d), world.moveBlockers);
+    const into = u.vx * nx + u.vy * ny;
+    if (into < 0) { u.vx -= nx * into; u.vy -= ny * into; }
+  }
 }
 
 // усиление «шипастость»: раз в contactInterval бьёт всех врагов, которых сейчас касается тело

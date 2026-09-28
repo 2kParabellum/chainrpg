@@ -121,7 +121,7 @@ function resetGame(level) {
       state.enemies.push(portal);
       taken.push({ x: p.x, y: p.y, r: portal.r + CONFIG.SCATTER.portalClearance });
     }
-    for (const [type, cx, cy] of rollEnemies(plan, level)) {
+    for (const [type, cx, cy, extra] of rollEnemies(plan, level)) {
       let p;
       if (cx === undefined) {
         p = scatterSpot(i, enemyTypes[type].stats.radius, taken, CONFIG.SCATTER.gap);
@@ -129,7 +129,7 @@ function resetGame(level) {
       } else {
         p = localToWorld(i, cx, cy);
       }
-      state.enemies.push(makeEnemy(type, p.x, p.y, i));
+      state.enemies.push(Object.assign(makeEnemy(type, p.x, p.y, i), extra));
     }
     for (const [cx, cy] of plan.mines || []) {
       const p = localToWorld(i, cx, cy);

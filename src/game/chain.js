@@ -6,7 +6,7 @@
 const { CONFIG, COLORS, state } = G;
 const { clamp, dist, removeFrom } = G.math;
 const { moveAndCollide, slideAlongWall } = G.collision;
-const { world, padUnder } = G.world;
+const { world, padUnder, buttonUnder } = G.world;
 const { leader, maxParty, setAbility } = G.session;
 const { allyTypes } = G;
 
@@ -176,11 +176,20 @@ function knockOutAlly(a, angle, speed) {
   state.downed.push(a);
 }
 
-// сбросить последнего союзника: он остаётся лежать на месте, поднять его можно ПРОБЕЛОМ
+// сбросить последнего союзника: он остаётся лежать на месте, поднять его можно ПРОБЕЛОМ.
+// Если Герой стоит на кнопке, брошенный дружочек ложится прямо на неё и держит её нажатой
 function dropLastAlly() {
   if (state.status !== 'play') return;
   for (let i = state.party.length - 1; i > 0; i--) {
-    if (canBeDisplaced(state.party[i])) { knockOutAlly(state.party[i], 0, 0); return; }
+    const a = state.party[i];
+    if (!canBeDisplaced(a)) continue;
+    knockOutAlly(a, 0, 0);
+    const btn = buttonUnder(leader());
+    if (btn) {
+      a.x = btn.x + btn.w / 2; a.y = btn.y + btn.h / 2;
+      state.effects.push({ type: 'ring', x: a.x, y: a.y, r: btn.w * 0.6, life: 0.4, color: COLORS.buttonPressed });
+    }
+    return;
   }
 }
 

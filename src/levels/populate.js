@@ -27,7 +27,17 @@ function rollEnemySpec(spec, level) {
   const weights = level.enemyWeights;
   const chosen = weights ? sampleWeighted(pool, kinds, weights) : shuffled(pool).slice(0, kinds);
   const types = assignTypes(count, chosen, weights);
-  return types.map((type, k) => (spec.spots ? [type, ...spec.spots[k]] : [type]));
+  // anchored — враги группы стоят на месте и не бродят (например, стрелки на крошечных островках)
+  const extra = spec.anchored ? { anchored: true } : null;
+  return types.map((type, k) => (spec.spots ? [type, ...spec.spots[k], extra] : [type, undefined, undefined, extra]));
+}
+
+// подиумы на выбор: сначала обязательные (fixed), остальные точки — разные случайные из пула.
+// Возвращает [[cx, cy, ключ], ...]; бросается заново при каждом старте
+function rollPadChoice(spec) {
+  if (!spec) return [];
+  const keys = spec.fixed.concat(shuffled(spec.pool.filter((k) => !spec.fixed.includes(k))));
+  return spec.spots.map(([cx, cy], k) => [cx, cy, keys[k]]);
 }
 
 // комната обычно задаёт одну группу врагов, но может задать список независимых групп
@@ -62,5 +72,5 @@ function rollLevelAllies(level) {
   return out;
 }
 
-G.populate = { rollEnemies, rollLevelAllies };
+G.populate = { rollEnemies, rollLevelAllies, rollPadChoice };
 })(window.Game = window.Game || {});

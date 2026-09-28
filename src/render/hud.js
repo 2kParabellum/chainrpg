@@ -4,8 +4,8 @@
 
 const { CONFIG, state } = G;
 const { abilities } = G;
-const { currentRoom, lightSources, isSpotted, maxParty } = G.session;
-const { roomCount, roomIndexAt } = G.world;
+const { currentRoom, lightSources, isSpotted, maxParty, leader } = G.session;
+const { roomCount, roomIndexAt, buttonUnder } = G.world;
 const { nearestPickup } = G.chain;
 const { ctx, allyColor } = G.shapes;
 
@@ -39,7 +39,12 @@ function drawHud() {
   }
 
   const pickup = nearestPickup();
-  if (pickup && state.status === 'play') {
+  const btn = buttonUnder(leader());
+  if (btn && !btn.pressed && state.party.length > 1 && state.status === 'play') {
+    ctx.fillStyle = '#8ce27a';
+    ctx.textAlign = 'center';
+    ctx.fillText('X — ОСТАВИТЬ ДРУЖОЧКА НА КНОПКЕ', CONFIG.VIEW.w / 2, CONFIG.VIEW.h - 30);
+  } else if (pickup && state.status === 'play') {
     ctx.fillStyle = '#f0f0f5';
     ctx.textAlign = 'center';
     const msg = state.party.length >= maxParty() ? 'ЦЕПОЧКА ПОЛНАЯ'

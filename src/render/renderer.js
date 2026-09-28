@@ -227,8 +227,11 @@ function drawTerrain() {
   for (const r of world.pits) {
     if (!visible(r)) continue;
     ctx.fillRect(r.x, r.y, r.w, r.h);
-    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    // пропасть комнаты-пропасти собрана из многих прямоугольников: швы между ними не рисуем
+    if (!r.seamless) ctx.strokeRect(r.x, r.y, r.w, r.h);
   }
+  // тропы и островки над пропастью — чуть светлее пола, чтобы мостки читались
+  drawRects(world.bridges, COLORS.bridge);
 
   for (const r of world.spikes) {
     if (!visible(r)) continue;
@@ -364,6 +367,32 @@ function drawPads(alpha) {
 // подиумы видны и в темноте: второй проход поверх затемнения
 function drawPadsInDark() { drawPads(CONFIG.PADS.darkAlpha); }
 
+// ядра пушек-ловушек светятся сами и видны издалека, даже в темноте: рисуются поверх затемнения
+function drawCannonShots() {
+  for (const p of state.projectiles) {
+    if (p.kind !== 'cannon' || !visible({ x: p.x - 40, y: p.y - 40, w: 80, h: 80 })) continue;
+    const a = Math.atan2(p.vy, p.vx);
+    ctx.strokeStyle = COLORS.cannonShot;
+    ctx.globalAlpha = 0.3;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = p.r * 1.4;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x - Math.cos(a) * p.r * 3, p.y - Math.sin(a) * p.r * 3);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = COLORS.cannonShot;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff3c0';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 // подсказка «кто подберёт»: пока звено касается подиума, от подиума к нему тянется яркий луч
 // его цвета — толстая мягкая подложка снизу и бегущий пунктир поверх, чтобы луч не терялся на полу
 function drawPadLinks() {
@@ -448,6 +477,7 @@ function drawProjectiles() {
   for (const p of state.projectiles) {
     if (p.kind === 'mortar' || p.kind === 'bigMortar') { drawMortar(p); continue; }
     if (p.kind === 'hook') { drawHook(p); continue; }
+    if (p.kind === 'cannon') continue; // ядра рисуются поверх темноты, см. drawCannonShots
     if (!isLit(p)) continue;
     ctx.fillStyle = p.team === 'ally' ? COLORS.allyShot : COLORS.enemyShot;
     ctx.beginPath();
@@ -520,5 +550,5 @@ function drawScene() {
   drawEffects();
 }
 
-G.renderer = { drawScene, drawPadsInDark };
+G.renderer = { drawScene, drawPadsInDark, drawCannonShots };
 })(window.Game = window.Game || {});

@@ -13,17 +13,19 @@ const world = {
   walls: [], pillars: [], pits: [], spikes: [], floors: [], warnings: [], pads: [],
   // двери, кнопки, неуязвимые пушки-ловушки и финишная зона — см. «Тропа над пропастью»
   doors: [], buttons: [], cannons: [], finish: null,
+  bridges: [],       // проходимые тропы и островки комнат-пропастей (только для рисования)
   moveBlockers: [], sightBlockers: [],
   width: 0, height: 0,
 };
 
 // раскладка текущего уровня; задаётся в buildWorld
-//   line:  комнаты стоят в ряд слева направо и соединены проходами
+//   line:  комнаты стоят в ряд слева направо и соединены проходами; у каждой может быть свой размер,
+//          центры комнат по высоте совпадают (на этой линии лежат проходы)
 //   field: одно поле из сетки cols × rows зон (по строкам слева направо, сверху вниз)
 //   arena: одна круглая комната (боссовая арена)
-let layout = { kind: 'line', wall: 0, count: 0 };
-
-function roomOriginX(i) { return i * (layout.roomW + layout.corridorLen); }
+let layout = { kind: 'line', wall: 0, count: 0, rooms: [] };
+// координаты плана комнаты в пикселях её внутреннего прямоугольника (units: 'px'), а не в долях
+let roomPx = [];
 
 function roomCount() { return layout.count; }
 
@@ -35,8 +37,11 @@ function roomIndexAt(x, y) {
     const row = clamp(Math.floor((y - layout.wall) / layout.cellH), 0, layout.rows - 1);
     return row * layout.cols + col;
   }
-  const step = layout.roomW + layout.corridorLen;
-  return clamp(Math.floor((x + layout.corridorLen / 2) / step), 0, layout.count - 1);
+  for (let i = 0; i < layout.count - 1; i++) {
+    const r = layout.rooms[i];
+    if (x < r.ox + r.w + layout.corridorLen / 2) return i;
+  }
+  return layout.count - 1;
 }
 
 function roomInterior(i) {
@@ -50,28 +55,88 @@ function roomInterior(i) {
     return { x: layout.wall + col * layout.cellW, y: layout.wall + row * layout.cellH,
              w: layout.cellW, h: layout.cellH };
   }
-  const ox = roomOriginX(i), W = layout.wall;
-  return { x: ox + W, y: W, w: layout.roomW - 2 * W, h: layout.roomH - 2 * W };
+  const r = layout.rooms[i], W = layout.wall;
+  return { x: r.ox + W, y: r.oy + W, w: r.w - 2 * W, h: r.h - 2 * W };
+}
+
+// масштаб координат плана: доли внутреннего размера или, для комнат с units: 'px', пиксели
+function planScale(i) {
+  if (roomPx[i]) return { w: 1, h: 1 };
+  const r = roomInterior(i);
+  return { w: r.w, h: r.h };
 }
 
 function localToWorld(i, cx, cy) {
-  const r = roomInterior(i);
-  return { x: r.x + cx * r.w, y: r.y + cy * r.h };
+  const r = roomInterior(i), s = planScale(i);
+  return { x: r.x + cx * s.w, y: r.y + cy * s.h };
+}
+
+// комната-пропасть: план перечисляет только проходимое — тропы (ломаные с шириной) и островки,
+// а всё остальное внутри комнаты становится пропастью. Пропасть собирается из прямоугольников:
+// сетка по всем краям проходимых кусков, непокрытые клетки склеиваются в полосы по строкам,
+// одинаковые полосы соседних строк — в один прямоугольник
+function addChasm(chasm, i, toRect) {
+  const inner = roomInterior(i), s = planScale(i);
+  const walk = [];
+  for (const path of chasm.paths || []) {
+    const hw = (path.width * s.w) / 2;
+    const pts = path.points.map(([cx, cy]) => localToWorld(i, cx, cy));
+    for (let k = 1; k < pts.length; k++) {
+      const a = pts[k - 1], b = pts[k];
+      walk.push({ x: Math.min(a.x, b.x) - hw, y: Math.min(a.y, b.y) - hw,
+                  w: Math.abs(a.x - b.x) + 2 * hw, h: Math.abs(a.y - b.y) + 2 * hw });
+    }
+  }
+  for (const r of chasm.rects || []) walk.push(toRect(r));
+  world.bridges.push(...walk);
+
+  const x0 = inner.x, x1 = inner.x + inner.w, y0 = inner.y, y1 = inner.y + inner.h;
+  const cut = (vals, lo, hi) => [...new Set([lo, hi, ...vals.map((v) => clamp(v, lo, hi))])].sort((a, b) => a - b);
+  const xs = cut(walk.flatMap((r) => [r.x, r.x + r.w]), x0, x1);
+  const ys = cut(walk.flatMap((r) => [r.y, r.y + r.h]), y0, y1);
+  const covered = (x, y) => walk.some((r) => x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h);
+
+  let open = new Map(); // полосы предыдущей строки, ещё не закрытые: ключ «x0:x1» -> прямоугольник
+  for (let j = 0; j < ys.length - 1; j++) {
+    const ya = ys[j], yb = ys[j + 1], ym = (ya + yb) / 2;
+    const next = new Map();
+    let runStart = null;
+    for (let k = 0; k < xs.length - 1; k++) {
+      const pit = !covered((xs[k] + xs[k + 1]) / 2, ym);
+      if (pit && runStart === null) runStart = xs[k];
+      const end = !pit || k === xs.length - 2;
+      if (end && runStart !== null) {
+        const runEnd = pit ? xs[k + 1] : xs[k];
+        const key = runStart + ':' + runEnd;
+        const prev = open.get(key);
+        if (prev) { prev.h = yb - prev.y; next.set(key, prev); open.delete(key); }
+        else next.set(key, { x: runStart, y: ya, w: runEnd - runStart, h: yb - ya, seamless: true });
+        runStart = null;
+      }
+    }
+    for (const rect of open.values()) world.pits.push(rect);
+    open = next;
+  }
+  for (const rect of open.values()) world.pits.push(rect);
 }
 
 // препятствия и знаки комнаты из её плана; координаты плана — доли внутреннего размера комнаты
+// (или пиксели, если units: 'px')
 function addRoomContent(plan, i) {
-  const inner = roomInterior(i);
+  const inner = roomInterior(i), s = planScale(i);
   const toRect = ([cx, cy, w, h]) => ({
-    x: inner.x + (cx - w / 2) * inner.w, y: inner.y + (cy - h / 2) * inner.h,
-    w: w * inner.w, h: h * inner.h,
+    x: inner.x + cx * s.w - (w * s.w) / 2, y: inner.y + cy * s.h - (h * s.h) / 2,
+    w: w * s.w, h: h * s.h,
   });
-  for (const p of plan.pillars) world.pillars.push(toRect(p));
-  for (const p of plan.pits) world.pits.push(toRect(p));
-  for (const p of plan.spikes) world.spikes.push(toRect(p));
-  // подиумы: квадрат PADS.size с центром в точке плана, ничего не блокируют
+  for (const p of plan.pillars || []) world.pillars.push(toRect(p));
+  for (const p of plan.pits || []) world.pits.push(toRect(p));
+  for (const p of plan.spikes || []) world.spikes.push(toRect(p));
+  if (plan.chasm) addChasm(plan.chasm, i, toRect);
+  // подиумы: квадрат PADS.size с центром в точке плана, ничего не блокируют; padChoice — подиумы
+  // со случайным набором (бросается заново при каждом старте, см. populate.rollPadChoice)
   const padSize = CONFIG.PADS.size;
-  for (const [cx, cy, ability] of plan.pads || []) {
+  const pads = (plan.pads || []).concat(G.populate.rollPadChoice(plan.padChoice));
+  for (const [cx, cy, ability] of pads) {
     const c = localToWorld(i, cx, cy);
     world.pads.push({ x: c.x - padSize / 2, y: c.y - padSize / 2, w: padSize, h: padSize, ability });
   }
@@ -125,42 +190,52 @@ function setDoorsOpen(openIds) {
   if (changed) rebuildBlockers();
 }
 
-// комнаты в линию: у каждой свои стены, справа узкий проход в следующую
+// комнаты в линию: у каждой свои стены, справа узкий проход в следующую. Размер комнаты — общий
+// из geometry или свой (plan.size = [ширина, высота] вместе со стенами); центры комнат по высоте
+// совпадают, на этой линии и лежат проходы
 function buildLine(level) {
   const g = level.geometry;
-  const ROOM_W = g.roomW, ROOM_H = g.roomH, WALL = g.wall;
-  const CORRIDOR_LEN = g.corridorLen, CORRIDOR_H = g.corridorH, ROOM_COUNT = level.rooms.length;
-  layout = { kind: 'line', roomW: ROOM_W, roomH: ROOM_H, wall: WALL, corridorLen: CORRIDOR_LEN,
-             corridorH: CORRIDOR_H, count: ROOM_COUNT };
-  world.height = ROOM_H;
-  const gapTop = (ROOM_H - CORRIDOR_H) / 2;
-  const gapBottom = (ROOM_H + CORRIDOR_H) / 2;
+  const WALL = g.wall, CORRIDOR_LEN = g.corridorLen, CORRIDOR_H = g.corridorH;
+  const ROOM_COUNT = level.rooms.length;
+  const sizes = level.rooms.map((p) => p.size || [g.roomW, g.roomH]);
+  const maxH = Math.max(...sizes.map((s) => s[1]));
+  let ox = 0;
+  const rooms = sizes.map(([w, h]) => {
+    const r = { ox, oy: (maxH - h) / 2, w, h };
+    ox += w + CORRIDOR_LEN;
+    return r;
+  });
+  layout = { kind: 'line', wall: WALL, corridorLen: CORRIDOR_LEN, corridorH: CORRIDOR_H,
+             count: ROOM_COUNT, rooms };
+  world.height = maxH;
+  const gapTop = (maxH - CORRIDOR_H) / 2;
+  const gapBottom = (maxH + CORRIDOR_H) / 2;
 
   for (let i = 0; i < ROOM_COUNT; i++) {
-    const ox = roomOriginX(i);
+    const { ox: x, oy: y, w, h } = rooms[i];
     const last = i === ROOM_COUNT - 1;
 
-    world.floors.push({ x: ox + WALL, y: WALL, w: ROOM_W - 2 * WALL, h: ROOM_H - 2 * WALL });
-    world.walls.push({ x: ox, y: 0, w: ROOM_W, h: WALL });
-    world.walls.push({ x: ox, y: ROOM_H - WALL, w: ROOM_W, h: WALL });
+    world.floors.push({ x: x + WALL, y: y + WALL, w: w - 2 * WALL, h: h - 2 * WALL });
+    world.walls.push({ x, y, w, h: WALL });
+    world.walls.push({ x, y: y + h - WALL, w, h: WALL });
 
     // левая стена
-    if (i === 0) world.walls.push({ x: ox, y: 0, w: WALL, h: ROOM_H });
+    if (i === 0) world.walls.push({ x, y, w: WALL, h });
     else {
-      world.walls.push({ x: ox, y: 0, w: WALL, h: gapTop });
-      world.walls.push({ x: ox, y: gapBottom, w: WALL, h: ROOM_H - gapBottom });
+      world.walls.push({ x, y, w: WALL, h: gapTop - y });
+      world.walls.push({ x, y: gapBottom, w: WALL, h: y + h - gapBottom });
     }
     // правая стена
-    const rx = ox + ROOM_W - WALL;
-    if (last) world.walls.push({ x: rx, y: 0, w: WALL, h: ROOM_H });
+    const rx = x + w - WALL;
+    if (last) world.walls.push({ x: rx, y, w: WALL, h });
     else {
-      world.walls.push({ x: rx, y: 0, w: WALL, h: gapTop });
-      world.walls.push({ x: rx, y: gapBottom, w: WALL, h: ROOM_H - gapBottom });
+      world.walls.push({ x: rx, y, w: WALL, h: gapTop - y });
+      world.walls.push({ x: rx, y: gapBottom, w: WALL, h: y + h - gapBottom });
     }
 
     // проход направо
     if (!last) {
-      const cx0 = ox + ROOM_W;
+      const cx0 = x + w;
       world.floors.push({ x: cx0, y: gapTop, w: CORRIDOR_LEN, h: CORRIDOR_H });
       world.walls.push({ x: cx0, y: gapTop - WALL, w: CORRIDOR_LEN, h: WALL });
       world.walls.push({ x: cx0, y: gapBottom, w: CORRIDOR_LEN, h: WALL });
@@ -169,7 +244,7 @@ function buildLine(level) {
     addRoomContent(level.rooms[i], i);
   }
 
-  world.width = ROOM_COUNT * (ROOM_W + CORRIDOR_LEN) - CORRIDOR_LEN;
+  world.width = ox - CORRIDOR_LEN;
 }
 
 // поле: внешняя стена по периметру, внутри сетка зон; на стыках зон стоят короткие стенки,
@@ -235,7 +310,8 @@ function buildArena(level) {
 function buildWorld(level) {
   world.walls = []; world.pillars = []; world.pits = []; world.spikes = [];
   world.floors = []; world.warnings = []; world.pads = [];
-  world.doors = []; world.buttons = []; world.cannons = []; world.finish = null;
+  world.doors = []; world.buttons = []; world.cannons = []; world.finish = null; world.bridges = [];
+  roomPx = level.rooms.map((p) => p.units === 'px');
   if (level.geometry.kind === 'field') buildField(level);
   else if (level.geometry.kind === 'arena') buildArena(level);
   else buildLine(level);
@@ -265,6 +341,14 @@ function padUnder(u) {
   return null;
 }
 
+// кнопка, на которой стоит юнит (или null)
+function buttonUnder(u) {
+  for (const b of world.buttons) {
+    if (circleRectOverlap(u.x, u.y, u.r, b)) return b;
+  }
+  return null;
+}
+
 // пересекает ли круг какой-нибудь подиум: по ним не расставляют нейтралов
 function overlapsPad(x, y, r) {
   return world.pads.some((pad) => circleRectOverlap(x, y, r, pad));
@@ -272,17 +356,23 @@ function overlapsPad(x, y, r) {
 
 function standsOnSpikes(u) { return spikeRectAt(u) !== null; }
 
+// точка для перебежки врага: сперва поближе к нему самому (на узких тропах так он бродит по своему
+// куску тропы, а не целится в соседний через пропасть), потом по всей комнате
 function freeSpotInRoom(e) {
   const room = roomInterior(e.room);
   const pad = e.r + 12;
+  const near = 150;
   let fallback = null;
   // враги не выбирают точки на шипах и в препятствиях, чтобы не убиваться о них сами
-  for (let tries = 0; tries < 10; tries++) {
+  for (let tries = 0; tries < 30; tries++) {
+    const local = tries < 20;
     const p = {
-      x: room.x + pad + Math.random() * (room.w - pad * 2),
-      y: room.y + pad + Math.random() * (room.h - pad * 2),
+      x: local ? e.x + (Math.random() * 2 - 1) * near : room.x + pad + Math.random() * (room.w - pad * 2),
+      y: local ? e.y + (Math.random() * 2 - 1) * near : room.y + pad + Math.random() * (room.h - pad * 2),
       r: e.r,
     };
+    p.x = clamp(p.x, room.x + pad, room.x + room.w - pad);
+    p.y = clamp(p.y, room.y + pad, room.y + room.h - pad);
     if (!fallback) fallback = p;
     if (standsOnSpikes(p)) continue;
     if (world.moveBlockers.some((rect) => circleRectOverlap(p.x, p.y, p.r, rect))) continue;
@@ -328,6 +418,6 @@ function freeSpotNear(x, y, minR, maxR, r) {
 
 G.world = {
   world, roomCount, roomIndexAt, roomInterior, localToWorld, buildWorld, hasLineOfSight,
-  spikeRectAt, standsOnSpikes, padUnder, freeSpotInRoom, scatterSpot, freeSpotNear, setDoorsOpen,
+  spikeRectAt, standsOnSpikes, padUnder, buttonUnder, freeSpotInRoom, scatterSpot, freeSpotNear, setDoorsOpen,
 };
 })(window.Game = window.Game || {});

@@ -12,7 +12,7 @@ const { resetGame } = G.session;
 const { tryRecruit, dropLastAlly } = G.chain;
 const { update } = G.update;
 const { canvas } = G.shapes;
-const { drawScene, drawPadsInDark } = G.renderer;
+const { drawScene, drawPadsInDark, drawCannonShots } = G.renderer;
 const { drawLight, drawHud } = G.hud;
 
 // уровни в порядке их показа в меню; за фоном меню при запуске стоит первый
@@ -100,6 +100,7 @@ function draw() {
   drawScene();
   drawLight();
   drawPadsInDark();
+  drawCannonShots();
   drawHud();
 }
 

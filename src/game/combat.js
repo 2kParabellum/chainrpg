@@ -147,7 +147,15 @@ function updateProjectiles(dt) {
         if (circleRectOverlap(p.x, p.y, p.r, rect)) { dead = true; break; }
       }
     }
-    if (!dead) {
+    // сквозной снаряд (ядро пушки-ловушки) не гаснет о цели: проходит насквозь и бьёт каждого
+    // один раз — и звенья цепочки, и лежачих
+    if (!dead && p.pierce) {
+      for (const t of chain.concat(state.downed)) {
+        if (p.hit.includes(t) || dist(p, t) >= p.r + t.r) continue;
+        p.hit.push(t);
+        damageUnit(t, p.dmg);
+      }
+    } else if (!dead) {
       const targets = p.team === 'ally' ? state.enemies : chain;
       for (const t of targets) {
         if (dist(p, t) >= p.r + t.r) continue;
@@ -224,8 +232,9 @@ function applyFirewalls(dt) {
 }
 
 // неуязвимая пушка-ловушка: не враг и не цель ни для кого, просто по таймеру стреляет строго
-// по прямой в заданном направлении на всю карту; снаряд гасится о стену/колонну/закрытую дверь,
-// как обычный, и ранит всех, кого коснётся по пути. Перед выстрелом короткий предупреждающий луч
+// по прямой в заданном направлении. Ядро медленное (чуть быстрее Героя) и большое, от него можно
+// увернуться; оно проходит сквозь всех, кого задело (каждого ранит один раз), и гаснет только
+// о стену, колонну или закрытую дверь. Перед выстрелом короткий предупреждающий луч
 function updateCannons(dt) {
   const cannons = world.cannons;
   for (let i = 0; i < cannons.length; i++) {
@@ -234,7 +243,8 @@ function updateCannons(dt) {
       s.telegraph -= dt;
       if (s.telegraph <= 0) {
         const tx = c.x + Math.cos(c.angle) * 4000, ty = c.y + Math.sin(c.angle) * 4000;
-        spawnProjectile(c, tx, ty, c.speed, c.dmg, 'enemy', c.radius);
+        spawnProjectile(c, tx, ty, c.speed, c.dmg, 'enemy', c.radius,
+          { kind: 'cannon', pierce: true, hit: [], life: 60 });
         s.cd = c.interval;
       }
       continue;

@@ -26,6 +26,7 @@ function stepOffSpikes(e, dt, speed) {
 
 // случайные перебежки врага в пределах своей комнаты
 function wanderStep(e, dt, speed) {
+  if (e.anchored) return; // стоит на своём месте (островок), не бродит
   if (e.pauseTimer > 0 && !standsOnSpikes(e)) { e.pauseTimer -= dt; return; }
 
   if (!e.wanderTarget || dist(e, e.wanderTarget) < CONFIG.WANDER.arrive) {
