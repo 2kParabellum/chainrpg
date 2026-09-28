@@ -11,6 +11,8 @@ const { circleRectOverlap, segmentHitsRect } = G.collision;
 
 const world = {
   walls: [], pillars: [], pits: [], spikes: [], floors: [], warnings: [], pads: [],
+  // двери, кнопки, неуязвимые пушки-ловушки и финишная зона — см. «Тропа над пропастью»
+  doors: [], buttons: [], cannons: [], finish: null,
   moveBlockers: [], sightBlockers: [],
   width: 0, height: 0,
 };
@@ -79,6 +81,48 @@ function addRoomContent(plan, i) {
       world.warnings.push(localToWorld(i, cx, cy));
     }
   }
+
+  // двери: блокируют движение и обзор, пока закрыты; открывает их связанная кнопка
+  for (const [cx, cy, w, h, id] of plan.doors || []) {
+    world.doors.push({ ...toRect([cx, cy, w, h]), id, open: false });
+  }
+  // кнопки: квадрат на полу, ничего не блокирует; список id дверей, которые она открывает
+  const btnSize = CONFIG.BUTTONS.size;
+  for (const [cx, cy, doorIds] of plan.buttons || []) {
+    const c = localToWorld(i, cx, cy);
+    world.buttons.push({ x: c.x - btnSize / 2, y: c.y - btnSize / 2, w: btnSize, h: btnSize, doorIds, pressed: false });
+  }
+  // неуязвимые пушки-ловушки: точка, направление (радианы), и необязательные числа поверх CONFIG.CANNON
+  for (const [cx, cy, angle, interval, windup, dmg] of plan.cannons || []) {
+    const c = localToWorld(i, cx, cy);
+    world.cannons.push({
+      x: c.x, y: c.y, angle,
+      interval, windup, dmg,
+      speed: CONFIG.CANNON.speed, radius: CONFIG.CANNON.radius,
+    });
+  }
+  // финишная зона (уровни с целью «дойти до места», а не «зачистить комнату»)
+  if (plan.finish) world.finish = toRect(plan.finish);
+}
+
+// сплошные препятствия и пропасти пересобираются заново: закрытая дверь блокирует движение
+// и обзор как колонна, открытая — не блокирует ничего. Единственное место в игре, где мир
+// меняется по ходу партии, а не только при сбросе; вызывается при сбросе и при каждом
+// переключении хотя бы одной двери
+function rebuildBlockers() {
+  const closedDoors = world.doors.filter((d) => !d.open);
+  world.sightBlockers = world.walls.concat(world.pillars, closedDoors);
+  world.moveBlockers = world.sightBlockers.concat(world.pits);
+}
+
+// применить новое состояние дверей (id открытых); перестраивает блокеры, только если что-то изменилось
+function setDoorsOpen(openIds) {
+  let changed = false;
+  for (const d of world.doors) {
+    const open = openIds.has(d.id);
+    if (d.open !== open) { d.open = open; changed = true; }
+  }
+  if (changed) rebuildBlockers();
 }
 
 // комнаты в линию: у каждой свои стены, справа узкий проход в следующую
@@ -191,11 +235,11 @@ function buildArena(level) {
 function buildWorld(level) {
   world.walls = []; world.pillars = []; world.pits = []; world.spikes = [];
   world.floors = []; world.warnings = []; world.pads = [];
+  world.doors = []; world.buttons = []; world.cannons = []; world.finish = null;
   if (level.geometry.kind === 'field') buildField(level);
   else if (level.geometry.kind === 'arena') buildArena(level);
   else buildLine(level);
-  world.sightBlockers = world.walls.concat(world.pillars);
-  world.moveBlockers = world.sightBlockers.concat(world.pits);
+  rebuildBlockers();
 }
 
 function hasLineOfSight(a, b) {
@@ -284,6 +328,6 @@ function freeSpotNear(x, y, minR, maxR, r) {
 
 G.world = {
   world, roomCount, roomIndexAt, roomInterior, localToWorld, buildWorld, hasLineOfSight,
-  spikeRectAt, standsOnSpikes, padUnder, freeSpotInRoom, scatterSpot, freeSpotNear,
+  spikeRectAt, standsOnSpikes, padUnder, freeSpotInRoom, scatterSpot, freeSpotNear, setDoorsOpen,
 };
 })(window.Game = window.Game || {});

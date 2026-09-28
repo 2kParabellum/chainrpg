@@ -5,13 +5,13 @@
 
 const { CONFIG, state } = G;
 const { clamp, dist, removeFrom, pickWeighted } = G.math;
-const { moveAndCollide, slideAlongWall } = G.collision;
-const { world } = G.world;
+const { moveAndCollide, slideAlongWall, circleRectOverlap } = G.collision;
+const { world, setDoorsOpen } = G.world;
 const { leader, isLit, currentRoom, chainUnits, isSpotted, spawnEnemy } = G.session;
 const { freeSpotNear } = G.world;
 const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly } = G.chain;
 const combat = G.combat;
-const { updateProjectiles, updateClouds, applySpikes, applyFirewalls, updateEffects } = combat;
+const { updateProjectiles, updateClouds, applySpikes, applyFirewalls, updateEffects, updateCannons } = combat;
 const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
 const { enemyTypes, weapons } = G;
 
@@ -111,10 +111,27 @@ function updateEnemy(e, dt) {
   type.update(e, dt, chainUnits(), game);
 }
 
+// кнопки открывают связанные двери, пока на них лежит брошенный (X) или выбитый союзник —
+// вес тела держит дверь: подняли союзника обратно — дверь снова закрывается
+function updateDoors() {
+  if (!world.buttons.length) return;
+  const openIds = new Set();
+  for (const btn of world.buttons) {
+    btn.pressed = state.downed.some((d) => circleRectOverlap(d.x, d.y, d.r, btn));
+    if (btn.pressed) for (const id of btn.doorIds) openIds.add(id);
+  }
+  setDoorsOpen(openIds);
+}
+
 // условие победы задаёт уровень
 function isVictory() {
   const rule = state.level.victory;
   if (rule.kind === 'destroyType') return !state.enemies.some((e) => e.type === rule.type);
+  // дойти до финишной зоны уровня (см. world.finish)
+  if (rule.kind === 'reachPoint') {
+    const lead = leader();
+    return !!world.finish && circleRectOverlap(lead.x, lead.y, lead.r, world.finish);
+  }
   // мины добивать необязательно: достаточно перебить всё живое
   const living = state.enemies.filter((e) => !enemyTypes[e.type].ignoredForVictory).length;
   return living === 0 && currentRoom() === rule.finalRoom;
@@ -146,7 +163,9 @@ function update(dt) {
   touchPads();
   updateBuffs(dt);
   for (const d of state.downed) updateDowned(d, dt);
+  updateDoors();
   for (const e of state.enemies.slice()) updateEnemy(e, dt);
+  updateCannons(dt);
   updateProjectiles(dt);
   updateClouds(dt);
   applySpikes(dt);

@@ -21,6 +21,7 @@ const state = {
   effects: [],
   clouds: [],
   firewalls: [],     // стенки огня от луча босса: горят некоторое время на месте
+  cannons: [],       // таймеры неуязвимых пушек-ловушек мира, по одному на world.cannons
   trail: [],         // след Героя, по которому бегут остальные звенья
   camera: { x: 0, y: 0 },
   status: 'play',    // menu | play | dead | win
@@ -90,12 +91,18 @@ function resetGame(level) {
   state.party = []; state.moveTarget = null; state.neutrals = []; state.downed = []; state.enemies = [];
   state.projectiles = []; state.effects = []; state.trail = [];
   state.clouds = []; state.firewalls = [];
+  state.cannons = world.cannons.map((c) => ({ cd: c.interval * Math.random(), telegraph: 0 }));
   state.status = 'play';
   state.lightTime = 0;
   state.visibleEnemies = [];
 
   const spawn = localToWorld(level.spawn.room, level.spawn.at[0], level.spawn.at[1]);
   state.party.push(makeAlly('ally', 'hero', spawn.x, spawn.y));
+  // уровень может начинаться с уже собранной цепочкой: дружочки встают в хвост чуть позади героя
+  // и сразу же подтягиваются на своё место плёткой
+  for (let i = 0; i < (level.startParty || 0); i++) {
+    state.party.push(makeAlly('ally', 'buddy', spawn.x - (i + 1) * 14, spawn.y));
+  }
 
   // каждый союзник существует в одном экземпляре: состав бросается один раз на весь уровень
   const roster = rollLevelAllies(level);

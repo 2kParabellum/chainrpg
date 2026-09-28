@@ -223,6 +223,31 @@ function applyFirewalls(dt) {
   }
 }
 
+// неуязвимая пушка-ловушка: не враг и не цель ни для кого, просто по таймеру стреляет строго
+// по прямой в заданном направлении на всю карту; снаряд гасится о стену/колонну/закрытую дверь,
+// как обычный, и ранит всех, кого коснётся по пути. Перед выстрелом короткий предупреждающий луч
+function updateCannons(dt) {
+  const cannons = world.cannons;
+  for (let i = 0; i < cannons.length; i++) {
+    const c = cannons[i], s = state.cannons[i];
+    if (s.telegraph > 0) {
+      s.telegraph -= dt;
+      if (s.telegraph <= 0) {
+        const tx = c.x + Math.cos(c.angle) * 4000, ty = c.y + Math.sin(c.angle) * 4000;
+        spawnProjectile(c, tx, ty, c.speed, c.dmg, 'enemy', c.radius);
+        s.cd = c.interval;
+      }
+      continue;
+    }
+    s.cd -= dt;
+    if (s.cd <= 0) {
+      s.telegraph = c.windup;
+      const tx = c.x + Math.cos(c.angle) * 4000, ty = c.y + Math.sin(c.angle) * 4000;
+      state.effects.push({ type: 'beam', x1: c.x, y1: c.y, x2: tx, y2: ty, life: c.windup, color: COLORS.enemyShot });
+    }
+  }
+}
+
 function updateEffects(dt) {
   for (let i = state.effects.length - 1; i >= 0; i--) {
     state.effects[i].life -= dt;
@@ -233,7 +258,7 @@ function updateEffects(dt) {
 G.combat = {
   nearestTarget, damageUnit,
   spawnProjectile, spawnMortar, spawnBigMortar, spawnHook,
-  spawnFirewall, applyFirewalls,
+  spawnFirewall, applyFirewalls, updateCannons,
   blast, updateProjectiles, applySpikes, updateClouds, updateEffects,
 };
 })(window.Game = window.Game || {});

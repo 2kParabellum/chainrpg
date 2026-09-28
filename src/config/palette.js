@@ -14,6 +14,9 @@ const COLORS = {
   zoneTint: { calm: 'rgba(90,150,210,0.07)', easy: 'rgba(110,200,120,0.06)', danger: 'rgba(220,140,60,0.06)', deadly: 'rgba(220,50,70,0.10)' },
   allyShot: '#d8f8b0', enemyShot: '#ff9a7a', blast: '#ff8a3c',
   hpBack: '#2a2a32', hpAlly: '#7ae07a', hpEnemy: '#e07a7a',
+  // двери, кнопки и неуязвимая пушка-ловушка (уровень «Тропа над пропастью»)
+  door: '#6b4a4a', doorEdge: '#c07a5c', button: '#4a4a55', buttonEdge: '#8a8a9a', buttonPressed: '#8ce27a',
+  cannon: '#3a3a44', finish: '#63d2ff',
 };
 
 G.COLORS = COLORS;

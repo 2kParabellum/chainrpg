@@ -142,6 +142,76 @@ function drawFirewall(f) {
   ctx.globalAlpha = 1;
 }
 
+// двери: закрытая — сплошная плашка (как колонна), открытая — только тонкий контур на полу,
+// чтобы было видно, где она стояла
+function drawDoors() {
+  for (const d of world.doors) {
+    if (!visible(d)) continue;
+    if (!d.open) {
+      ctx.fillStyle = COLORS.door;
+      ctx.fillRect(d.x, d.y, d.w, d.h);
+      ctx.strokeStyle = COLORS.doorEdge;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(d.x + 1, d.y + 1, d.w - 2, d.h - 2);
+    } else {
+      ctx.strokeStyle = COLORS.doorEdge;
+      ctx.globalAlpha = 0.35;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.strokeRect(d.x + 1, d.y + 1, d.w - 2, d.h - 2);
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
+// кнопки: квадрат на полу, светится зелёным, пока на ней лежит брошенный союзник
+function drawButtons() {
+  for (const b of world.buttons) {
+    if (!visible(b)) continue;
+    const color = b.pressed ? COLORS.buttonPressed : COLORS.button;
+    ctx.fillStyle = color;
+    ctx.globalAlpha = b.pressed ? 0.5 : 0.3;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = b.pressed ? COLORS.buttonPressed : COLORS.buttonEdge;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
+  }
+}
+
+// неуязвимая пушка-ловушка: тёмный квадрат с коротким стволом по направлению стрельбы
+function drawCannons() {
+  for (const c of world.cannons) {
+    if (!visible({ x: c.x - 16, y: c.y - 16, w: 32, h: 32 })) continue;
+    ctx.fillStyle = COLORS.cannon;
+    ctx.fillRect(c.x - 13, c.y - 13, 26, 26);
+    ctx.strokeStyle = '#0e0e10';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(c.x, c.y);
+    ctx.lineTo(c.x + Math.cos(c.angle) * 22, c.y + Math.sin(c.angle) * 22);
+    ctx.stroke();
+  }
+}
+
+// финишная зона: пунктирный контур и мягкое свечение
+function drawFinish() {
+  const f = world.finish;
+  if (!f || !visible(f)) return;
+  const wave = 0.2 + 0.08 * Math.sin(state.lightTime * 2);
+  ctx.fillStyle = COLORS.finish;
+  ctx.globalAlpha = wave;
+  ctx.fillRect(f.x, f.y, f.w, f.h);
+  ctx.globalAlpha = 0.8;
+  ctx.strokeStyle = COLORS.finish;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([10, 6]);
+  ctx.strokeRect(f.x + 1, f.y + 1, f.w - 2, f.h - 2);
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+}
+
 function drawTerrain() {
   drawRects(world.floors, COLORS.floor);
   // зоны поля подсвечены по степени опасности
@@ -431,6 +501,10 @@ function drawScene() {
   ctx.translate(-state.camera.x, -state.camera.y);
 
   drawTerrain();
+  drawFinish();
+  drawDoors();
+  drawButtons();
+  drawCannons();
   drawPads(1);
   drawPadLinks();
   drawTargetMarker();

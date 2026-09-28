@@ -17,10 +17,9 @@ function assignTypes(count, types, weights) {
   return out;
 }
 
-// состав врагов комнаты: точки те же, а типы бросаются заново каждую игру
-function rollEnemies(plan, level) {
-  const spec = plan.enemies;
-  const count = !spec ? 0 : spec.spots ? spec.spots.length : spec.count || 0;
+// состав врагов одной группы точек: точки те же, а типы бросаются заново каждую игру
+function rollEnemySpec(spec, level) {
+  const count = spec.spots ? spec.spots.length : spec.count || 0;
   if (!count) return [];
   const pool = spec.pool || level.enemyPool;
   const kinds = clamp(spec.kinds || 1, 1, Math.min(pool.length, count));
@@ -29,6 +28,14 @@ function rollEnemies(plan, level) {
   const chosen = weights ? sampleWeighted(pool, kinds, weights) : shuffled(pool).slice(0, kinds);
   const types = assignTypes(count, chosen, weights);
   return types.map((type, k) => (spec.spots ? [type, ...spec.spots[k]] : [type]));
+}
+
+// комната обычно задаёт одну группу врагов, но может задать список независимых групп
+// (например, свои типы на тропе и свои на островках вокруг) — тогда plan.enemies — массив групп
+function rollEnemies(plan, level) {
+  if (!plan.enemies) return [];
+  const specs = Array.isArray(plan.enemies) ? plan.enemies : [plan.enemies];
+  return specs.flatMap((spec) => rollEnemySpec(spec, level));
 }
 
 // дружочки уровня: каждая точка allies.spots комнаты (с учётом необязательного chance — вероятности
