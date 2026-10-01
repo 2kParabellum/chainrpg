@@ -7,7 +7,7 @@
 'use strict';
 
 const { state } = G;
-const { initInput } = G.input;
+const { initInput, moveAxes } = G.input;
 const { resetGame } = G.session;
 const { tryRecruit, dropLastAlly } = G.chain;
 const { update } = G.update;
@@ -21,22 +21,7 @@ const START_LEVEL = LEVELS[0];
 
 // --- ввод: намерения игрока ---
 
-let mouseDown = false;
-
-// координаты канваса -> координаты мира
-function toWorld(p) { return { x: p.x + state.camera.x, y: p.y + state.camera.y }; }
-
 initInput(canvas, {
-  onPointerDown(p) {
-    mouseDown = true;
-    state.moveTarget = toWorld(p);
-  },
-  onPointerMove(p) {
-    if (mouseDown) state.moveTarget = toWorld(p);
-  },
-  onPointerUp() {
-    mouseDown = false;
-  },
   onCommand(name) {
     if (state.status === 'menu') return;
     if (name === 'restart') resetGame(state.level);
@@ -84,7 +69,6 @@ LEVELS.forEach((level, i) => {
 onClick('restart', () => { if (state.status !== 'menu') resetGame(state.level); });
 // возврат в меню посреди партии: пока меню открыто, игра стоит на паузе
 onClick('menuBtn', () => {
-  mouseDown = false;
   state.status = 'menu';
   showPanel('main');
   syncOverlay();
@@ -107,6 +91,7 @@ function loop(now) {
   const dt = Math.min(0.05, (now - lastTime) / 1000);
   lastTime = now;
   syncOverlay();
+  state.moveInput = moveAxes();
   update(dt);
   draw();
   requestAnimationFrame(loop);

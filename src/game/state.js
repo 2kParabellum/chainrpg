@@ -13,7 +13,7 @@ const { allyTypes, enemyTypes, weapons, abilities } = G;
 const state = {
   level: null,       // данные текущего уровня
   party: [],         // вся цепочка по порядку: [0] — Герой (им управляет игрок), остальные бегут по его следу
-  moveTarget: null,  // куда идёт Герой: цель управления
+  moveInput: { throttle: 0, turn: 0 }, // зажатые клавиши движения: газ (+1/-1) и поворот (-1/+1)
   neutrals: [],      // ждут вербовки
   downed: [],        // выбитые из цепочки, лежат до подбора
   enemies: [],
@@ -87,7 +87,7 @@ function spawnEnemy(type, x, y, room, extra) {
 function resetGame(level) {
   state.level = level;
   buildWorld(level);
-  state.party = []; state.moveTarget = null; state.neutrals = []; state.downed = []; state.enemies = [];
+  state.party = []; state.moveInput = { throttle: 0, turn: 0 }; state.neutrals = []; state.downed = []; state.enemies = [];
   state.projectiles = []; state.effects = []; state.trail = [];
   state.clouds = []; state.firewalls = [];
   state.cannons = world.cannons.map((c) => ({ cd: c.interval * Math.random(), telegraph: 0 }));
@@ -96,7 +96,11 @@ function resetGame(level) {
   state.targetableEnemies = [];
 
   const spawn = localToWorld(level.spawn.room, level.spawn.at[0], level.spawn.at[1]);
-  state.party.push(makeAlly('ally', 'hero', spawn.x, spawn.y));
+  const hero = makeAlly('ally', 'hero', spawn.x, spawn.y);
+  // куда смотрит Герой и куда едет по W; по умолчанию вверх
+  hero.heading = level.spawn.heading === undefined ? -Math.PI / 2 : level.spawn.heading;
+  hero.facing = hero.heading;
+  state.party.push(hero);
   // уровень может начинаться с уже собранной цепочкой: дружочки встают в хвост чуть позади героя
   // и сразу же подтягиваются на своё место плёткой
   for (let i = 0; i < (level.startParty || 0); i++) {

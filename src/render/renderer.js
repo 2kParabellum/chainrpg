@@ -261,18 +261,6 @@ function drawTerrain() {
   drawRects(world.pillars, COLORS.pillar);
 }
 
-// точка назначения
-function drawTargetMarker() {
-  const target = state.moveTarget;
-  if (target && state.status === 'play') {
-    ctx.strokeStyle = 'rgba(99,210,255,0.5)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(target.x, target.y, 6, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-}
-
 function drawNeutrals() {
   for (const n of state.neutrals) {
     if (!onScreen(n)) continue;
@@ -459,6 +447,18 @@ function drawChain() {
     drawBuffRings(a);
     drawHpBar(a);
   }
+  // шеврон перед Героем: куда он поедет по W
+  const lead = state.party[0], h = lead.heading || 0;
+  const tip = lead.r + 13, back = lead.r + 6;
+  ctx.strokeStyle = allyColor(lead);
+  ctx.globalAlpha = 0.85;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(lead.x + Math.cos(h - 0.45) * back, lead.y + Math.sin(h - 0.45) * back);
+  ctx.lineTo(lead.x + Math.cos(h) * tip, lead.y + Math.sin(h) * tip);
+  ctx.lineTo(lead.x + Math.cos(h + 0.45) * back, lead.y + Math.sin(h + 0.45) * back);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
 }
 
 // оружие поверх тел, если у него есть своё рисование
@@ -535,7 +535,6 @@ function drawScene() {
   drawCannons();
   drawPads(1);
   drawPadLinks();
-  drawTargetMarker();
   drawNeutrals();
   drawDowned();
   drawWarnings();

@@ -21,8 +21,9 @@ const hero = {
   anchor: true,
   stats: { name: 'Герой', hp: 120, radius: 14 },
   base: { weapons: { sword: {} } },
-  // треугольник-«нос» показывает направление
+  // треугольник-«нос» показывает направление движения (heading), а не взгляд оружия
   mark(u, f, ctx) {
+    if (u.heading !== undefined) f = u.heading;
     ctx.beginPath();
     ctx.moveTo(u.x + Math.cos(f) * u.r * 0.9, u.y + Math.sin(f) * u.r * 0.9);
     ctx.lineTo(u.x + Math.cos(f + 2.5) * u.r * 0.7, u.y + Math.sin(f + 2.5) * u.r * 0.7);

@@ -32,38 +32,30 @@ const game = {
   spawnEnemy, freeSpotNear, pickChaser,
 };
 
-// движение Героя с инерцией: разгон к точке и накат после отпускания газа
+// «танковое» движение Героя с инерцией: A/D поворачивают направление (heading), W/S дают газ
+// вперёд/назад вдоль него. Скорость тянется к желаемой с разгоном, без газа — накат и торможение.
+// heading отдельно от facing: оружие поворачивает facing к цели, но не должно разворачивать Героя
 function updateLeader(dt) {
   const lead = leader();
   const mv = lead.moveMul || 1;   // усиление подиума скорости: быстрее ход и разворот
-  const cfg = { ...CONFIG.LEADER, speed: CONFIG.LEADER.speed * mv, accel: CONFIG.LEADER.accel * mv, brake: CONFIG.LEADER.brake * mv };
-  let ax = 0, ay = 0;
+  const cfg = CONFIG.LEADER;
+  const { throttle, turn } = state.moveInput;
 
-  if (state.moveTarget) {
-    const dx = state.moveTarget.x - lead.x, dy = state.moveTarget.y - lead.y;
-    const d = Math.hypot(dx, dy);
-    if (d <= cfg.arriveRadius) state.moveTarget = null;
-    else { ax = dx / d; ay = dy / d; }
-  }
+  // в экранных координатах (y вниз) уменьшение угла — поворот налево
+  lead.heading += turn * cfg.turnSpeed * mv * dt;
+  lead.facing = lead.heading;
 
-  if (ax || ay) {
-    lead.vx += ax * cfg.accel * dt;
-    lead.vy += ay * cfg.accel * dt;
-    const sp = Math.hypot(lead.vx, lead.vy);
-    if (sp > cfg.speed) {
-      lead.vx = (lead.vx / sp) * cfg.speed;
-      lead.vy = (lead.vy / sp) * cfg.speed;
-    }
-  } else {
-    const sp = Math.hypot(lead.vx, lead.vy);
-    const drop = cfg.brake * dt;
-    if (sp <= drop) { lead.vx = 0; lead.vy = 0; }
-    else { lead.vx -= (lead.vx / sp) * drop; lead.vy -= (lead.vy / sp) * drop; }
-  }
+  const k = throttle > 0 ? 1 : throttle < 0 ? -cfg.reverseMul : 0;
+  const wantX = Math.cos(lead.heading) * cfg.speed * mv * k;
+  const wantY = Math.sin(lead.heading) * cfg.speed * mv * k;
+  const dx = wantX - lead.vx, dy = wantY - lead.vy;
+  const gap = Math.hypot(dx, dy);
+  const step = (k ? cfg.accel : cfg.brake) * mv * dt;
+  if (gap <= step) { lead.vx = wantX; lead.vy = wantY; }
+  else { lead.vx += (dx / gap) * step; lead.vy += (dy / gap) * step; }
 
   const sp = Math.hypot(lead.vx, lead.vy);
   if (sp > 0.5) {
-    lead.facing = Math.atan2(lead.vy, lead.vx);
     // упёршись в стену, не тормозим в ноль, а скользим вдоль неё
     const normal = moveAndCollide(lead, lead.vx * dt, lead.vy * dt, world.moveBlockers);
     if (normal) slideAlongWall(lead, normal, cfg.wallFriction);
