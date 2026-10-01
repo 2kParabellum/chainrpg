@@ -10,6 +10,7 @@ const { world, setDoorsOpen } = G.world;
 const { leader, currentRoom, chainUnits, isSpotted, spawnEnemy } = G.session;
 const { freeSpotNear } = G.world;
 const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly } = G.chain;
+const { updatePads } = G.pads;
 const combat = G.combat;
 const { updateProjectiles, updateClouds, applySpikes, applyFirewalls, updateEffects, updateCannons } = combat;
 const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
@@ -170,6 +171,7 @@ function update(dt) {
   }
   touchPads();
   updateBuffs(dt);
+  updatePads(dt);
   for (const d of state.downed) updateDowned(d, dt);
   updateDoors();
   for (const e of state.enemies.slice()) updateEnemy(e, dt);

@@ -5,7 +5,8 @@
 
 const { CONFIG, COLORS, state } = G;
 const { clamp, dist } = G.math;
-const { world, padUnder } = G.world;
+const { world } = G.world;
+const { padUnder } = G.pads;
 const { isSpotted } = G.session;
 const { allyTypes, enemyTypes, weapons, abilities } = G;
 const shapes = G.shapes;
@@ -323,14 +324,41 @@ function drawFirewalls() {
   for (const f of state.firewalls) drawFirewall(f);
 }
 
-// подиумы: светящийся квадрат на полу; alpha — общая яркость.
-// Подиумы усилений (скорость, сила) окружены ещё и широким мягким свечением
-function drawPads(alpha) {
+// песочные часы над подиумом: он скоро исчезнет
+function drawHourglass(x, y, s) {
+  ctx.strokeStyle = COLORS.warning;
+  ctx.fillStyle = COLORS.warning;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x - s, y - s); ctx.lineTo(x + s, y - s); ctx.lineTo(x - s, y + s); ctx.lineTo(x + s, y + s);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x - s * 0.5, y + s * 0.5); ctx.lineTo(x + s * 0.5, y + s * 0.5); ctx.lineTo(x, y);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// яркость подиума: вырастает при появлении, перед исчезновением мигает всё чаще и гаснет
+function padAlpha(pad, warnTime) {
+  const age = pad.maxLife - pad.life;
+  let a = clamp(age / 0.3, 0, 1) * clamp(pad.life / 0.3, 0, 1);
+  if (pad.life <= warnTime) {
+    const t = warnTime - pad.life;
+    if (Math.sin(t * (6 + t * 5)) < 0) a *= 0.3;
+  }
+  return a;
+}
+
+// подиумы: светящийся квадрат на полу. Подиумы усилений окружены ещё и широким мягким свечением
+function drawPads() {
   const { pulse } = CONFIG.PADS;
+  const warnTime = { ...CONFIG.PAD_SPAWN, ...state.level.padSpawn }.warnTime;
   const wave = Math.sin((state.time / pulse) * Math.PI * 2);
   const glow = 0.25 + 0.1 * wave;
-  for (const pad of world.pads) {
+  for (const pad of state.pads) {
     if (!visible(pad)) continue;
+    const alpha = padAlpha(pad, warnTime);
     const buff = G.buffs[pad.ability];
     const def = buff || abilities[pad.ability];
     const cx = pad.x + pad.w / 2, cy = pad.y + pad.h / 2;
@@ -355,6 +383,7 @@ function drawPads(alpha) {
     ctx.lineWidth = 2;
     def.icon(ctx, cx, cy, pad.w * 0.36);
     ctx.globalAlpha = 1;
+    if (pad.life <= warnTime) drawHourglass(pad.x + pad.w, pad.y - 4, 7);
   }
 }
 
@@ -533,7 +562,7 @@ function drawScene() {
   drawDoors();
   drawButtons();
   drawCannons();
-  drawPads(1);
+  drawPads();
   drawPadLinks();
   drawNeutrals();
   drawDowned();

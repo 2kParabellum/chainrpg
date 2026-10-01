@@ -10,7 +10,7 @@ const { CONFIG } = G;
 const { circleRectOverlap, segmentHitsRect } = G.collision;
 
 const world = {
-  walls: [], pillars: [], pits: [], spikes: [], floors: [], warnings: [], pads: [],
+  walls: [], pillars: [], pits: [], spikes: [], floors: [], warnings: [],
   // двери, кнопки, неуязвимые пушки-ловушки и финишная зона — см. «Тропа над пропастью»
   doors: [], buttons: [], cannons: [], finish: null,
   bridges: [],       // проходимые тропы и островки комнат-пропастей (только для рисования)
@@ -132,14 +132,6 @@ function addRoomContent(plan, i) {
   for (const p of plan.pits || []) world.pits.push(toRect(p));
   for (const p of plan.spikes || []) world.spikes.push(toRect(p));
   if (plan.chasm) addChasm(plan.chasm, i, toRect);
-  // подиумы: квадрат PADS.size с центром в точке плана, ничего не блокируют; padChoice — подиумы
-  // со случайным набором (бросается заново при каждом старте, см. populate.rollPadChoice)
-  const padSize = CONFIG.PADS.size;
-  const pads = (plan.pads || []).concat(G.populate.rollPadChoice(plan.padChoice));
-  for (const [cx, cy, ability] of pads) {
-    const c = localToWorld(i, cx, cy);
-    world.pads.push({ x: c.x - padSize / 2, y: c.y - padSize / 2, w: padSize, h: padSize, ability });
-  }
   // в заминированных комнатах на полу у входа нарисованы предупреждающие знаки
   if ((plan.mines || []).length) {
     for (const [cx, cy] of [[0.09, 0.30], [0.09, 0.70]]) {
@@ -309,7 +301,7 @@ function buildArena(level) {
 
 function buildWorld(level) {
   world.walls = []; world.pillars = []; world.pits = []; world.spikes = [];
-  world.floors = []; world.warnings = []; world.pads = [];
+  world.floors = []; world.warnings = [];
   world.doors = []; world.buttons = []; world.cannons = []; world.finish = null; world.bridges = [];
   roomPx = level.rooms.map((p) => p.units === 'px');
   if (level.geometry.kind === 'field') buildField(level);
@@ -333,25 +325,12 @@ function spikeRectAt(u) {
   return null;
 }
 
-// подиум, которого касается тело юнита (или null): берётся при пересечении круга тела и квадрата подиума
-function padUnder(u) {
-  for (const pad of world.pads) {
-    if (circleRectOverlap(u.x, u.y, u.r, pad)) return pad;
-  }
-  return null;
-}
-
 // кнопка, на которой стоит юнит (или null)
 function buttonUnder(u) {
   for (const b of world.buttons) {
     if (circleRectOverlap(u.x, u.y, u.r, b)) return b;
   }
   return null;
-}
-
-// пересекает ли круг какой-нибудь подиум: по ним не расставляют нейтралов
-function overlapsPad(x, y, r) {
-  return world.pads.some((pad) => circleRectOverlap(x, y, r, pad));
 }
 
 function standsOnSpikes(u) { return spikeRectAt(u) !== null; }
@@ -393,7 +372,7 @@ function scatterSpot(roomIdx, r, taken, gap) {
       y: room.y + pad + Math.random() * (room.h - pad * 2),
       r,
     };
-    if (standsOnSpikes(p) || overlapsPad(p.x, p.y, r)) continue;
+    if (standsOnSpikes(p)) continue;
     if (world.moveBlockers.some((rect) => circleRectOverlap(p.x, p.y, r + 8, rect))) continue;
     if (taken.some((t) => Math.hypot(p.x - t.x, p.y - t.y) < t.r + r + gap)) continue;
     break;
@@ -415,9 +394,27 @@ function freeSpotNear(x, y, minR, maxR, r) {
   return null;
 }
 
+// центр свободного квадрата со стороной size в кольце minR..maxR вокруг (x, y) — куда встаёт подиум:
+// целиком внутри мира, не задевает стены, колонны, пропасти и шипы, не ближе 20 к кругам avoid
+// ([{ x, y, r }]); null, если за несколько попыток места не нашлось
+function freeSquareNear(x, y, minR, maxR, size, avoid) {
+  const half = size / 2;
+  for (let tries = 0; tries < 30; tries++) {
+    const a = Math.random() * Math.PI * 2;
+    const d = minR + Math.random() * (maxR - minR);
+    const cx = x + Math.cos(a) * d, cy = y + Math.sin(a) * d;
+    const sq = { x: cx - half, y: cy - half, w: size, h: size };
+    if (sq.x < 0 || sq.y < 0 || sq.x + size > world.width || sq.y + size > world.height) continue;
+    const hits = (rect) => sq.x < rect.x + rect.w && sq.x + size > rect.x && sq.y < rect.y + rect.h && sq.y + size > rect.y;
+    if (world.moveBlockers.some(hits) || world.spikes.some(hits)) continue;
+    if (avoid.some((c) => circleRectOverlap(c.x, c.y, c.r + 20, sq))) continue;
+    return { x: cx, y: cy };
+  }
+  return null;
+}
 
 G.world = {
   world, roomCount, roomIndexAt, roomInterior, localToWorld, buildWorld, hasLineOfSight,
-  spikeRectAt, standsOnSpikes, padUnder, buttonUnder, freeSpotInRoom, scatterSpot, freeSpotNear, setDoorsOpen,
+  spikeRectAt, standsOnSpikes, buttonUnder, freeSpotInRoom, scatterSpot, freeSpotNear, freeSquareNear, setDoorsOpen,
 };
 })(window.Game = window.Game || {});

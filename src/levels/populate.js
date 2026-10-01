@@ -32,14 +32,6 @@ function rollEnemySpec(spec, level) {
   return types.map((type, k) => (spec.spots ? [type, ...spec.spots[k], extra] : [type, undefined, undefined, extra]));
 }
 
-// подиумы на выбор: сначала обязательные (fixed), остальные точки — разные случайные из пула.
-// Возвращает [[cx, cy, ключ], ...]; бросается заново при каждом старте
-function rollPadChoice(spec) {
-  if (!spec) return [];
-  const keys = spec.fixed.concat(shuffled(spec.pool.filter((k) => !spec.fixed.includes(k))));
-  return spec.spots.map(([cx, cy], k) => [cx, cy, keys[k]]);
-}
-
 // комната обычно задаёт одну группу врагов, но может задать список независимых групп
 // (например, свои типы на тропе и свои на островках вокруг) — тогда plan.enemies — массив групп
 function rollEnemies(plan, level) {
@@ -72,5 +64,5 @@ function rollLevelAllies(level) {
   return out;
 }
 
-G.populate = { rollEnemies, rollLevelAllies, rollPadChoice };
+G.populate = { rollEnemies, rollLevelAllies };
 })(window.Game = window.Game || {});

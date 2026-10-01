@@ -6,7 +6,8 @@
 const { CONFIG, COLORS, state } = G;
 const { clamp, dist, removeFrom } = G.math;
 const { moveAndCollide, slideAlongWall } = G.collision;
-const { world, padUnder, buttonUnder } = G.world;
+const { world, buttonUnder } = G.world;
+const { padUnder } = G.pads;
 const { leader, maxParty, setAbility } = G.session;
 const { allyTypes } = G;
 
