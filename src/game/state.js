@@ -25,9 +25,9 @@ const state = {
   trail: [],         // след Героя, по которому бегут остальные звенья
   camera: { x: 0, y: 0 },
   status: 'play',    // menu | play | dead | win
-  lightTime: 0,
+  time: 0,           // время партии: для анимаций
   padRequest: false, // нажат ПРОБЕЛ: в этом кадре звенья на подиумах берут их способность или усиление
-  visibleEnemies: [], // освещённые враги: считаются раз за кадр, по ним стреляют союзники
+  targetableEnemies: [], // враги, по которым можно стрелять: считаются раз за кадр
 };
 
 function makeUnit(kind, type, x, y, cfg) {
@@ -55,7 +55,6 @@ function makeGear(u, key) {
 function makeAlly(kind, type, x, y) {
   const t = allyTypes[type];
   const u = makeUnit(kind, type, x, y, t.stats);
-  u.light = t.light || 0;        // радиус факела: только у Героя
   u.ability = null;              // ключ способности от подиума; null — базовое оружие
   u.prevTarget = null;           // прошлая точка следа: по ней плётка считает скорость точки
   u.gear = makeGear(u, null);
@@ -93,8 +92,8 @@ function resetGame(level) {
   state.clouds = []; state.firewalls = [];
   state.cannons = world.cannons.map((c) => ({ cd: c.interval * Math.random(), telegraph: 0 }));
   state.status = 'play';
-  state.lightTime = 0;
-  state.visibleEnemies = [];
+  state.time = 0;
+  state.targetableEnemies = [];
 
   const spawn = localToWorld(level.spawn.room, level.spawn.at[0], level.spawn.at[1]);
   state.party.push(makeAlly('ally', 'hero', spawn.x, spawn.y));
@@ -150,28 +149,10 @@ function resetGame(level) {
   state.camera.y = clamp(state.party[0].y - CONFIG.VIEW.h / 2, 0, world.height - CONFIG.VIEW.h);
 }
 
-// ведущий — всегда Герой, первое звено цепочки: от него считаются свет, камера, активация врагов и цель охотников
+// ведущий — всегда Герой, первое звено цепочки: от него считаются камера, активация врагов и цель охотников
 function leader() { return state.party[0]; }
 
 function chainUnits() { return state.party.slice(); }
-
-// радиус факела Героя с лёгким дрожанием пламени
-function lightRadius() {
-  const v = CONFIG.VISION;
-  return leader().light + Math.sin(state.lightTime * v.flickerSpeed) * v.flicker
-                  + Math.sin(state.lightTime * v.flickerSpeed * 2.7) * v.flicker * 0.5;
-}
-
-// единственный источник света — факел Героя
-function lightSources() {
-  const lead = leader();
-  return [{ x: lead.x, y: lead.y, r: lightRadius() }];
-}
-
-// освещён ли юнит факелом; pad — запас по радиусу (у облаков и снарядов)
-function isLit(u, pad = 0) {
-  return dist(leader(), u) <= lightRadius() + pad;
-}
 
 // враг, которого уже можно видеть, целить и рубить: скрытые типы (мина) — только после обнаружения
 function isSpotted(e) { return !enemyTypes[e.type].hiddenUntilRevealed || e.revealed; }
@@ -182,5 +163,5 @@ function maxParty() { return state.level.maxParty || CONFIG.CHAIN.maxParty; }
 function currentRoom() { return roomIndexAt(leader().x, leader().y); }
 
 G.state = state;
-G.session = { makeUnit, makeAlly, setAbility, spawnEnemy, resetGame, leader, chainUnits, lightRadius, lightSources, isLit, isSpotted, currentRoom, maxParty };
+G.session = { makeUnit, makeAlly, setAbility, spawnEnemy, resetGame, leader, chainUnits, isSpotted, currentRoom, maxParty };
 })(window.Game = window.Game || {});

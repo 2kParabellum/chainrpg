@@ -7,7 +7,7 @@ const { CONFIG, state } = G;
 const { clamp, dist, removeFrom, pickWeighted } = G.math;
 const { moveAndCollide, slideAlongWall, circleRectOverlap } = G.collision;
 const { world, setDoorsOpen } = G.world;
-const { leader, isLit, currentRoom, chainUnits, isSpotted, spawnEnemy } = G.session;
+const { leader, currentRoom, chainUnits, isSpotted, spawnEnemy } = G.session;
 const { freeSpotNear } = G.world;
 const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly } = G.chain;
 const combat = G.combat;
@@ -165,12 +165,12 @@ function updateLate() {
 function update(dt) {
   if (state.status !== 'play') return;
 
-  state.lightTime += dt;
+  state.time += dt;
   updateLeader(dt);
   pushTrail();
 
-  // дальнее оружие бьёт только по освещённому (факелом Героя), а мину — ещё и только после обнаружения
-  state.visibleEnemies = state.enemies.filter((e) => isLit(e) && isSpotted(e));
+  // дальнее оружие бьёт по любому врагу в пределах своей дальности, а мину — только после обнаружения
+  state.targetableEnemies = state.enemies.filter(isSpotted);
 
   for (const a of state.party.slice()) {
     const i = state.party.indexOf(a);

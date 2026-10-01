@@ -1,10 +1,10 @@
-// Интерфейс поверх сцены: затемнение за границей фонаря, HUD, экраны победы и поражения. Состояние только читается.
+// Интерфейс поверх сцены: HUD, экраны победы и поражения. Состояние только читается.
 (function (G) {
 'use strict';
 
 const { CONFIG, state } = G;
 const { abilities } = G;
-const { currentRoom, lightSources, isSpotted, maxParty, leader } = G.session;
+const { currentRoom, isSpotted, maxParty, leader } = G.session;
 const { roomCount, roomIndexAt, buttonUnder } = G.world;
 const { nearestPickup } = G.chain;
 const { ctx, allyColor } = G.shapes;
@@ -66,30 +66,5 @@ function drawHud() {
   ctx.restore();
 }
 
-// темнота вне света: на отдельном слое заливаем всё тьмой и вырезаем круг у каждого источника света
-// (факел Героя), затем накладываем слой на сцену
-const dark = document.createElement('canvas');
-dark.width = CONFIG.VIEW.w;
-dark.height = CONFIG.VIEW.h;
-const dctx = dark.getContext('2d');
-
-function drawLight() {
-  const { w, h } = { w: CONFIG.VIEW.w, h: CONFIG.VIEW.h };
-  dctx.globalCompositeOperation = 'source-over';
-  dctx.clearRect(0, 0, w, h);
-  dctx.fillStyle = `rgba(6,6,8,${CONFIG.VISION.darkness})`;
-  dctx.fillRect(0, 0, w, h);
-  dctx.globalCompositeOperation = 'destination-out';
-  for (const s of lightSources()) {
-    const x = s.x - state.camera.x, y = s.y - state.camera.y;
-    const g = dctx.createRadialGradient(x, y, s.r * CONFIG.VISION.innerRatio, x, y, s.r);
-    g.addColorStop(0, 'rgba(0,0,0,1)');
-    g.addColorStop(1, 'rgba(0,0,0,0)');
-    dctx.fillStyle = g;
-    dctx.fillRect(0, 0, w, h);
-  }
-  ctx.drawImage(dark, state.camera.x, state.camera.y);
-}
-
-G.hud = { drawLight, drawHud };
+G.hud = { drawHud };
 })(window.Game = window.Game || {});

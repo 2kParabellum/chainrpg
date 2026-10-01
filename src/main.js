@@ -12,8 +12,8 @@ const { resetGame } = G.session;
 const { tryRecruit, dropLastAlly } = G.chain;
 const { update } = G.update;
 const { canvas } = G.shapes;
-const { drawScene, drawPadsInDark, drawCannonShots } = G.renderer;
-const { drawLight, drawHud } = G.hud;
+const { drawScene, drawCannonShots } = G.renderer;
+const { drawHud } = G.hud;
 
 // уровни в порядке их показа в меню; за фоном меню при запуске стоит первый
 const LEVELS = [G.level2, G.level3];
@@ -98,8 +98,6 @@ onClick('backBtn', () => showPanel('main'));
 
 function draw() {
   drawScene();
-  drawLight();
-  drawPadsInDark();
   drawCannonShots();
   drawHud();
 }

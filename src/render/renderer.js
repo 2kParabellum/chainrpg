@@ -6,10 +6,16 @@
 const { CONFIG, COLORS, state } = G;
 const { clamp, dist } = G.math;
 const { world, padUnder } = G.world;
-const { isLit, isSpotted } = G.session;
+const { isSpotted } = G.session;
 const { allyTypes, enemyTypes, weapons, abilities } = G;
 const shapes = G.shapes;
 const { canvas, ctx, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor } = shapes;
+
+// точка (с запасом pad) попадает в кадр: рисовать то, что за экраном, незачем
+function onScreen(p, pad = 0) {
+  const r = (p.r || 0) + pad;
+  return visible({ x: p.x - r, y: p.y - r, w: r * 2, h: r * 2 });
+}
 
 // знак на полу: заминированная комната
 function drawWarning(w) {
@@ -38,7 +44,7 @@ function drawEnemy(e) {
 
 // нить гарпуна тянется от Скорпиона к наконечнику, пока тот летит
 function drawHook(p) {
-  if (!isLit(p)) return;
+  if (!onScreen(p)) return;
   if (p.owner && state.enemies.includes(p.owner)) {
     ctx.strokeStyle = COLORS.scorpion;
     ctx.globalAlpha = 0.7;
@@ -63,7 +69,7 @@ function drawHook(p) {
 
 // вонючее облако: рваный круг, который тускнеет к концу жизни
 function drawCloud(c) {
-  if (!isLit(c, c.cur)) return;
+  if (!onScreen(c, c.cur)) return;
   const fade = clamp(c.life / 0.8, 0, 1);
   ctx.fillStyle = COLORS.cloud;
   ctx.globalAlpha = 0.16 * fade;
@@ -94,7 +100,7 @@ function drawMortar(p) {
 
   // круг на земле показывает, куда прилетит: успеть выйти можно только заранее
   const color = p.color || COLORS.blast;
-  if (isLit({ x: p.tx, y: p.ty, r: 0 })) {
+  if (onScreen({ x: p.tx, y: p.ty, r: 0 }, p.blast)) {
     ctx.strokeStyle = color;
     ctx.globalAlpha = 0.25 + k * 0.55;
     ctx.lineWidth = 2;
@@ -109,7 +115,7 @@ function drawMortar(p) {
     ctx.globalAlpha = 1;
   }
 
-  if (!isLit(p)) return;
+  if (!onScreen(p)) return;
   const height = Math.sin(k * Math.PI) * 55;
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.beginPath();
@@ -124,7 +130,7 @@ function drawMortar(p) {
 // стенка огня: толстая тускнеющая полоса вдоль отрезка, горит, пока не истечёт срок
 function drawFirewall(f) {
   const mx = (f.x1 + f.x2) / 2, my = (f.y1 + f.y2) / 2;
-  if (!isLit({ x: mx, y: my, r: 0 }, f.r)) return;
+  if (!onScreen({ x: mx, y: my, r: 0 }, f.r + Math.hypot(f.x2 - f.x1, f.y2 - f.y1) / 2)) return;
   const fade = clamp(f.life / f.maxLife, 0.15, 1);
   ctx.lineCap = 'round';
   ctx.strokeStyle = COLORS.fire;
@@ -199,7 +205,7 @@ function drawCannons() {
 function drawFinish() {
   const f = world.finish;
   if (!f || !visible(f)) return;
-  const wave = 0.2 + 0.08 * Math.sin(state.lightTime * 2);
+  const wave = 0.2 + 0.08 * Math.sin(state.time * 2);
   ctx.fillStyle = COLORS.finish;
   ctx.globalAlpha = wave;
   ctx.fillRect(f.x, f.y, f.w, f.h);
@@ -269,7 +275,7 @@ function drawTargetMarker() {
 
 function drawNeutrals() {
   for (const n of state.neutrals) {
-    if (!isLit(n)) continue;
+    if (!onScreen(n)) continue;
     ctx.setLineDash([4, 4]);
     drawUnitBody(n, COLORS.neutral, false);
     ctx.setLineDash([]);
@@ -284,7 +290,7 @@ function drawNeutrals() {
 // выбитые из цепочки лежат и ждут, пока их подберут
 function drawDowned() {
   for (const d of state.downed) {
-    if (!isLit(d)) continue;
+    if (!onScreen(d)) continue;
     const color = allyColor(d);
     ctx.globalAlpha = 0.55;
     drawUnitBody(d, color, true);
@@ -315,7 +321,7 @@ function drawWarnings() {
 
 function drawEnemies() {
   for (const e of state.enemies) {
-    if (!isLit(e)) continue;
+    if (!onScreen(e)) continue;
     if (!isSpotted(e)) continue;
     drawEnemy(e);
   }
@@ -329,11 +335,11 @@ function drawFirewalls() {
   for (const f of state.firewalls) drawFirewall(f);
 }
 
-// подиумы: светящийся квадрат на полу; alpha — общая яркость (в темноте слабее).
+// подиумы: светящийся квадрат на полу; alpha — общая яркость.
 // Подиумы усилений (скорость, сила) окружены ещё и широким мягким свечением
 function drawPads(alpha) {
   const { pulse } = CONFIG.PADS;
-  const wave = Math.sin((state.lightTime / pulse) * Math.PI * 2);
+  const wave = Math.sin((state.time / pulse) * Math.PI * 2);
   const glow = 0.25 + 0.1 * wave;
   for (const pad of world.pads) {
     if (!visible(pad)) continue;
@@ -364,10 +370,7 @@ function drawPads(alpha) {
   }
 }
 
-// подиумы видны и в темноте: второй проход поверх затемнения
-function drawPadsInDark() { drawPads(CONFIG.PADS.darkAlpha); }
-
-// ядра пушек-ловушек светятся сами и видны издалека, даже в темноте: рисуются поверх затемнения
+// ядра пушек-ловушек рисуются последним слоем сцены, поверх всего
 function drawCannonShots() {
   for (const p of state.projectiles) {
     if (p.kind !== 'cannon' || !visible({ x: p.x - 40, y: p.y - 40, w: 80, h: 80 })) continue;
@@ -401,7 +404,7 @@ function drawPadLinks() {
     if (!pad) continue;
     const def = G.buffs[pad.ability] || abilities[pad.ability];
     const cx = pad.x + pad.w / 2, cy = pad.y + pad.h / 2;
-    const pulse = 0.75 + 0.25 * Math.sin(state.lightTime * 6);
+    const pulse = 0.75 + 0.25 * Math.sin(state.time * 6);
 
     ctx.strokeStyle = def.color;
     ctx.lineCap = 'round';
@@ -415,7 +418,7 @@ function drawPadLinks() {
     ctx.lineWidth = 3;
     ctx.globalAlpha = 0.95 * pulse;
     ctx.setLineDash([10, 8]);
-    ctx.lineDashOffset = -state.lightTime * 90;
+    ctx.lineDashOffset = -state.time * 90;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.lineTo(u.x, u.y);
@@ -445,7 +448,7 @@ function drawBuffRings(u) {
   }
 }
 
-// цепочка: с хвоста, чтобы Герой оказался сверху; у Героя над плечом язычок факела.
+// цепочка: с хвоста, чтобы Герой оказался сверху.
 // Знаки на теле: сначала знак типа, затем знак способности
 function drawChain() {
   for (let i = state.party.length - 1; i >= 0; i--) {
@@ -456,11 +459,6 @@ function drawChain() {
     drawBuffRings(a);
     drawHpBar(a);
   }
-  const lead = state.party[0];
-  ctx.fillStyle = '#ffb347';
-  ctx.beginPath();
-  ctx.arc(lead.x + lead.r * 0.8, lead.y - lead.r * 0.9, 3.5 + Math.sin(state.lightTime * 9) * 0.8, 0, Math.PI * 2);
-  ctx.fill();
 }
 
 // оружие поверх тел, если у него есть своё рисование
@@ -477,8 +475,8 @@ function drawProjectiles() {
   for (const p of state.projectiles) {
     if (p.kind === 'mortar' || p.kind === 'bigMortar') { drawMortar(p); continue; }
     if (p.kind === 'hook') { drawHook(p); continue; }
-    if (p.kind === 'cannon') continue; // ядра рисуются поверх темноты, см. drawCannonShots
-    if (!isLit(p)) continue;
+    if (p.kind === 'cannon') continue; // ядра рисуются отдельным слоем, см. drawCannonShots
+    if (!onScreen(p)) continue;
     ctx.fillStyle = p.team === 'ally' ? COLORS.allyShot : COLORS.enemyShot;
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
@@ -550,5 +548,5 @@ function drawScene() {
   drawEffects();
 }
 
-G.renderer = { drawScene, drawPadsInDark, drawCannonShots };
+G.renderer = { drawScene, drawCannonShots };
 })(window.Game = window.Game || {});

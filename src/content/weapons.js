@@ -20,7 +20,7 @@ function ready(w, dt) {
   return w.cd === 0;
 }
 
-// ближний удар по одной цели: ближайший обнаруженный враг вплотную. Свет не нужен
+// ближний удар по одной цели: ближайший обнаруженный враг вплотную
 function meleeUpdate(u, w, dt, game) {
   if (!ready(w, dt)) return;
   let foe = null, best = Infinity;
@@ -36,11 +36,11 @@ function meleeUpdate(u, w, dt, game) {
   game.state.effects.push({ type: 'beam', x1: u.x, y1: u.y, x2: foe.x, y2: foe.y, life: 0.12, color: w.color });
 }
 
-// дальний выстрел: только по освещённым врагам
+// дальний выстрел: ближайший обнаруженный враг в пределах дальности оружия и на прямой видимости
 function shootUpdate(fire) {
   return function (u, w, dt, game) {
     if (!ready(w, dt)) return;
-    const foe = game.nearestTarget(u, game.state.visibleEnemies, w.range);
+    const foe = game.nearestTarget(u, game.state.targetableEnemies, w.range);
     if (!foe) return;
     u.facing = Math.atan2(foe.y - u.y, foe.x - u.x);
     fire(u, w, foe, game);
