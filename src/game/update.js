@@ -7,10 +7,11 @@ const { CONFIG, state } = G;
 const { clamp, dist, removeFrom, pickWeighted } = G.math;
 const { moveAndCollide, slideAlongWall, circleRectOverlap } = G.collision;
 const { world, setDoorsOpen } = G.world;
-const { leader, chainSpeedMul, currentRoom, chainUnits, isSpotted, spawnEnemy } = G.session;
+const { leader, chainSpeedMul, currentRoom, chainUnits, enemyTargets, isSpotted, spawnEnemy } = G.session;
 const { freeSpotNear } = G.world;
 const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly } = G.chain;
 const { updatePads, updateAllySpawns } = G.pads;
+const { updateWaves } = G.waves;
 const combat = G.combat;
 const { updateProjectiles, updateClouds, applySpikes, applyFirewalls, updateEffects, updateCannons } = combat;
 const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
@@ -123,9 +124,9 @@ function updateEnemy(e, dt) {
 
   // порталы и порождённые ими враги действуют на любом расстоянии, остальные спят вдали от игрока
   if (!type.alwaysActive && !e.chasing && dist(e, leader()) > CONFIG.ACTIVATION_DIST) return;
-  // враги целятся в ближайшего союзника — и в цепочке, и выбитого (его добивают);
+  // враги целятся в ближайшего союзника — и в цепочке, и выбитого (его добивают), а на «Обороне» — и в базу;
   // первым в списке всегда Герой (на него, например, смотрит босс)
-  type.update(e, dt, chainUnits().concat(state.downed), game);
+  type.update(e, dt, enemyTargets(), game);
 }
 
 // кнопки открывают связанные двери, пока на них лежит брошенный (X) или выбитый союзник —
@@ -143,6 +144,8 @@ function updateDoors() {
 // условие победы задаёт уровень
 function isVictory() {
   const rule = state.level.victory;
+  // продержаться заданное время (база цела — иначе партия уже проиграна)
+  if (rule.kind === 'survive') return state.time >= rule.time;
   if (rule.kind === 'destroyType') return !state.enemies.some((e) => e.type === rule.type);
   // дойти до финишной зоны уровня (см. world.finish)
   if (rule.kind === 'reachPoint') {
@@ -185,6 +188,7 @@ function update(dt) {
   // выбитые союзники не выходят из боя: стреляют, рубят и лечат лёжа
   for (const d of state.downed.slice()) updateWeapons(d, dt);
   updateDoors();
+  updateWaves(dt);
   for (const e of state.enemies.slice()) updateEnemy(e, dt);
   updateCannons(dt);
   updateProjectiles(dt);

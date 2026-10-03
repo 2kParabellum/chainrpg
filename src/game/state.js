@@ -5,7 +5,7 @@
 'use strict';
 
 const { CONFIG } = G;
-const { clamp, dist } = G.math;
+const { clamp, dist, shuffled } = G.math;
 const { world, localToWorld, buildWorld, roomIndexAt, scatterSpot } = G.world;
 const { rollEnemies, rollLevelAllies } = G.populate;
 const { allyTypes, enemyTypes, weapons, abilities } = G;
@@ -32,6 +32,8 @@ const state = {
   buffSpawnIn: null, // то же для подиумов усилений
   allySpawnIn: null, // то же для случайных дружочков
   targetableEnemies: [], // враги, по которым можно стрелять: считаются раз за кадр
+  base: null,        // уровень «Оборона»: база — цель врагов с запасом HP (null на других уровнях)
+  nests: [],         // гнёзда врагов: таймер следующей волны и сколько волн уже вышло (см. game/waves.js)
 };
 
 function makeUnit(kind, type, x, y, cfg) {
@@ -99,6 +101,13 @@ function setAbility(u, key, level = 1) {
   recalcStats(u);
 }
 
+// база уровня «Оборона» на месте здания world.base: для врагов она цель наравне с союзниками;
+// круг цели вписан в здание. regenTimer — сколько секунд её не задевали (для вспышки при попадании)
+function makeBase(b) {
+  return { kind: 'base', type: 'base', x: b.x + b.w / 2, y: b.y + b.h / 2, r: Math.min(b.w, b.h) / 2,
+           vx: 0, vy: 0, hp: b.hp, maxHp: b.hp, regenTimer: 99, cfg: { name: 'База' } };
+}
+
 function makeEnemy(type, x, y, room) {
   const t = enemyTypes[type];
   const e = makeUnit('enemy', type, x, y, t.stats);
@@ -127,6 +136,12 @@ function resetGame(level) {
   state.status = 'play';
   state.time = 0;
   state.targetableEnemies = [];
+  state.base = world.base ? makeBase(world.base) : null;
+  // у каждого гнезда свой таймер волн; порядок, в котором гнёзда выпускают первые волны, бросается заново
+  const waves = level.waves;
+  state.nests = waves ? shuffled(world.nests).map((p, k) => ({
+    x: p.x, y: p.y, wave: 0, nextIn: waves.firstAt + k * waves.stagger, releasedAt: -99, lastCount: 0,
+  })) : [];
 
   const spawn = localToWorld(level.spawn.room, level.spawn.at[0], level.spawn.at[1]);
   const hero = makeAlly('ally', 'hero', spawn.x, spawn.y);
@@ -191,6 +206,13 @@ function leader() { return state.party[0]; }
 
 function chainUnits() { return state.party.slice(); }
 
+// по кому бьют враги: цепочка (первым — Герой), лежачие и база уровня «Оборона»
+function enemyTargets() {
+  const list = chainUnits().concat(state.downed);
+  if (state.base) list.push(state.base);
+  return list;
+}
+
 // враг, которого уже можно видеть, целить и рубить: скрытые типы (мина) — только после обнаружения
 function isSpotted(e) { return !enemyTypes[e.type].hiddenUntilRevealed || e.revealed; }
 
@@ -205,5 +227,5 @@ function chainSpeedMul() {
 function currentRoom() { return roomIndexAt(leader().x, leader().y); }
 
 G.state = state;
-G.session = { makeUnit, makeAlly, setAbility, recalcStats, spawnEnemy, resetGame, leader, chainUnits, isSpotted, currentRoom, chainSpeedMul };
+G.session = { makeUnit, makeAlly, setAbility, recalcStats, spawnEnemy, resetGame, leader, chainUnits, enemyTargets, isSpotted, currentRoom, chainSpeedMul };
 })(window.Game = window.Game || {});

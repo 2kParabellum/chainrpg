@@ -6,8 +6,9 @@
 const { CONFIG, state } = G;
 const { dist } = G.math;
 const { moveAndCollide, circleRectOverlap } = G.collision;
-const { leader } = G.session;
-const { world, spikeRectAt, standsOnSpikes, freeSpotInRoom, hasLineOfSight } = G.world;
+const { leader, chainUnits } = G.session;
+const { world, spikeRectAt, standsOnSpikes, freeSpotInRoom, hasLineOfSight, flowDir } = G.world;
+const { nearestTarget } = G.combat;
 
 // враг, оказавшийся на шипах не в рывке, сходит с них кратчайшим путём
 function stepOffSpikes(e, dt, speed) {
@@ -63,7 +64,33 @@ function pathAheadBlocked(e, ux, uy) {
   return world.moveBlockers.some((rect) => circleRectOverlap(px, py, e.r, rect));
 }
 
-function chaseStep(e, dt, speed, stopDist, target = leader()) {
+// враг волны (уровень «Оборона», e.siege) идёт к базе, но, увидев союзника ближе waves.sight, — к нему;
+// потерял из виду — снова к базе
+function siegeTarget(e) {
+  return nearestTarget(e, chainUnits().concat(state.downed), state.level.waves.sight) || state.base;
+}
+
+// путь по прямой свободен для тела радиуса r: ни стены, ни колонны на средней линии и на краях тела
+function clearPath(a, b, r) {
+  const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+  const nx = (-dy / d) * r, ny = (dx / d) * r;
+  return [0, 1, -1].every((k) => hasLineOfSight({ x: a.x + nx * k, y: a.y + ny * k }, { x: b.x + nx * k, y: b.y + ny * k }));
+}
+
+function chaseStep(e, dt, speed, stopDist, target) {
+  if (!target && e.siege && state.base) {
+    target = siegeTarget(e);
+    // к базе по прямой — только если путь до неё свободен; иначе по полю направлений через проходы двора
+    if (target === state.base && !clearPath(e, target, e.r)) {
+      const dir = flowDir(e.x, e.y);
+      if (dir) {
+        e.detour = 0;
+        moveAndCollide(e, dir.x * speed * dt, dir.y * speed * dt, world.moveBlockers);
+        return;
+      }
+    }
+  }
+  target = target || leader();
   const dx = target.x - e.x, dy = target.y - e.y;
   const d = Math.hypot(dx, dy);
   if (d < 1) return;

@@ -124,7 +124,8 @@ scorpion.update = ranged(scorpion, (e, foe, game) => game.spawnHook(e, foe));
 // зомби норовит встать рядом с цепочкой, но не вплотную, и травит всё вокруг облаком
 const zombie = {
   stats: { name: 'Зомби', hp: 70, radius: 17, aggro: 520, walkSpeed: 62, cooldown: 4.5,
-           standoff: 55,            // держится рядом, но не вплотную — облако накрывает цепочку
+           standoff: 24,            // просвет между телами: держится рядом, но не вплотную — облако накрывает
+                                    // цепочку; меряется от края цели, чтобы так же стоять и у большой базы
            cloudRadius: 95,         // радиус вонючего облака
            cloudDps: 8,            // урон в секунду внутри облака
            cloudLife: 3.5,          // сколько облако висит
@@ -143,16 +144,16 @@ const zombie = {
       return;
     }
 
-    const d = dist(e, foe);
+    const gap = dist(e, foe) - e.r - foe.r;
     e.facing = Math.atan2(foe.y - e.y, foe.x - e.x);
     const near = e.cfg.standoff;
-    const sign = d > near * 1.15 ? 1 : d < near * 0.8 ? -1 : 0;
+    const sign = gap > near + 8 ? 1 : gap < near - 11 ? -1 : 0;
     if (sign) {
       moveAndCollide(e, Math.cos(e.facing) * e.cfg.walkSpeed * sign * dt,
         Math.sin(e.facing) * e.cfg.walkSpeed * sign * dt, game.world.moveBlockers);
     }
 
-    if (e.cd <= 0 && d < near * 1.6) {
+    if (e.cd <= 0 && gap < near + 33) {
       game.state.clouds.push({ x: e.x, y: e.y, r: e.cfg.cloudRadius, cur: 0, t: 0, life: e.cfg.cloudLife });
       e.cd = e.cfg.cooldown;
     }

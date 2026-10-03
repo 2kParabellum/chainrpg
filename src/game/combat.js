@@ -6,7 +6,7 @@ const { CONFIG, COLORS, state } = G;
 const { dist, removeFrom } = G.math;
 const { circleRectOverlap, distToSegment } = G.collision;
 const { world, hasLineOfSight, standsOnSpikes } = G.world;
-const { chainUnits } = G.session;
+const { chainUnits, enemyTargets } = G.session;
 const { hookAlly, knockOutAlly } = G.chain;
 const { allyTypes, enemyTypes } = G;
 
@@ -28,6 +28,7 @@ function damageUnit(u, dmg) {
   if (u.hp <= 0) {
     // усиление «воля»: смертельный урон не убивает союзника (в цепочке или выбитого), он остаётся с 1 HP
     if ((u.kind === 'ally' || u.kind === 'downed') && Object.keys(u.buffs).some((k) => u.buffs[k] > 0 && G.buffs[k].revive)) { u.hp = 1; return; }
+    if (u.kind === 'base') { state.status = 'dead'; return; } // разрушена база — поражение
     if (u.kind === 'ally') {
       // гибель Героя — конец партии; его тело остаётся в цепочке, чтобы сцена и камера не остались без ведущего
       if (allyTypes[u.type].anchor) { state.status = 'dead'; return; }
@@ -126,8 +127,8 @@ function explodeBigMortar(p) {
 
 function updateProjectiles(dt) {
   const chain = chainUnits();
-  // вражеские выстрелы бьют и цепочку, и выбитых союзников: те дерутся и их добивают
-  const allies = chain.concat(state.downed);
+  // вражеские выстрелы бьют и цепочку, и выбитых союзников (те дерутся и их добивают), и базу
+  const allies = enemyTargets();
   for (let i = state.projectiles.length - 1; i >= 0; i--) {
     const p = state.projectiles[i];
 
@@ -198,10 +199,10 @@ function applySpikes(dt) {
   }
 }
 
-// вонючее облако висит на месте и травит только цепочку — своих оно не задевает
+// вонючее облако висит на месте и травит только союзников (и базу) — своих оно не задевает
 function updateClouds(dt) {
   const cfg = enemyTypes.zombie.stats;
-  const victims = chainUnits().concat(state.downed);
+  const victims = enemyTargets();
   for (let i = state.clouds.length - 1; i >= 0; i--) {
     const c = state.clouds[i];
     c.t += dt;

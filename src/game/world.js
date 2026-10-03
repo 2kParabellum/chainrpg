@@ -14,6 +14,9 @@ const world = {
   // двери, кнопки, неуязвимые пушки-ловушки и финишная зона — см. «Тропа над пропастью»
   doors: [], buttons: [], cannons: [], finish: null,
   bridges: [],       // проходимые тропы и островки комнат-пропастей (только для рисования)
+  // уровень «Оборона»: база (прямоугольник здания с запасом HP), двор вокруг неё и гнёзда врагов (точки)
+  base: null, home: null, nests: [],
+  solids: [],        // твёрдые постройки (база): держат движение, но не обзор и не выстрелы
   moveBlockers: [], sightBlockers: [],
   width: 0, height: 0,
 };
@@ -23,6 +26,7 @@ const world = {
 //          центры комнат по высоте совпадают (на этой линии лежат проходы)
 //   field: одно поле из сетки cols × rows зон (по строкам слева направо, сверху вниз)
 //   arena: одна круглая комната (боссовая арена)
+//   rect:  одна прямоугольная комната во весь уровень (оборона базы)
 let layout = { kind: 'line', wall: 0, count: 0, rooms: [] };
 // координаты плана комнаты в пикселях её внутреннего прямоугольника (units: 'px'), а не в долях
 let roomPx = [];
@@ -31,7 +35,7 @@ function roomCount() { return layout.count; }
 
 // в какой комнате (зоне) находится точка; проход между комнатами относится к ближайшей комнате
 function roomIndexAt(x, y) {
-  if (layout.kind === 'arena') return 0;
+  if (layout.kind === 'arena' || layout.kind === 'rect') return 0;
   if (layout.kind === 'field') {
     const col = clamp(Math.floor((x - layout.wall) / layout.cellW), 0, layout.cols - 1);
     const row = clamp(Math.floor((y - layout.wall) / layout.cellH), 0, layout.rows - 1);
@@ -49,6 +53,9 @@ function roomInterior(i) {
     // квадрат, описанный вокруг круга арены: координаты плана (0..1) ложатся на него,
     // как на прямоугольник обычной комнаты — автор плана сам следит, чтобы точки попали в круг
     return { x: layout.margin, y: layout.margin, w: layout.radius * 2, h: layout.radius * 2 };
+  }
+  if (layout.kind === 'rect') {
+    return { x: layout.wall, y: layout.wall, w: world.width - 2 * layout.wall, h: world.height - 2 * layout.wall };
   }
   if (layout.kind === 'field') {
     const col = i % layout.cols, row = Math.floor(i / layout.cols);
@@ -160,6 +167,18 @@ function addRoomContent(plan, i) {
   }
   // финишная зона (уровни с целью «дойти до места», а не «зачистить комнату»)
   if (plan.finish) world.finish = toRect(plan.finish);
+
+  // оборона: двор подсвечен спокойным цветом; база — твёрдое здание; гнёзда врагов — точки на полу
+  if (plan.home) {
+    world.home = toRect(plan.home);
+    world.floors.push({ ...world.home, tint: 'calm' });
+  }
+  if (plan.base) {
+    const r = toRect([...plan.base.at, ...plan.base.size]);
+    world.base = { ...r, hp: plan.base.hp };
+    world.solids.push(r);
+  }
+  for (const [cx, cy] of plan.nests || []) world.nests.push(localToWorld(i, cx, cy));
 }
 
 // сплошные препятствия и пропасти пересобираются заново: закрытая дверь блокирует движение
@@ -169,7 +188,7 @@ function addRoomContent(plan, i) {
 function rebuildBlockers() {
   const closedDoors = world.doors.filter((d) => !d.open);
   world.sightBlockers = world.walls.concat(world.pillars, closedDoors);
-  world.moveBlockers = world.sightBlockers.concat(world.pits);
+  world.moveBlockers = world.sightBlockers.concat(world.pits, world.solids);
 }
 
 // применить новое состояние дверей (id открытых); перестраивает блокеры, только если что-то изменилось
@@ -299,15 +318,102 @@ function buildArena(level) {
   addRoomContent(level.rooms[0], 0);
 }
 
+// одна прямоугольная комната во весь уровень: внешняя стена по периметру, всё остальное — в плане
+function buildRect(level) {
+  const g = level.geometry, W = g.wall;
+  layout = { kind: 'rect', wall: W, count: 1 };
+  world.width = g.width; world.height = g.height;
+  world.walls.push({ x: 0, y: 0, w: g.width, h: W });
+  world.walls.push({ x: 0, y: g.height - W, w: g.width, h: W });
+  world.walls.push({ x: 0, y: 0, w: W, h: g.height });
+  world.walls.push({ x: g.width - W, y: 0, w: W, h: g.height });
+  world.floors.push(roomInterior(0));
+  addRoomContent(level.rooms[0], 0);
+}
+
+// --- поле направлений к базе ---
+// Враги волн идут к базе через проходы двора, а прямой путь к ней упирается в стены. Поэтому при сборке
+// мира от базы по сетке клеток один раз расходится волна расстояний (Дейкстра по 8 соседям, диагональ
+// не срезает углы), и враг шагает в соседнюю клетку, которая ближе к базе. Мир по ходу партии не меняется
+// (двери на этом уровне не используются), так что поле не пересчитывается
+let flow = null;
+const FLOW_STEPS = [[1, 0, 10], [-1, 0, 10], [0, 1, 10], [0, -1, 10], [1, 1, 14], [1, -1, 14], [-1, 1, 14], [-1, -1, 14]];
+
+function buildFlow(goal) {
+  const S = CONFIG.SIEGE.flowCell, C = CONFIG.SIEGE.flowClearance;
+  const cols = Math.ceil(world.width / S), rows = Math.ceil(world.height / S), n = cols * rows;
+  // сама база клеток не закрывает: в неё волна и стекается
+  const blockers = world.sightBlockers.concat(world.pits);
+  const open = new Uint8Array(n);
+  const dist = new Int32Array(n).fill(0x3fffffff);
+  const buckets = [];
+  const push = (k, d) => { (buckets[d] || (buckets[d] = [])).push(k); };
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      const x = (i + 0.5) * S, y = (j + 0.5) * S, k = j * cols + i;
+      open[k] = blockers.some((r) => circleRectOverlap(x, y, C, r)) ? 0 : 1;
+      // источник — клетки под базой и вплотную к ней
+      if (open[k] && x > goal.x - S && x < goal.x + goal.w + S && y > goal.y - S && y < goal.y + goal.h + S) {
+        dist[k] = 0; push(k, 0);
+      }
+    }
+  }
+  const passable = (i, j) => i >= 0 && j >= 0 && i < cols && j < rows && open[j * cols + i] === 1;
+  for (let d = 0; d < buckets.length; d++) {
+    for (const k of buckets[d] || []) {
+      if (dist[k] !== d) continue;
+      const i = k % cols, j = (k - i) / cols;
+      for (const [di, dj, cost] of FLOW_STEPS) {
+        const ni = i + di, nj = j + dj;
+        if (!passable(ni, nj)) continue;
+        if (di && dj && !(passable(ni, j) && passable(i, nj))) continue;
+        const nk = nj * cols + ni, nd = d + cost;
+        if (nd < dist[nk]) { dist[nk] = nd; push(nk, nd); }
+      }
+    }
+  }
+  flow = { S, cols, rows, open, dist };
+}
+
+// куда шагать из точки (x, y), чтобы приблизиться к базе: единичный вектор к центру соседней клетки,
+// которая ближе к базе; null — поля нет или ближе уже некуда (стоим у самой базы)
+function flowDir(x, y) {
+  if (!flow) return null;
+  const { S, cols, rows, open, dist } = flow;
+  const i = clamp(Math.floor(x / S), 0, cols - 1), j = clamp(Math.floor(y / S), 0, rows - 1);
+  let best = dist[j * cols + i], bi = -1, bj = -1;
+  for (const [di, dj] of FLOW_STEPS) {
+    const ni = i + di, nj = j + dj;
+    if (ni < 0 || nj < 0 || ni >= cols || nj >= rows) continue;
+    if (di && dj && !(open[j * cols + ni] && open[nj * cols + i])) continue;
+    const d = dist[nj * cols + ni];
+    if (d < best) { best = d; bi = ni; bj = nj; }
+  }
+  if (bi < 0) return null;
+  const dx = (bi + 0.5) * S - x, dy = (bj + 0.5) * S - y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: dx / len, y: dy / len };
+}
+
+// точка во дворе базы (с отступом inset внутрь; отрицательный — двор чуть шире)
+function inHome(x, y, inset = 0) {
+  const h = world.home;
+  return !!h && x > h.x + inset && x < h.x + h.w - inset && y > h.y + inset && y < h.y + h.h - inset;
+}
+
 function buildWorld(level) {
   world.walls = []; world.pillars = []; world.pits = []; world.spikes = [];
   world.floors = []; world.warnings = [];
   world.doors = []; world.buttons = []; world.cannons = []; world.finish = null; world.bridges = [];
+  world.base = null; world.home = null; world.nests = []; world.solids = [];
   roomPx = level.rooms.map((p) => p.units === 'px');
   if (level.geometry.kind === 'field') buildField(level);
   else if (level.geometry.kind === 'arena') buildArena(level);
+  else if (level.geometry.kind === 'rect') buildRect(level);
   else buildLine(level);
   rebuildBlockers();
+  flow = null;
+  if (world.base) buildFlow(world.base);
 }
 
 function hasLineOfSight(a, b) {
@@ -396,13 +502,15 @@ function freeSpotNear(x, y, minR, maxR, r) {
 
 // центр свободного квадрата со стороной size в кольце minR..maxR вокруг (x, y) — куда встаёт подиум:
 // целиком внутри мира, не задевает стены, колонны, пропасти и шипы, не ближе 20 к кругам avoid
-// ([{ x, y, r }]); null, если за несколько попыток места не нашлось
-function freeSquareNear(x, y, minR, maxR, size, avoid) {
+// ([{ x, y, r }]); accept(cx, cy) — необязательное правило уровня, где можно (двор базы или вне его);
+// null, если за несколько попыток места не нашлось
+function freeSquareNear(x, y, minR, maxR, size, avoid, accept) {
   const half = size / 2;
-  for (let tries = 0; tries < 30; tries++) {
+  for (let tries = 0; tries < 40; tries++) {
     const a = Math.random() * Math.PI * 2;
     const d = minR + Math.random() * (maxR - minR);
     const cx = x + Math.cos(a) * d, cy = y + Math.sin(a) * d;
+    if (accept && !accept(cx, cy)) continue;
     const sq = { x: cx - half, y: cy - half, w: size, h: size };
     if (sq.x < 0 || sq.y < 0 || sq.x + size > world.width || sq.y + size > world.height) continue;
     const hits = (rect) => sq.x < rect.x + rect.w && sq.x + size > rect.x && sq.y < rect.y + rect.h && sq.y + size > rect.y;
@@ -416,5 +524,6 @@ function freeSquareNear(x, y, minR, maxR, size, avoid) {
 G.world = {
   world, roomCount, roomIndexAt, roomInterior, localToWorld, buildWorld, hasLineOfSight,
   spikeRectAt, standsOnSpikes, buttonUnder, freeSpotInRoom, scatterSpot, freeSpotNear, freeSquareNear, setDoorsOpen,
+  flowDir, inHome,
 };
 })(window.Game = window.Game || {});

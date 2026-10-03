@@ -7,7 +7,7 @@
 const { CONFIG, COLORS, state } = G;
 const { pickWeighted } = G.math;
 const { circleRectOverlap } = G.collision;
-const { freeSquareNear } = G.world;
+const { freeSquareNear, inHome, world } = G.world;
 const { leader, makeAlly } = G.session;
 
 const rand = ([a, b]) => a + Math.random() * (b - a);
@@ -28,6 +28,12 @@ function occupied() {
   return state.pads.concat(state.padMarks).map((p) => ({ x: p.x + p.w / 2, y: p.y + p.h / 2, r: p.w * 0.75 }))
     .concat(state.neutrals.map((n) => ({ x: n.x, y: n.y, r: n.r + 10 })))
     .concat(state.enemies.filter((e) => e.r >= 40).map((e) => ({ x: e.x, y: e.y, r: e.r })));
+}
+
+// уровень «Оборона»: стартовые подиумы и дружочки — во дворе базы, все следующие — только за его стенами
+function placeRule(atStart) {
+  if (!world.home) return undefined;
+  return atStart ? (x, y) => inHome(x, y, 50) : (x, y) => !inHome(x, y, -50);
 }
 
 // общий таймер появлений: после сброса партии (timer === null) сразу выкладывает startCount штук,
@@ -84,7 +90,7 @@ function spawnPad(cfg, kind, atStart) {
   const ability = pickWeighted(fresh.length ? fresh : all, group.weights);
 
   const lead = leader();
-  const spot = freeSquareNear(lead.x, lead.y, cfg.ringMin, cfg.ringMax, size, occupied());
+  const spot = freeSquareNear(lead.x, lead.y, cfg.ringMin, cfg.ringMax, size, occupied(), placeRule(atStart));
   if (!spot) return false;
 
   const mark = { x: spot.x - size / 2, y: spot.y - size / 2, w: size, h: size, ability,
@@ -123,9 +129,9 @@ function updatePads(dt) {
 }
 
 // новый нейтральный дружочек около Героя; false, если места не нашлось
-function spawnAlly(cfg) {
+function spawnAlly(cfg, atStart) {
   const lead = leader();
-  const spot = freeSquareNear(lead.x, lead.y, cfg.ringMin, cfg.ringMax, 40, occupied());
+  const spot = freeSquareNear(lead.x, lead.y, cfg.ringMin, cfg.ringMax, 40, occupied(), placeRule(atStart));
   if (!spot) return false;
   const u = makeAlly('neutral', 'buddy', spot.x, spot.y);
   u.life = u.maxLife = rand(cfg.lifetime);

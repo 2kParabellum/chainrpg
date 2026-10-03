@@ -64,5 +64,11 @@ function rollLevelAllies(level) {
   return out;
 }
 
-G.populate = { rollEnemies, rollLevelAllies };
+// состав одной волны уровня «Оборона»: count врагов не больше waves.kinds разных типов из пула уровня
+// (с весами уровня), каждый выбранный тип — хотя бы раз. Возвращает список типов
+function rollWave(count, level) {
+  return rollEnemySpec({ count, kinds: level.waves.kinds }, level).map(([type]) => type);
+}
+
+G.populate = { rollEnemies, rollLevelAllies, rollWave };
 })(window.Game = window.Game || {});

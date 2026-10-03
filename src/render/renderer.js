@@ -262,6 +262,76 @@ function drawTerrain() {
   drawRects(world.pillars, COLORS.pillar);
 }
 
+// база уровня «Оборона»: здание с толстой рамкой и знаком-короной, над ним длинная полоска HP;
+// при попадании здание вспыхивает красным
+function drawBase() {
+  const b = world.base, s = state.base;
+  if (!b || !s || !visible(b)) return;
+  const hit = s.regenTimer < 0.15;
+  ctx.fillStyle = hit ? COLORS.baseHit : COLORS.base;
+  ctx.fillRect(b.x, b.y, b.w, b.h);
+  ctx.strokeStyle = COLORS.baseEdge;
+  ctx.lineWidth = 4;
+  ctx.strokeRect(b.x + 2, b.y + 2, b.w - 4, b.h - 4);
+  ctx.lineWidth = 2;
+  ctx.strokeRect(b.x + 16, b.y + 16, b.w - 32, b.h - 32);
+  // корона в центре
+  const cx = b.x + b.w / 2, cy = b.y + b.h / 2, k = Math.min(b.w, b.h) * 0.22;
+  ctx.fillStyle = COLORS.baseEdge;
+  ctx.beginPath();
+  ctx.moveTo(cx - k, cy + k * 0.6);
+  ctx.lineTo(cx - k, cy - k * 0.5);
+  ctx.lineTo(cx - k * 0.5, cy);
+  ctx.lineTo(cx, cy - k * 0.8);
+  ctx.lineTo(cx + k * 0.5, cy);
+  ctx.lineTo(cx + k, cy - k * 0.5);
+  ctx.lineTo(cx + k, cy + k * 0.6);
+  ctx.closePath();
+  ctx.fill();
+  // полоска HP во всю ширину здания
+  const w = b.w, h = 8, x = b.x, y = b.y - 16;
+  ctx.fillStyle = COLORS.hpBack;
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = COLORS.hpAlly;
+  ctx.fillRect(x, y, w * clamp(s.hp / s.maxHp, 0, 1), h);
+}
+
+// гнёзда врагов: тёмный круг с вращающимся пунктиром; перед волной разгорается красным,
+// рядом — сколько врагов выйдет в следующей волне
+function drawNests() {
+  const cfg = state.level.waves;
+  if (!cfg) return;
+  for (const n of state.nests) {
+    if (!onScreen({ x: n.x, y: n.y, r: 60 })) continue;
+    const soon = clamp(1 - n.nextIn / cfg.telegraph, 0, 1);
+    const r = 42;
+    ctx.fillStyle = '#1c0e12';
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = COLORS.nest;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.5 + 0.5 * soon;
+    ctx.setLineDash([8, 7]);
+    ctx.lineDashOffset = -state.time * (20 + 80 * soon);
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
+    ctx.globalAlpha = 0.25 + 0.6 * soon;
+    ctx.fillStyle = COLORS.nest;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r * (0.25 + 0.45 * soon), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = COLORS.nest;
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`×${G.waves.waveSize(cfg, n.wave)}  ${Math.max(0, Math.ceil(n.nextIn))}с`, n.x, n.y + r + 16);
+  }
+}
+
 // яркость временного объекта с остатком жизни life (из maxLife): вырастает при появлении,
 // перед исчезновением мигает всё чаще и гаснет
 function fadeAlpha(life, maxLife, warnTime) {
@@ -612,6 +682,8 @@ function drawScene() {
   ctx.translate(-state.camera.x, -state.camera.y);
 
   drawTerrain();
+  drawNests();
+  drawBase();
   drawFinish();
   drawDoors();
   drawButtons();
