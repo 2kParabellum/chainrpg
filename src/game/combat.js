@@ -26,9 +26,9 @@ function damageUnit(u, dmg) {
   u.hp -= dmg;
   u.regenTimer = 0;
   if (u.hp <= 0) {
+    // усиление «воля»: смертельный урон не убивает союзника (в цепочке или выбитого), он остаётся с 1 HP
+    if ((u.kind === 'ally' || u.kind === 'downed') && Object.keys(u.buffs).some((k) => u.buffs[k] > 0 && G.buffs[k].revive)) { u.hp = 1; return; }
     if (u.kind === 'ally') {
-      // усиление «воля»: смертельный урон не убивает, звено остаётся с 1 HP
-      if (u.buffs && Object.keys(u.buffs).some((k) => u.buffs[k] > 0 && G.buffs[k].revive)) { u.hp = 1; return; }
       // гибель Героя — конец партии; его тело остаётся в цепочке, чтобы сцена и камера не остались без ведущего
       if (allyTypes[u.type].anchor) { state.status = 'dead'; return; }
       removeFrom(state.party, u);
@@ -38,6 +38,7 @@ function damageUnit(u, dmg) {
       const flash = enemyTypes[u.type].deathFlash;
       if (flash) state.effects.push({ type: 'blast', x: u.x, y: u.y, r: flash, life: 0.35 });
     }
+    else if (u.kind === 'downed') removeFrom(state.downed, u);
     else if (u.kind === 'neutral') removeFrom(state.neutrals, u);
   }
 }
@@ -123,6 +124,8 @@ function explodeBigMortar(p) {
 
 function updateProjectiles(dt) {
   const chain = chainUnits();
+  // вражеские выстрелы бьют и цепочку, и выбитых союзников: те дерутся и их добивают
+  const allies = chain.concat(state.downed);
   for (let i = state.projectiles.length - 1; i >= 0; i--) {
     const p = state.projectiles[i];
 
@@ -156,7 +159,7 @@ function updateProjectiles(dt) {
         damageUnit(t, p.dmg);
       }
     } else if (!dead) {
-      const targets = p.team === 'ally' ? state.enemies : chain;
+      const targets = p.team === 'ally' ? state.enemies : allies;
       for (const t of targets) {
         if (dist(p, t) >= p.r + t.r) continue;
         // щит босса гасит выстрелы, пока активен; усиление «сила» пробивает его насквозь

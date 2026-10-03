@@ -8,7 +8,7 @@ const { clamp, dist, removeFrom } = G.math;
 const { moveAndCollide, slideAlongWall } = G.collision;
 const { world, buttonUnder } = G.world;
 const { padUnder, markPadUsed } = G.pads;
-const { leader, maxParty, setAbility } = G.session;
+const { leader, maxParty, setAbility, recalcStats } = G.session;
 const { allyTypes } = G;
 
 // --- след ---
@@ -77,34 +77,29 @@ function followChain(a, dt, i) {
   if (normal) slideAlongWall(a, normal, 1);
 }
 
-// снять усиление key: множители сбрасываются, HP возвращается к обычному пределу.
-// sturdy, contactDmg и revive работают, только пока таймер u.buffs[key] > 0, и снятия не требуют
+// снять усиление key. sturdy, contactDmg и revive работают, только пока таймер u.buffs[key] > 0
 function endBuff(u, key) {
-  const def = G.buffs[key];
   u.buffs[key] = 0;
-  if (def.dmg || def.hp) { u.dmgMul = 1; u.maxHp = u.baseMaxHp; u.hp = Math.min(u.hp, u.maxHp); }
-  if (def.move || def.rate) { u.moveMul = 1; u.rateMul = 1; }
+  removeFrom(u.buffOrder, key);
+  recalcStats(u);
 }
 
-// временное усиление; у звена не больше одного: новое перезаписывает старое.
-// Повторный подиум того же усиления обновляет таймер, но не умножает HP второй раз
+// временное усиление; у звена не больше CONFIG.BUFFS.maxActive разом: лишнее снимается самое давнее
+// по времени взятия. Повторное взятие того же обновляет таймер и делает его самым свежим
 function giveBuff(u, key) {
   const def = G.buffs[key];
-  if (!u.buffs) u.buffs = {};
-  for (const other of Object.keys(u.buffs)) if (other !== key && u.buffs[other] > 0) endBuff(u, other);
   const fresh = !(u.buffs[key] > 0);
   u.buffs[key] = def.duration;
-  if (fresh) {
-    if (def.dmg || def.hp) { u.dmgMul = def.dmg || 1; u.baseMaxHp = u.maxHp; u.maxHp *= def.hp || 1; u.hp *= def.hp || 1; }
-    if (def.move || def.rate) { u.moveMul = def.move || 1; u.rateMul = def.rate || 1; }
-    state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 8, life: 0.4, color: def.color });
-  }
+  removeFrom(u.buffOrder, key);
+  u.buffOrder.push(key);
+  while (u.buffOrder.length > CONFIG.BUFFS.maxActive) endBuff(u, u.buffOrder[0]);
+  recalcStats(u);
+  if (fresh) state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 8, life: 0.4, color: def.color });
 }
 
-// таймеры усилений; регенерация тикает каждый кадр, пока активна
+// таймеры усилений (и у цепочки, и у выбитых); регенерация тикает каждый кадр, пока активна
 function updateBuffs(dt) {
-  for (const u of state.party) {
-    if (!u.buffs) continue;
+  for (const u of state.party.concat(state.downed)) {
     for (const key of Object.keys(u.buffs)) {
       if (!(u.buffs[key] > 0)) continue;
       const def = G.buffs[key];
@@ -121,17 +116,27 @@ function isSturdy(u) {
 }
 
 // автоподбор: каждое звено (и Герой), которое касается подиума, сразу получает его способность вместо
-// текущей или его усиление. Подиум одноразовый: касание запускает (и продлевает) его таймер исчезновения,
+// текущей (та же способность — следующий уровень) или его усиление. Подиум одноразовый: касание запускает (и продлевает) его таймер исчезновения,
 // так что вся цепочка успевает проехать по нему, а после хвоста он пропадает
 function touchPads() {
   for (const u of state.party) {
     const pad = padUnder(u);
     if (!pad) continue;
     markPadUsed(pad);
+    // каждое звено берёт с одного подиума один раз, хотя касается его много кадров подряд
+    if (pad.takenBy.includes(u)) continue;
+    pad.takenBy.push(u);
     if (G.buffs[pad.ability]) { giveBuff(u, pad.ability); continue; }
-    if (u.ability === pad.ability) continue;
-    setAbility(u, pad.ability);
-    state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 8, life: 0.4, color: G.abilities[pad.ability].color });
+    const def = G.abilities[pad.ability];
+    // та же профессия ещё раз подряд — прокачка уровня; другая — новая профессия с первого уровня
+    if (u.ability === pad.ability) {
+      if (u.abilityLevel >= (def.levels || [{}]).length) continue;
+      setAbility(u, pad.ability, u.abilityLevel + 1);
+      state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 14, life: 0.6, color: def.color });
+    } else {
+      setAbility(u, pad.ability);
+    }
+    state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 8, life: 0.4, color: def.color });
   }
 }
 

@@ -19,11 +19,6 @@ const ROOM_PLAN = {
   spikes: [[0.30, 0.70, 0.05, 0.05], [0.70, 0.70, 0.05, 0.05]],
   // единственный враг арены — босс, ставится записью реестра, а не случайным пулом
   enemies: { spots: [[0.5, 0.10]], kinds: 1, pool: ['boss'] },
-  // десяток дружочков по кругу ближе к стене арены
-  allies: { spots: [
-    [0.92, 0.56], [0.80, 0.79], [0.57, 0.91], [0.32, 0.88], [0.13, 0.70],
-    [0.08, 0.44], [0.20, 0.21], [0.43, 0.09], [0.68, 0.12], [0.87, 0.30],
-  ] },
 };
 
 G.level3 = {
@@ -36,7 +31,7 @@ G.level3 = {
   // победа: демон уничтожен
   victory: { kind: 'destroyType', type: 'boss', label: 'БОСС' },
   // подиумы появляются случайно; «сила» — единственная пробивает щит босса выстрелами, поэтому здесь она чаще
-  padSpawn: { weights: { shooter: 3, medic: 2, speed: 1, power: 3, regen: 1, sturdy: 1, spiky: 1, will: 1 } },
+  padSpawn: { weights: { shooter: 3, medic: 2, spear: 2, speed: 1, power: 3, regen: 1, sturdy: 1, spiky: 1, will: 1 } },
   rooms: [ROOM_PLAN],
 };
 })(window.Game = window.Game || {});

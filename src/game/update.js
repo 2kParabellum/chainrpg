@@ -10,7 +10,7 @@ const { world, setDoorsOpen } = G.world;
 const { leader, currentRoom, chainUnits, isSpotted, spawnEnemy } = G.session;
 const { freeSpotNear } = G.world;
 const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly } = G.chain;
-const { updatePads } = G.pads;
+const { updatePads, updateAllySpawns } = G.pads;
 const combat = G.combat;
 const { updateProjectiles, updateClouds, applySpikes, applyFirewalls, updateEffects, updateCannons } = combat;
 const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
@@ -95,11 +95,16 @@ function applySpikyContact(a, dt) {
   }
 }
 
-// звено цепочки: Герой идёт сам, остальные бегут за ним; работает оружие текущей способности звена
+// оружие союзника (в цепочке или выбитого): работает оружие текущей способности, шипастость бьёт касанием
+function updateWeapons(a, dt) {
+  for (const w of a.gear) weapons[w.type].update(a, w, dt * (a.rateMul || 1), game);
+  if (a.buffs.spiky > 0) applySpikyContact(a, dt);
+}
+
+// звено цепочки: Герой идёт сам, остальные бегут за ним
 function updateAlly(a, dt, i) {
   if (i > 0) followChain(a, dt, i);
-  for (const w of a.gear) weapons[w.type].update(a, w, dt * (a.rateMul || 1), game);
-  if (a.buffs && a.buffs.spiky > 0) applySpikyContact(a, dt);
+  updateWeapons(a, dt);
 }
 
 // общая часть любого врага: регенерация и активация, дальше — поведение по типу
@@ -117,7 +122,9 @@ function updateEnemy(e, dt) {
 
   // порталы и порождённые ими охотники действуют на любом расстоянии, остальные спят вдали от игрока
   if (!type.alwaysActive && !e.hunter && dist(e, leader()) > CONFIG.ACTIVATION_DIST) return;
-  type.update(e, dt, chainUnits(), game);
+  // враги целятся в ближайшего союзника — и в цепочке, и выбитого (его добивают);
+  // первым в списке всегда Герой (на него, например, смотрит босс)
+  type.update(e, dt, chainUnits().concat(state.downed), game);
 }
 
 // кнопки открывают связанные двери, пока на них лежит брошенный (X) или выбитый союзник —
@@ -172,7 +179,10 @@ function update(dt) {
   touchPads();
   updateBuffs(dt);
   updatePads(dt);
+  updateAllySpawns(dt);
   for (const d of state.downed) updateDowned(d, dt);
+  // выбитые союзники не выходят из боя: стреляют, рубят и лечат лёжа
+  for (const d of state.downed.slice()) updateWeapons(d, dt);
   updateDoors();
   for (const e of state.enemies.slice()) updateEnemy(e, dt);
   updateCannons(dt);

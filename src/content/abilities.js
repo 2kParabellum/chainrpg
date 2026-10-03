@@ -8,6 +8,8 @@
 //   weapons — { имя оружия: {переопределения его характеристик} }, как у base в allies.js
 //   mark    — (u, f, ctx): знак на теле; f — направление взгляда
 //   icon    — (ctx, x, y, size): значок в центре подиума
+//   levels  — прокачка: тот же подиум профессии, взятый ещё раз подряд, поднимает уровень (до levels.length).
+//             levels[n-1] — переопределения для уровня n: weapons — { оружие: {характеристики} }, hp — множитель HP
 (function (G) {
 'use strict';
 
@@ -18,6 +20,8 @@ const shooter = {
   name: 'стрелок',
   color: COLORS.shooter,
   weapons: { bow: {} },
+  // прокачка: дальность и скорость стрельбы
+  levels: [{}, { weapons: { bow: { range: 370, cooldown: 0.8 } } }, { weapons: { bow: { range: 440, cooldown: 0.64 } } }],
   mark(u, f, ctx) {
     ctx.beginPath();
     ctx.arc(u.x, u.y, u.r * 0.95, f - 1.0, f + 1.0);
@@ -41,6 +45,9 @@ const medic = {
   name: 'медик',
   color: COLORS.medic,
   weapons: { heal: {} },
+  // прокачка: сила лечения, дальность и частота
+  levels: [{}, { weapons: { heal: { heal: 14.4, range: 260 } } },
+           { weapons: { heal: { heal: 19.2, range: 300, cooldown: 1.6 } } }],
   mark(u, f, ctx) {
     ctx.beginPath();
     ctx.moveTo(u.x - u.r * 0.55, u.y); ctx.lineTo(u.x + u.r * 0.55, u.y);
@@ -55,9 +62,34 @@ const medic = {
   },
 };
 
+// Копейщик: сильный ближний удар, но достаёт только вплотную (примерно на размер своего тела)
+const spear = {
+  name: 'копейщик',
+  color: COLORS.spear,
+  weapons: { spear: {} },
+  // прокачка: HP и урон
+  levels: [{}, { hp: 1.3, weapons: { spear: { dmg: 44 } } }, { hp: 1.6, weapons: { spear: { dmg: 56 } } }],
+  mark(u, f, ctx) {
+    ctx.beginPath();
+    ctx.moveTo(u.x - Math.cos(f) * u.r * 0.6, u.y - Math.sin(f) * u.r * 0.6);
+    ctx.lineTo(u.x + Math.cos(f) * u.r * 0.9, u.y + Math.sin(f) * u.r * 0.9);
+    ctx.stroke();
+  },
+  icon(ctx, x, y, s) {
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.55, y + s * 0.55);
+    ctx.lineTo(x + s * 0.35, y - s * 0.35);
+    ctx.moveTo(x + s * 0.6, y - s * 0.6);
+    ctx.lineTo(x + s * 0.15, y - s * 0.45);
+    ctx.lineTo(x + s * 0.45, y - s * 0.15);
+    ctx.closePath();
+    ctx.stroke();
+  },
+};
+
 // Временные усиления: у звена, коснувшегося подиума, на `duration` секунд
 // включается эффект. Ключ записи — тип подиума. Не заменяют способность; у звена не больше
-// одного усиления разом — новое перезаписывает старое (см. giveBuff в game/chain.js).
+// CONFIG.BUFFS.maxActive усилений разом — лишнее снимает самое давнее (см. giveBuff в game/chain.js).
 //   move  — множитель скорости и разворота Героя; rate — множитель скорости атаки (перезарядка идёт быстрее);
 //   dmg   — множитель урона; hp — множитель текущего и максимального HP (на время действия)
 //   regenRate  — сколько HP в секунду восстанавливает себе звено, пока действует
@@ -169,6 +201,6 @@ const will = {
   },
 };
 
-G.abilities = { shooter, medic };
+G.abilities = { shooter, medic, spear };
 G.buffs = { speed, power, regen, sturdy, spiky, will };
 })(window.Game = window.Game || {});

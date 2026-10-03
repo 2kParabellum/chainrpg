@@ -27,7 +27,8 @@ const state = {
   status: 'play',    // menu | play | dead | win
   time: 0,           // время партии: для анимаций
   pads: [],          // подиумы на карте: появляются и исчезают по ходу партии (см. game/pads.js)
-  padSpawnIn: null,  // секунд до следующего подиума; null — партия только началась, стартовые ещё не выложены
+  padSpawnIn: null,
+  allySpawnIn: null, // то же для случайных дружочков  // секунд до следующего подиума; null — партия только началась, стартовые ещё не выложены
   targetableEnemies: [], // враги, по которым можно стрелять: считаются раз за кадр
 };
 
@@ -46,10 +47,33 @@ function makeWeapon(name, over) {
   return w;
 }
 
-// оружие юнита плоским списком: личные копии оружия способности key или, если её нет, базового
-function makeGear(u, key) {
+// переопределения уровня level (1..) способности key; у первого уровня их нет
+function abilityLevelSpec(key, level) {
+  const levels = (key && abilities[key].levels) || [];
+  return levels[level - 1] || {};
+}
+
+// оружие юнита плоским списком: личные копии оружия способности key (с прокачкой уровня level) или базового
+function makeGear(u, key, level = 1) {
   const spec = key ? abilities[key] : allyTypes[u.type].base;
-  return Object.entries((spec && spec.weapons) || {}).map(([name, over]) => makeWeapon(name, over));
+  const up = key ? abilityLevelSpec(key, level).weapons || {} : {};
+  return Object.entries((spec && spec.weapons) || {}).map(([name, over]) => makeWeapon(name, { ...over, ...up[name] }));
+}
+
+// пересчитать производные характеристики звена: множители активных усилений и прибавку HP от уровня
+// способности. Рост предела HP прибавляет столько же текущего HP, падение — только обрезает текущее
+function recalcStats(u) {
+  let dmg = 1, hp = 1, move = 1, rate = 1;
+  for (const [key, left] of Object.entries(u.buffs)) {
+    if (!(left > 0)) continue;
+    const d = G.buffs[key];
+    dmg *= d.dmg || 1; hp *= d.hp || 1; move *= d.move || 1; rate *= d.rate || 1;
+  }
+  if (u.ability) hp *= abilityLevelSpec(u.ability, u.abilityLevel).hp || 1;
+  u.dmgMul = dmg; u.moveMul = move; u.rateMul = rate;
+  const max = Math.round(u.cfg.hp * hp);
+  if (max > u.maxHp) u.hp += max - u.maxHp; else u.hp = Math.min(u.hp, max);
+  u.maxHp = max;
 }
 
 // союзник (в цепи, нейтрал или лежачий): тело + базовое оружие без способности
@@ -57,15 +81,20 @@ function makeAlly(kind, type, x, y) {
   const t = allyTypes[type];
   const u = makeUnit(kind, type, x, y, t.stats);
   u.ability = null;              // ключ способности от подиума; null — базовое оружие
+  u.abilityLevel = 0;            // уровень прокачки способности (1..), 0 — способности нет
+  u.buffs = {};                  // усиление -> сколько секунд осталось
+  u.buffOrder = [];              // активные усиления в порядке взятия: первым снимается самое давнее
   u.prevTarget = null;           // прошлая точка следа: по ней плётка считает скорость точки
   u.gear = makeGear(u, null);
   return u;
 }
 
-// сменить способность звена: оружие пересобирается новыми личными копиями; null — снова базовое
-function setAbility(u, key) {
+// сменить способность звена (или её уровень): оружие пересобирается новыми личными копиями; null — снова базовое
+function setAbility(u, key, level = 1) {
   u.ability = key;
-  u.gear = makeGear(u, key);
+  u.abilityLevel = key ? level : 0;
+  u.gear = makeGear(u, key, level);
+  recalcStats(u);
 }
 
 function makeEnemy(type, x, y, room) {
@@ -91,7 +120,7 @@ function resetGame(level) {
   state.party = []; state.moveInput = { throttle: 0, turn: 0 }; state.neutrals = []; state.downed = []; state.enemies = [];
   state.projectiles = []; state.effects = []; state.trail = [];
   state.clouds = []; state.firewalls = [];
-  state.pads = []; state.padSpawnIn = null;
+  state.pads = []; state.padSpawnIn = null; state.allySpawnIn = null;
   state.cannons = world.cannons.map((c) => ({ cd: c.interval * Math.random(), telegraph: 0 }));
   state.status = 'play';
   state.time = 0;
@@ -169,5 +198,5 @@ function maxParty() { return state.level.maxParty || CONFIG.CHAIN.maxParty; }
 function currentRoom() { return roomIndexAt(leader().x, leader().y); }
 
 G.state = state;
-G.session = { makeUnit, makeAlly, setAbility, spawnEnemy, resetGame, leader, chainUnits, isSpotted, currentRoom, maxParty };
+G.session = { makeUnit, makeAlly, setAbility, recalcStats, spawnEnemy, resetGame, leader, chainUnits, isSpotted, currentRoom, maxParty };
 })(window.Game = window.Game || {});

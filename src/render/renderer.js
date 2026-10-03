@@ -262,9 +262,24 @@ function drawTerrain() {
   drawRects(world.pillars, COLORS.pillar);
 }
 
+// яркость временного объекта с остатком жизни life (из maxLife): вырастает при появлении,
+// перед исчезновением мигает всё чаще и гаснет
+function fadeAlpha(life, maxLife, warnTime) {
+  let a = clamp((maxLife - life) / 0.3, 0, 1) * clamp(life / 0.3, 0, 1);
+  if (life <= warnTime) {
+    const t = warnTime - life;
+    if (Math.sin(t * (6 + t * 5)) < 0) a *= 0.3;
+  }
+  return a;
+}
+
+// ждущие вербовки дружочки появляются и уходят так же, как подиумы: перед уходом — часы и мигание
 function drawNeutrals() {
+  const warnTime = G.pads.allySettings().warnTime;
   for (const n of state.neutrals) {
     if (!onScreen(n)) continue;
+    const timed = n.life !== undefined;
+    if (timed) ctx.globalAlpha = fadeAlpha(n.life, n.maxLife, warnTime);
     ctx.setLineDash([4, 4]);
     drawUnitBody(n, COLORS.neutral, false);
     ctx.setLineDash([]);
@@ -273,6 +288,25 @@ function drawNeutrals() {
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(n.cfg.name, n.x, n.y + n.r + 14);
+    ctx.globalAlpha = 1;
+    if (timed && n.life <= warnTime) drawHourglass(n.x + n.r + 6, n.y - n.r - 6, 6);
+  }
+}
+
+// подпись способности с уровнем прокачки: «(стрелок 2)»
+function abilityLabel(u) {
+  if (!u.ability) return '';
+  return ` (${abilities[u.ability].name}${u.abilityLevel > 1 ? ' ' + u.abilityLevel : ''})`;
+}
+
+// уровень прокачки — точки над полоской HP (со второго уровня)
+function drawLevelPips(u) {
+  if (!(u.abilityLevel > 1)) return;
+  ctx.fillStyle = abilities[u.ability].color;
+  for (let k = 0; k < u.abilityLevel; k++) {
+    ctx.beginPath();
+    ctx.arc(u.x + (k - (u.abilityLevel - 1) / 2) * 6, u.y - u.r - 14, 2, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
@@ -297,7 +331,8 @@ function drawDowned() {
     ctx.fillStyle = color;
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(d.cfg.name + (d.ability ? ` (${abilities[d.ability].name})` : ''), d.x, d.y + d.r + 14);
+    ctx.fillText(d.cfg.name + abilityLabel(d), d.x, d.y + d.r + 14);
+    drawLevelPips(d);
   }
 }
 
@@ -341,15 +376,11 @@ function drawHourglass(x, y, s) {
 
 // яркость подиума: вырастает при появлении, перед исчезновением мигает всё чаще и гаснет
 function padAlpha(pad, warnTime) {
-  const age = pad.maxLife - pad.life;
-  let a = clamp(age / 0.3, 0, 1) * clamp(pad.life / 0.3, 0, 1);
   // взятый подиум тускнеет и гаснет, как только по нему проехал хвост
-  if (pad.usedLeft !== undefined) return a * (0.25 + 0.75 * clamp(pad.usedLeft / 0.5, 0, 1));
-  if (pad.life <= warnTime) {
-    const t = warnTime - pad.life;
-    if (Math.sin(t * (6 + t * 5)) < 0) a *= 0.3;
+  if (pad.usedLeft !== undefined) {
+    return clamp((pad.maxLife - pad.life) / 0.3, 0, 1) * (0.25 + 0.75 * clamp(pad.usedLeft / 0.5, 0, 1));
   }
-  return a;
+  return fadeAlpha(pad.life, pad.maxLife, warnTime);
 }
 
 // подиумы: светящийся квадрат на полу. Подиумы усилений окружены ещё и широким мягким свечением
@@ -477,6 +508,7 @@ function drawChain() {
     if (a.ability) drawMark(a, abilities[a.ability].mark);
     drawBuffRings(a);
     drawHpBar(a);
+    drawLevelPips(a);
   }
   // шеврон перед Героем: куда он поедет по W
   const lead = state.party[0], h = lead.heading || 0;

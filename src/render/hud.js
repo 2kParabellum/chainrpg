@@ -33,7 +33,7 @@ function drawHud() {
   for (const a of state.party) {
     ctx.fillStyle = allyColor(a);
     const bf = Object.entries(a.buffs || {}).filter(([, t]) => t > 0).map(([k, t]) => ` ${G.buffs[k].name} ${Math.ceil(t)}с`).join('');
-    const label = a.cfg.name + (a.ability ? ` (${abilities[a.ability].name})` : '') + bf;
+    const label = a.cfg.name + (a.ability ? ` (${abilities[a.ability].name}${a.abilityLevel > 1 ? ' ' + a.abilityLevel : ''})` : '') + bf;
     ctx.fillText(`${label.padEnd(34, ' ')} ${Math.max(0, Math.ceil(a.hp))}/${a.maxHp}`, 12, y);
     y += 16;
   }

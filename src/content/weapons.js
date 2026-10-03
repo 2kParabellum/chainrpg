@@ -62,6 +62,12 @@ const fist = {
   update: meleeUpdate,
 };
 
+// копьё: ближний удар на дистанции примерно своего тела, но сильный
+const spear = {
+  stats: { reach: 14, dmg: 32, cooldown: 1.1, color: COLORS.spear },
+  update: meleeUpdate,
+};
+
 const bow = {
   stats: { range: 300, dmg: 11.5, cooldown: 1.0, projSpeed: 560, projRadius: 4 },
   update: shootUpdate(arrow),
@@ -73,7 +79,8 @@ const heal = {
   update(u, w, dt, game) {
     if (!ready(w, dt)) return;
     let worst = null;
-    for (const m of game.chainUnits()) {
+    // лечит и цепочку, и выбитых союзников, которые лежат рядом
+    for (const m of game.chainUnits().concat(game.state.downed)) {
       if (m.hp >= m.maxHp) continue;
       if (dist(u, m) > w.range) continue;
       if (!worst || m.hp / m.maxHp < worst.hp / worst.maxHp) worst = m;
@@ -86,5 +93,5 @@ const heal = {
   },
 };
 
-G.weapons = { sword, fist, bow, heal };
+G.weapons = { sword, fist, spear, bow, heal };
 })(window.Game = window.Game || {});
