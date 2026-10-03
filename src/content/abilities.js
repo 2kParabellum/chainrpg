@@ -93,7 +93,7 @@ const spark = {
   color: COLORS.spark,
   weapons: { spark: {} },
   // прокачка: урон
-  levels: [{}, { weapons: { spark: { dps: 16 } } }, { weapons: { spark: { dps: 21 } } }],
+  levels: [{}, { weapons: { spark: { dps: 32 } } }, { weapons: { spark: { dps: 42 } } }],
   // ломаная молния вдоль взгляда
   mark(u, f, ctx) {
     const px = Math.cos(f + Math.PI / 2), py = Math.sin(f + Math.PI / 2);

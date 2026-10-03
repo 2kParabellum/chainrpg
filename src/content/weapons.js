@@ -98,7 +98,7 @@ const spear = {
 // дальше breakMul·range или погибла — молния рвётся, искра ищет новую цель и снова целится.
 // Щит босса молнию гасит, как и выстрелы, а усиление «сила» его пробивает (см. game/combat.js)
 const spark = {
-  stats: { range: 230, fullRange: 110, farMul: 0.5, breakMul: 1.25, aimTime: 0.8, dps: 12, color: COLORS.spark },
+  stats: { range: 230, fullRange: 110, farMul: 0.5, breakMul: 1.25, aimTime: 1.2, dps: 24, color: COLORS.spark },
   update(u, w, dt, game) {
     const t = w.target;
     if (t && (!game.state.enemies.includes(t) || dist(u, t) > w.range * w.breakMul)) w.target = null;
@@ -162,7 +162,7 @@ const spark = {
 };
 
 const bow = {
-  stats: { range: 300, dmg: 11.5, cooldown: 1.0, projSpeed: 560, projRadius: 4 },
+  stats: { range: 300, dmg: 8.05, cooldown: 1.0, projSpeed: 560, projRadius: 4 },
   update: shootUpdate(arrow),
 };
 
