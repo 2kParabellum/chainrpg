@@ -619,12 +619,13 @@ function drawScene() {
   drawPadMarks();
   drawPads();
   drawPadLinks();
+  // облака и стенки огня лежат на земле: под всеми телами, иначе огонь закрывает стоящих в нём врагов
+  drawClouds();
+  drawFirewalls();
   drawNeutrals();
   drawDowned();
   drawWarnings();
   drawEnemies();
-  drawClouds();
-  drawFirewalls();
   drawChain();
   drawWeapons();
   drawProjectiles();

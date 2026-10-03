@@ -35,8 +35,10 @@ function damageUnit(u, dmg) {
     }
     else if (u.kind === 'enemy') {
       removeFrom(state.enemies, u);
+      // гибель всегда видна: большая вспышка у громадин (deathFlash), у остальных — короткое кольцо
       const flash = enemyTypes[u.type].deathFlash;
       if (flash) state.effects.push({ type: 'blast', x: u.x, y: u.y, r: flash, life: 0.35 });
+      else state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 8, life: 0.35, color: COLORS.enemyShot });
     }
     else if (u.kind === 'downed') removeFrom(state.downed, u);
     else if (u.kind === 'neutral') removeFrom(state.neutrals, u);
