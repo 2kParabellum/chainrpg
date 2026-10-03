@@ -62,10 +62,26 @@ const fist = {
   update: meleeUpdate,
 };
 
-// копьё: ближний удар на дистанции примерно своего тела, но сильный
+// копьё: редкий сильный удар в две небольшие зоны по бокам от носителя — поперёк направления движения
+// (стоит на месте — поперёк взгляда). Бьёт всех обнаруженных врагов в обеих зонах; без целей не тратит перезарядку
 const spear = {
-  stats: { reach: 14, dmg: 32, cooldown: 1.1, color: COLORS.spear },
-  update: meleeUpdate,
+  stats: { dmg: 32, cooldown: 2.0, zoneDist: 30, zoneRadius: 24, color: COLORS.spear },
+  update(u, w, dt, game) {
+    if (!ready(w, dt)) return;
+    const dir = Math.hypot(u.vx, u.vy) > 5 ? Math.atan2(u.vy, u.vx) : (u.heading !== undefined ? u.heading : u.facing);
+    const zones = [1, -1].map((side) => ({
+      x: u.x + Math.cos(dir + side * Math.PI / 2) * (u.r + w.zoneDist),
+      y: u.y + Math.sin(dir + side * Math.PI / 2) * (u.r + w.zoneDist),
+    }));
+    const hit = game.state.enemies.filter((e) => game.isSpotted(e)
+      && zones.some((z) => dist(z, e) < w.zoneRadius + e.r));
+    if (!hit.length) return;
+    for (const e of hit) game.damageUnit(e, w.dmg * (u.dmgMul || 1));
+    w.cd = w.cooldown;
+    for (const z of zones) {
+      game.state.effects.push({ type: 'ring', x: z.x, y: z.y, r: w.zoneRadius, life: 0.3, color: w.color });
+    }
+  },
 };
 
 const bow = {

@@ -27,8 +27,10 @@ const state = {
   status: 'play',    // menu | play | dead | win
   time: 0,           // время партии: для анимаций
   pads: [],          // подиумы на карте: появляются и исчезают по ходу партии (см. game/pads.js)
-  padSpawnIn: null,
-  allySpawnIn: null, // то же для случайных дружочков  // секунд до следующего подиума; null — партия только началась, стартовые ещё не выложены
+  padMarks: [],      // метки-тени будущих подиумов: через несколько секунд на их месте появится подиум
+  jobSpawnIn: null,  // секунд до следующего подиума профессии; null — партия только началась
+  buffSpawnIn: null, // то же для подиумов усилений
+  allySpawnIn: null, // то же для случайных дружочков
   targetableEnemies: [], // враги, по которым можно стрелять: считаются раз за кадр
 };
 
@@ -120,7 +122,7 @@ function resetGame(level) {
   state.party = []; state.moveInput = { throttle: 0, turn: 0 }; state.neutrals = []; state.downed = []; state.enemies = [];
   state.projectiles = []; state.effects = []; state.trail = [];
   state.clouds = []; state.firewalls = [];
-  state.pads = []; state.padSpawnIn = null; state.allySpawnIn = null;
+  state.pads = []; state.padMarks = []; state.jobSpawnIn = null; state.buffSpawnIn = null; state.allySpawnIn = null;
   state.cannons = world.cannons.map((c) => ({ cd: c.interval * Math.random(), telegraph: 0 }));
   state.status = 'play';
   state.time = 0;

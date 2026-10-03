@@ -7,7 +7,7 @@ const { CONFIG, COLORS, state } = G;
 const { clamp, dist, removeFrom } = G.math;
 const { moveAndCollide, slideAlongWall } = G.collision;
 const { world, buttonUnder } = G.world;
-const { padUnder, markPadUsed } = G.pads;
+const { padUnder, markPadUsed, consumePad } = G.pads;
 const { leader, maxParty, setAbility, recalcStats } = G.session;
 const { allyTypes } = G;
 
@@ -115,28 +115,46 @@ function isSturdy(u) {
   return !!(u.buffs && Object.keys(u.buffs).some((k) => u.buffs[k] > 0 && G.buffs[k].sturdy));
 }
 
-// автоподбор: каждое звено (и Герой), которое касается подиума, сразу получает его способность вместо
-// текущей (та же способность — следующий уровень) или его усиление. Подиум одноразовый: касание запускает (и продлевает) его таймер исчезновения,
-// так что вся цепочка успевает проехать по нему, а после хвоста он пропадает
+// кому достаётся подиум профессии key: первому от головы дружочку без профессии (Герой профессий не берёт —
+// у него всегда меч); если пустых нет — звену этой профессии с самым низким уровнем, ещё не максимальным.
+// null — отдать некому, подиум остаётся лежать
+function jobTarget(key) {
+  const crew = state.party.filter((u) => !allyTypes[u.type].anchor);
+  const blank = crew.find((u) => !u.ability);
+  if (blank) return blank;
+  const max = (G.abilities[key].levels || [{}]).length;
+  let best = null;
+  for (const u of crew) {
+    if (u.ability !== key || u.abilityLevel >= max) continue;
+    if (!best || u.abilityLevel < best.abilityLevel) best = u;
+  }
+  return best;
+}
+
+// автоподбор подиумов при касании, пробел не нужен.
+// Усиление получает каждое коснувшееся звено (и Герой); подиум одноразовый: касание запускает (и продлевает)
+// таймер исчезновения, так что вся цепочка успевает проехать, а после хвоста он гаснет.
+// Профессию получает одно звено (см. jobTarget), не обязательно коснувшееся: подиум сразу исчезает
 function touchPads() {
   for (const u of state.party) {
     const pad = padUnder(u);
     if (!pad) continue;
-    markPadUsed(pad);
-    // каждое звено берёт с одного подиума один раз, хотя касается его много кадров подряд
-    if (pad.takenBy.includes(u)) continue;
-    pad.takenBy.push(u);
-    if (G.buffs[pad.ability]) { giveBuff(u, pad.ability); continue; }
-    const def = G.abilities[pad.ability];
-    // та же профессия ещё раз подряд — прокачка уровня; другая — новая профессия с первого уровня
-    if (u.ability === pad.ability) {
-      if (u.abilityLevel >= (def.levels || [{}]).length) continue;
-      setAbility(u, pad.ability, u.abilityLevel + 1);
-      state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 14, life: 0.6, color: def.color });
-    } else {
-      setAbility(u, pad.ability);
+    if (G.buffs[pad.ability]) {
+      markPadUsed(pad);
+      // каждое звено берёт с одного подиума один раз, хотя касается его много кадров подряд
+      if (pad.takenBy.includes(u)) continue;
+      pad.takenBy.push(u);
+      giveBuff(u, pad.ability);
+      continue;
     }
-    state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 8, life: 0.4, color: def.color });
+    const target = jobTarget(pad.ability);
+    if (!target) continue;
+    const def = G.abilities[pad.ability];
+    setAbility(target, pad.ability, target.ability === pad.ability ? target.abilityLevel + 1 : 1);
+    consumePad(pad);
+    // луч от подиума к получившему и вспышка вокруг него (у прокачки — шире)
+    state.effects.push({ type: 'beam', x1: pad.x + pad.w / 2, y1: pad.y + pad.h / 2, x2: target.x, y2: target.y, life: 0.35, color: def.color });
+    state.effects.push({ type: 'ring', x: target.x, y: target.y, r: target.r + (target.abilityLevel > 1 ? 14 : 8), life: 0.5, color: def.color });
   }
 }
 

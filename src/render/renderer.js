@@ -383,10 +383,30 @@ function padAlpha(pad, warnTime) {
   return fadeAlpha(pad.life, pad.maxLife, warnTime);
 }
 
+// метка будущего подиума: тень, которая сужается от широкой до размера подиума и темнеет к его появлению
+function drawPadMarks() {
+  for (const m of state.padMarks) {
+    if (!visible(m)) continue;
+    const k = 1 - clamp(m.left / m.total, 0, 1);     // 0 — только появилась, 1 — сейчас будет подиум
+    const cx = m.x + m.w / 2, cy = m.y + m.h / 2;
+    const half = (m.w / 2) * (2.2 - 1.2 * k);
+    ctx.fillStyle = '#000';
+    ctx.globalAlpha = 0.2 + 0.45 * k;
+    ctx.fillRect(cx - half, cy - half, half * 2, half * 2);
+    ctx.globalAlpha = 0.35 + 0.4 * k;
+    ctx.strokeStyle = '#8a8a95';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 5]);
+    ctx.strokeRect(m.x + 1, m.y + 1, m.w - 2, m.h - 2);
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  }
+}
+
 // подиумы: светящийся квадрат на полу. Подиумы усилений окружены ещё и широким мягким свечением
 function drawPads() {
   const { pulse } = CONFIG.PADS;
-  const warnTime = { ...CONFIG.PAD_SPAWN, ...state.level.padSpawn }.warnTime;
+  const warnTime = G.pads.settings().warnTime;
   const wave = Math.sin((state.time / pulse) * Math.PI * 2);
   const glow = 0.25 + 0.1 * wave;
   for (const pad of state.pads) {
@@ -596,6 +616,7 @@ function drawScene() {
   drawDoors();
   drawButtons();
   drawCannons();
+  drawPadMarks();
   drawPads();
   drawPadLinks();
   drawNeutrals();

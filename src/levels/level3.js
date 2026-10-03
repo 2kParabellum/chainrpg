@@ -31,7 +31,7 @@ G.level3 = {
   // победа: демон уничтожен
   victory: { kind: 'destroyType', type: 'boss', label: 'БОСС' },
   // подиумы появляются случайно; «сила» — единственная пробивает щит босса выстрелами, поэтому здесь она чаще
-  padSpawn: { weights: { shooter: 3, medic: 2, spear: 2, speed: 1, power: 3, regen: 1, sturdy: 1, spiky: 1, will: 1 } },
+  padSpawn: { buffs: { weights: { speed: 1, power: 3, regen: 1, sturdy: 1, spiky: 1, will: 1 } } },
   rooms: [ROOM_PLAN],
 };
 })(window.Game = window.Game || {});
