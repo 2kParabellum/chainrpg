@@ -5,7 +5,7 @@
 const { CONFIG, COLORS, state } = G;
 const { abilities } = G;
 const { currentRoom, isSpotted, chainSpeedMul, leader } = G.session;
-const { roomCount, roomIndexAt, buttonUnder } = G.world;
+const { roomCount, roomIndexAt, buttonUnder, world } = G.world;
 const { clamp } = G.math;
 const { nearestPickup } = G.chain;
 const { ctx, allyColor } = G.shapes;
@@ -46,6 +46,45 @@ function drawEdgeMarkers() {
   if (state.base && state.base.regenTimer < 1) drawEdgeMarker(state.base.x, state.base.y, COLORS.baseEdge, 'БАЗА');
 }
 
+// мини-карта в правом нижнем углу (уровень задаёт minimap): стены и пропасти, двор, база, гнёзда (разгораются
+// перед волной), враги, подиумы, ждущие дружочки, цепочка и рамка того, что сейчас на экране
+const MINIMAP_W = 210;
+function drawMinimap() {
+  if (!state.level.minimap) return;
+  const k = MINIMAP_W / world.width, w = MINIMAP_W, h = world.height * k;
+  const x0 = CONFIG.VIEW.w - w - 10, y0 = CONFIG.VIEW.h - h - 10;
+  const rect = (r, color) => { ctx.fillStyle = color; ctx.fillRect(x0 + r.x * k, y0 + r.y * k, Math.max(1, r.w * k), Math.max(1, r.h * k)); };
+  const dot = (u, rad, color) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x0 + u.x * k, y0 + u.y * k, rad, 0, Math.PI * 2); ctx.fill(); };
+
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = '#0c0c10';
+  ctx.fillRect(x0, y0, w, h);
+  ctx.globalAlpha = 1;
+  if (world.home) rect(world.home, 'rgba(90,150,210,0.18)');
+  for (const r of world.pits) rect(r, '#2a2a44');
+  for (const r of world.walls.concat(world.pillars)) rect(r, '#6a6a78');
+  if (world.base) rect(world.base, COLORS.baseEdge);
+
+  const cfg = state.level.waves;
+  for (const n of state.nests) {
+    const soon = cfg ? Math.max(0, 1 - n.nextIn / cfg.telegraph) : 0;
+    ctx.globalAlpha = 0.6 + 0.4 * soon * (0.5 + 0.5 * Math.sin(state.time * 12));
+    dot(n, 4 + 2 * soon, COLORS.nest);
+    ctx.globalAlpha = 1;
+  }
+  for (const p of state.pads) dot({ x: p.x + p.w / 2, y: p.y + p.h / 2 }, 2, (G.buffs[p.ability] || abilities[p.ability]).color);
+  for (const n of state.neutrals) dot(n, 1.6, COLORS.buddy);
+  for (const e of state.enemies) if (isSpotted(e)) dot(e, 1.4, COLORS.enemy);
+  for (const a of state.party.slice(1)) dot(a, 1.6, allyColor(a));
+  dot(leader(), 3, COLORS.hero);
+
+  ctx.strokeStyle = '#c8c8d2';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x0 + state.camera.x * k, y0 + state.camera.y * k, CONFIG.VIEW.w * k, CONFIG.VIEW.h * k);
+  ctx.strokeStyle = '#45454f';
+  ctx.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
+}
+
 function drawHud() {
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -82,6 +121,7 @@ function drawHud() {
   }
 
   drawEdgeMarkers();
+  drawMinimap();
 
   const pickup = nearestPickup();
   const btn = buttonUnder(leader());

@@ -23,11 +23,14 @@ function allySettings() { return { ...CONFIG.ALLY_SPAWN, ...state.level.allySpaw
 // подиум профессии или усиления
 const padKind = (ability) => (G.buffs[ability] ? 'buffs' : 'jobs');
 
-// что занимает место: подиумы (и метки будущих), ждущие дружочки и громадины (порталы, босс) — новое сюда не встаёт
+// что занимает место: подиумы (и метки будущих), ждущие дружочки, громадины (порталы, босс) и зоны выхода
+// врагов у гнёзд «Обороны» — новое сюда не встаёт
 function occupied() {
+  const nestR = state.level.waves ? state.level.waves.spawnRadius + 30 : 0;
   return state.pads.concat(state.padMarks).map((p) => ({ x: p.x + p.w / 2, y: p.y + p.h / 2, r: p.w * 0.75 }))
     .concat(state.neutrals.map((n) => ({ x: n.x, y: n.y, r: n.r + 10 })))
-    .concat(state.enemies.filter((e) => e.r >= 40).map((e) => ({ x: e.x, y: e.y, r: e.r })));
+    .concat(state.enemies.filter((e) => e.r >= 40).map((e) => ({ x: e.x, y: e.y, r: e.r })))
+    .concat(state.nests.map((n) => ({ x: n.x, y: n.y, r: nestR })));
 }
 
 // уровень «Оборона»: стартовые подиумы и дружочки — во дворе базы, все следующие — только за его стенами
