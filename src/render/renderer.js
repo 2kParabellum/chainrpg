@@ -544,9 +544,9 @@ function drawChain() {
   ctx.globalAlpha = 1;
 }
 
-// оружие поверх тел, если у него есть своё рисование
+// оружие поверх тел, если у него есть своё рисование (и у цепочки, и у выбитых — они дерутся лёжа)
 function drawWeapons() {
-  for (const u of state.party) {
+  for (const u of state.party.concat(state.downed)) {
     for (const w of u.gear) {
       const def = weapons[w.type];
       if (def.draw) def.draw(u, w, shapes);

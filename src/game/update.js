@@ -121,8 +121,8 @@ function updateEnemy(e, dt) {
     }
   }
 
-  // порталы и порождённые ими охотники действуют на любом расстоянии, остальные спят вдали от игрока
-  if (!type.alwaysActive && !e.hunter && dist(e, leader()) > CONFIG.ACTIVATION_DIST) return;
+  // порталы и порождённые ими враги действуют на любом расстоянии, остальные спят вдали от игрока
+  if (!type.alwaysActive && !e.chasing && dist(e, leader()) > CONFIG.ACTIVATION_DIST) return;
   // враги целятся в ближайшего союзника — и в цепочке, и выбитого (его добивают);
   // первым в списке всегда Герой (на него, например, смотрит босс)
   type.update(e, dt, chainUnits().concat(state.downed), game);

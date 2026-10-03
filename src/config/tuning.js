@@ -61,7 +61,7 @@ const CONFIG = {
       startCount: 2,     // сколько сразу при старте партии
       maxActive: 4,      // больше одновременно на карте не бывает (вместе с метками)
       interval: [5, 11], // пауза между появлениями, сек
-      weights: { shooter: 3, medic: 2, spear: 2 },
+      weights: { shooter: 3, medic: 2, spear: 2, spark: 2 },
     },
     buffs: {
       startCount: 1,

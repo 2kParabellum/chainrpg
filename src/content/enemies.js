@@ -6,7 +6,7 @@
 //   stats        — характеристики; юнит получает их как cfg
 //   wanderSpeed  — скорость блуждания по комнате; нет поля — враг не блуждает
 //   chaseSpeed   — скорость погони за игроком; есть поле — тип «подвижный»: такого врага может
-//                  породить портал, и порождённый (e.hunter) идёт к игроку через всю карту
+//                  породить портал, и порождённый (e.chasing) идёт к игроку через всю карту
 //   init         — (e): личные поля юнита при создании
 //   update       — (e, dt, chain, game): поведение за кадр, когда враг активен и жив
 //   lateUpdate   — (e, chain, game): шаг после боя и среды (мина: обнаружение и подрыв)
@@ -26,11 +26,11 @@ const { dist, pickOne } = G.math;
 const { moveAndCollide, circleRectOverlap } = G.collision;
 
 // общий шаблон стрелка, катапульты и скорпиона: блуждать, целиться, стрелять по перезарядке;
-// охотник (порождён порталом) вместо блуждания идёт к игроку и держит дистанцию 0.6 дальности
+// порождённый порталом вместо блуждания идёт к игроку и держит дистанцию 0.6 дальности
 function ranged(type, fire) {
   return function (e, dt, chain, game) {
     if (type.wanderSpeed !== undefined) {
-      if (e.hunter) game.chaseStep(e, dt, type.chaseSpeed, e.cfg.range * 0.6);
+      if (e.chasing) game.chaseStep(e, dt, type.chaseSpeed, e.cfg.range * 0.6);
       else if (!game.stepOffSpikes(e, dt, type.wanderSpeed * 1.6)) game.wanderStep(e, dt, type.wanderSpeed);
     }
 
@@ -136,7 +136,7 @@ const zombie = {
     e.cd -= dt;
 
     if (!foe) {
-      if (e.hunter) { game.chaseStep(e, dt, zombie.chaseSpeed); return; }
+      if (e.chasing) { game.chaseStep(e, dt, zombie.chaseSpeed); return; }
       if (!game.stepOffSpikes(e, dt, zombie.wanderSpeed * 1.6)) {
         game.wanderStep(e, dt, zombie.wanderSpeed);
       }
@@ -177,6 +177,54 @@ const zombie = {
   },
 };
 
+// Хантер: мелкий и быстрый (чуть медленнее Героя). Видит далеко: заметив ближайшего союзника,
+// бежит к нему, обходя препятствия, и кусает вплотную
+const hunter = {
+  stats: { name: 'Хантер', hp: 20, radius: 10, aggro: 720, runSpeed: 165,
+           dmg: 5, cooldown: 0.8,
+           reach: 8 },              // с какого просвета между телами достаёт укусом
+  wanderSpeed: 60,
+  chaseSpeed: 165,
+  update(e, dt, chain, game) {
+    e.cd -= dt;
+    const foe = game.nearestTarget(e, chain, e.cfg.aggro);
+    if (!foe) {
+      if (e.chasing) game.chaseStep(e, dt, hunter.chaseSpeed);
+      else if (!game.stepOffSpikes(e, dt, hunter.wanderSpeed * 1.6)) game.wanderStep(e, dt, hunter.wanderSpeed);
+      return;
+    }
+    e.facing = Math.atan2(foe.y - e.y, foe.x - e.x);
+    const gap = dist(e, foe) - e.r - foe.r;
+    if (gap > e.cfg.reach * 0.5) game.chaseStep(e, dt, e.cfg.runSpeed, e.r + foe.r + e.cfg.reach * 0.5, foe);
+    if (gap <= e.cfg.reach && e.cd <= 0) {
+      game.damageUnit(foe, e.cfg.dmg);
+      e.cd = e.cfg.cooldown;
+      game.state.effects.push({ type: 'beam', x1: e.x, y1: e.y, x2: foe.x, y2: foe.y, life: 0.12, color: COLORS.hunter });
+    }
+  },
+  draw(e, g) {
+    const { ctx } = g;
+    g.drawUnitBody(e, COLORS.hunter, true);
+    // острая морда вперёд и два уха назад
+    const f = e.facing || 0;
+    ctx.fillStyle = '#0e0e10';
+    ctx.beginPath();
+    ctx.moveTo(e.x + Math.cos(f) * e.r * 1.5, e.y + Math.sin(f) * e.r * 1.5);
+    ctx.lineTo(e.x + Math.cos(f + 0.5) * e.r * 0.8, e.y + Math.sin(f + 0.5) * e.r * 0.8);
+    ctx.lineTo(e.x + Math.cos(f - 0.5) * e.r * 0.8, e.y + Math.sin(f - 0.5) * e.r * 0.8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#0e0e10';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (const s of [2.4, -2.4]) {
+      ctx.moveTo(e.x + Math.cos(f + s) * e.r * 0.5, e.y + Math.sin(f + s) * e.r * 0.5);
+      ctx.lineTo(e.x + Math.cos(f + s * 0.9) * e.r * 1.4, e.y + Math.sin(f + s * 0.9) * e.r * 1.4);
+    }
+    ctx.stroke();
+  },
+};
+
 const bull = {
   stats: { name: 'Бычок', hp: 44, radius: 18, dmg: 12, aggro: 430, walkSpeed: 55,
            telegraph: 0.7, chargeSpeed: 540, chargeMaxDist: 720, chargeCooldown: 1.6,
@@ -194,8 +242,8 @@ const bull = {
     const foe = game.nearestTarget(e, chain, e.cfg.aggro);
 
     if (e.state === 'idle') {
-      if (e.hunter && !foe) { game.chaseStep(e, dt, bull.chaseSpeed); return; }
-      if (!e.hunter && game.stepOffSpikes(e, dt, bull.wanderSpeed * 1.6)) return;
+      if (e.chasing && !foe) { game.chaseStep(e, dt, bull.chaseSpeed); return; }
+      if (!e.chasing && game.stepOffSpikes(e, dt, bull.wanderSpeed * 1.6)) return;
       if (!foe) { game.wanderStep(e, dt, bull.wanderSpeed); return; }
       e.facing = Math.atan2(foe.y - e.y, foe.x - e.x);
       moveAndCollide(e, Math.cos(e.facing) * e.cfg.walkSpeed * dt,
@@ -336,7 +384,7 @@ const portal = {
            // при большем числе порталов берётся последнее значение
            spawnEvery: [2.5, 10, 15, 20],
            stagger: 6,              // разброс первого выхода (сек), чтобы порталы не стреляли залпом
-           maxHunters: 24,          // предел охотников на всей карте: пока их столько, порталы не выпускают новых
+           maxChasing: 24,          // предел порождённых на всей карте: пока их столько, порталы не выпускают новых
            spawnRingMin: 25,        // враг появляется в кольце от края портала: от ..
            spawnRingMax: 80,        // .. до этих расстояний
            spawnClearance: 22 },    // радиус свободного места под появляющегося врага
@@ -360,11 +408,11 @@ const portal = {
     if (e.spawnIn > 0) return;
 
     e.sinceSpawn = 0;
-    if (game.state.enemies.filter((x) => x.hunter).length >= cfg.maxHunters) return;
+    if (game.state.enemies.filter((x) => x.chasing).length >= cfg.maxChasing) return;
 
     const spot = game.freeSpotNear(e.x, e.y, e.r + cfg.spawnRingMin, e.r + cfg.spawnRingMax, cfg.spawnClearance);
     if (!spot) { e.sinceSpawn = every - 1; return; } // всё занято — пробуем ещё раз через секунду
-    game.spawnEnemy(game.pickChaser(), spot.x, spot.y, e.room, { hunter: true, spawnedBy: e });
+    game.spawnEnemy(game.pickChaser(), spot.x, spot.y, e.room, { chasing: true, spawnedBy: e });
     game.state.effects.push({ type: 'ring', x: spot.x, y: spot.y, r: 26, life: 0.35, color: COLORS.portal });
   },
   draw(e, g) {
@@ -481,7 +529,7 @@ const boss = {
            // тоже 820) дойти до стены за секунду; на прожаренной земле остаётся стена огня на 10 с
            beamAimTime: 1, beamSpeed: 820, beamRange: 820, beamRadius: 24, fireDps: 11, fireLife: 10,
            // атака 4 — вызов подкрепления
-           summonMin: 4, summonMax: 6, summonTypes: ['zombie', 'shooter'],
+           summonMin: 4, summonMax: 6, summonTypes: ['zombie', 'hunter'],
            // щит: включён постоянно. Ранит выстрелами босса не достать (кроме усиления «сила»),
            // а тот, кто подошёл слишком близко, получает урон сам
            shieldAuraExtra: 55, shieldContactDmg: 14, shieldContactInterval: 0.4 },
@@ -602,5 +650,5 @@ const boss = {
   },
 };
 
-G.enemyTypes = { shooter, bull, tower, scorpion, zombie, mine, portal, boss };
+G.enemyTypes = { shooter, bull, tower, scorpion, zombie, hunter, mine, portal, boss };
 })(window.Game = window.Game || {});

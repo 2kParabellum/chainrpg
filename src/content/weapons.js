@@ -92,6 +92,75 @@ const spear = {
   },
 };
 
+// искра: молния средней дальности. Заметив врага в пределах range, целится aimTime секунд, затем бьёт
+// молнией, которая держится на цели и жжёт её непрерывно (dps в секунду). Чем цель ближе, тем больнее:
+// ближе fullRange — полный урон, к краю дальности падает до farMul и дальше не меняется. Цель ушла
+// дальше breakMul·range или погибла — молния рвётся, искра ищет новую цель и снова целится.
+// Щит босса молнию гасит, как и выстрелы, а усиление «сила» его пробивает (см. game/combat.js)
+const spark = {
+  stats: { range: 230, fullRange: 110, farMul: 0.5, breakMul: 1.25, aimTime: 0.8, dps: 12, color: COLORS.spark },
+  update(u, w, dt, game) {
+    const t = w.target;
+    if (t && (!game.state.enemies.includes(t) || dist(u, t) > w.range * w.breakMul)) w.target = null;
+    if (!w.target) {
+      const foe = game.nearestTarget(u, game.state.targetableEnemies, w.range);
+      if (!foe) return;
+      w.target = foe;
+      w.aim = w.aimTime;
+    }
+    const foe = w.target;
+    u.facing = Math.atan2(foe.y - u.y, foe.x - u.x);
+    if (w.aim > 0) { w.aim -= dt; return; }
+
+    const power = !!(u.buffs && u.buffs.power > 0);
+    if (foe.type === 'boss' && foe.shielded && !power) return;
+    const k = Math.min(1, Math.max(0, (dist(u, foe) - w.fullRange) / (w.range - w.fullRange)));
+    game.damageUnit(foe, w.dps * (1 - (1 - w.farMul) * k) * (u.dmgMul || 1) * dt);
+  },
+  // прицел — пунктир, который разгорается к выстрелу; молния — ломаная, каждый кадр новая
+  draw(u, w, g) {
+    const foe = w.target;
+    if (!foe) return;
+    const { ctx } = g;
+    const dx = foe.x - u.x, dy = foe.y - u.y;
+    const d = Math.hypot(dx, dy) || 1;
+    if (w.aim > 0) {
+      ctx.globalAlpha = 0.2 + 0.6 * (1 - w.aim / w.aimTime);
+      ctx.strokeStyle = w.color;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 6]);
+      ctx.beginPath();
+      ctx.moveTo(u.x, u.y);
+      ctx.lineTo(foe.x, foe.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(foe.x, foe.y, foe.r + 4 + 10 * (w.aim / w.aimTime), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      return;
+    }
+    const nx = -dy / d, ny = dx / d;
+    const n = Math.max(3, Math.round(d / 18));
+    const pts = [[u.x, u.y]];
+    for (let i = 1; i < n; i++) {
+      const j = (Math.random() - 0.5) * 14;
+      pts.push([u.x + (dx * i) / n + nx * j, u.y + (dy * i) / n + ny * j]);
+    }
+    pts.push([foe.x, foe.y]);
+    for (const [width, color, alpha] of [[5, w.color, 0.35], [1.6, '#eef4ff', 0.95]]) {
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (const [x, y] of pts.slice(1)) ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  },
+};
+
 const bow = {
   stats: { range: 300, dmg: 11.5, cooldown: 1.0, projSpeed: 560, projRadius: 4 },
   update: shootUpdate(arrow),
@@ -117,5 +186,5 @@ const heal = {
   },
 };
 
-G.weapons = { sword, fist, spear, bow, heal };
+G.weapons = { sword, fist, spear, spark, bow, heal };
 })(window.Game = window.Game || {});

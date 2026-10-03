@@ -87,6 +87,37 @@ const spear = {
   },
 };
 
+// Искра: молния средней дальности, которая присасывается к врагу и жжёт его, пока он рядом
+const spark = {
+  name: 'искра',
+  color: COLORS.spark,
+  weapons: { spark: {} },
+  // прокачка: урон
+  levels: [{}, { weapons: { spark: { dps: 16 } } }, { weapons: { spark: { dps: 21 } } }],
+  // ломаная молния вдоль взгляда
+  mark(u, f, ctx) {
+    const px = Math.cos(f + Math.PI / 2), py = Math.sin(f + Math.PI / 2);
+    const at = (t, s) => [u.x + Math.cos(f) * u.r * t + px * u.r * s, u.y + Math.sin(f) * u.r * t + py * u.r * s];
+    ctx.beginPath();
+    ctx.moveTo(...at(-0.7, 0));
+    ctx.lineTo(...at(-0.2, 0.35));
+    ctx.lineTo(...at(0.2, -0.35));
+    ctx.lineTo(...at(0.75, 0));
+    ctx.stroke();
+  },
+  // шар слева и ломаная молния из него вправо (у усиления «скорость» — замкнутая стрелка-молния)
+  icon(ctx, x, y, s) {
+    ctx.beginPath();
+    ctx.arc(x - s * 0.4, y, s * 0.2, 0, Math.PI * 2);
+    ctx.moveTo(x - s * 0.2, y);
+    ctx.lineTo(x, y - s * 0.35);
+    ctx.lineTo(x + s * 0.2, y + s * 0.35);
+    ctx.lineTo(x + s * 0.4, y - s * 0.2);
+    ctx.lineTo(x + s * 0.6, y);
+    ctx.stroke();
+  },
+};
+
 // Временные усиления: у звена, коснувшегося подиума, на `duration` секунд
 // включается эффект. Ключ записи — тип подиума. Не заменяют способность; у звена не больше
 // CONFIG.BUFFS.maxActive усилений разом — лишнее снимает самое давнее (см. giveBuff в game/chain.js).
@@ -201,6 +232,6 @@ const will = {
   },
 };
 
-G.abilities = { shooter, medic, spear };
+G.abilities = { shooter, medic, spear, spark };
 G.buffs = { speed, power, regen, sturdy, spiky, will };
 })(window.Game = window.Game || {});

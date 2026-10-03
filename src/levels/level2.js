@@ -23,7 +23,7 @@
 //    сложная с порталом (11 врагов) — северо-запад и юго-восток
 // ============================================================================
 
-const ENEMY_POOL = ['shooter', 'bull', 'tower', 'scorpion', 'zombie'];
+const ENEMY_POOL = ['shooter', 'bull', 'tower', 'scorpion', 'zombie', 'hunter'];
 
 const SIMPLE_ENEMIES = { count: 4, kinds: 2 };
 const MEDIUM_ENEMIES = { count: 7, kinds: 2 };
@@ -111,7 +111,7 @@ G.level2 = {
   enemyPool: ENEMY_POOL,
   // относительная частота типов врагов (и в зонах, и у порождённых порталами; без веса — 1):
   // стрелков больше всех, быков и скорпионов меньше остальных
-  enemyWeights: { shooter: 4, tower: 2, zombie: 2, bull: 1, scorpion: 1 },
+  enemyWeights: { shooter: 4, tower: 2, zombie: 2, hunter: 2, bull: 1, scorpion: 1 },
   zoneNames: ['СЕВЕРО-ЗАПАД', 'СЕВЕР', 'СЕВЕРО-ВОСТОК', 'ЗАПАД', 'ЦЕНТР', 'ВОСТОК',
               'ЮГО-ЗАПАД', 'ЮГ', 'ЮГО-ВОСТОК'],
   // победа: все порталы разрушены

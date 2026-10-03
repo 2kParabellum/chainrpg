@@ -107,7 +107,7 @@ function makeEnemy(type, x, y, room) {
   return e;
 }
 
-// новый враг посреди партии (его порождает портал); extra — личные поля вроде hunter и spawnedBy
+// новый враг посреди партии (его порождает портал); extra — личные поля вроде chasing и spawnedBy
 function spawnEnemy(type, x, y, room, extra) {
   const e = makeEnemy(type, x, y, room);
   Object.assign(e, extra);
@@ -186,7 +186,7 @@ function resetGame(level) {
   state.camera.y = clamp(state.party[0].y - CONFIG.VIEW.h / 2, 0, world.height - CONFIG.VIEW.h);
 }
 
-// ведущий — всегда Герой, первое звено цепочки: от него считаются камера, активация врагов и цель охотников
+// ведущий — всегда Герой, первое звено цепочки: от него считаются камера, активация врагов и цель порождённых порталами
 function leader() { return state.party[0]; }
 
 function chainUnits() { return state.party.slice(); }
