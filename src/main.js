@@ -25,7 +25,7 @@ initInput(canvas, {
   onCommand(name) {
     if (state.status === 'menu') return;
     if (name === 'restart') resetGame(state.level);
-    else if (name === 'recruit') { tryRecruit(); state.padRequest = true; }
+    else if (name === 'recruit') tryRecruit();
     else if (name === 'drop') dropLastAlly();
   },
 });

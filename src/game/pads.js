@@ -24,6 +24,12 @@ function padUnder(u) {
   return null;
 }
 
+// подиума коснулось звено: запустить или продлить таймер исчезновения (подиум одноразовый)
+function markPadUsed(pad) {
+  pad.usedLeft = settings().usedGrace;
+  pad.life = Math.max(pad.life, pad.usedLeft); // пока по нему едут, по времени жизни он не пропадёт
+}
+
 // новый подиум около Героя; false, если места не нашлось
 function spawnPad(cfg) {
   const size = CONFIG.PADS.size;
@@ -58,7 +64,8 @@ function updatePads(dt) {
   for (let i = state.pads.length - 1; i >= 0; i--) {
     const p = state.pads[i];
     p.life -= dt;
-    if (p.life > 0) continue;
+    if (p.usedLeft !== undefined) p.usedLeft -= dt;
+    if (p.life > 0 && !(p.usedLeft <= 0)) continue;
     state.pads.splice(i, 1);
     state.effects.push({ type: 'ring', x: p.x + p.w / 2, y: p.y + p.h / 2, r: p.w * 0.5, life: 0.3, color: padColor(p.ability) });
   }
@@ -70,5 +77,5 @@ function updatePads(dt) {
   state.padSpawnIn = spawnPad(cfg) ? rand(cfg.interval) : 1;
 }
 
-G.pads = { padUnder, updatePads };
+G.pads = { padUnder, markPadUsed, updatePads };
 })(window.Game = window.Game || {});

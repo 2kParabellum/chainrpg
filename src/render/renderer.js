@@ -343,6 +343,8 @@ function drawHourglass(x, y, s) {
 function padAlpha(pad, warnTime) {
   const age = pad.maxLife - pad.life;
   let a = clamp(age / 0.3, 0, 1) * clamp(pad.life / 0.3, 0, 1);
+  // взятый подиум тускнеет и гаснет, как только по нему проехал хвост
+  if (pad.usedLeft !== undefined) return a * (0.25 + 0.75 * clamp(pad.usedLeft / 0.5, 0, 1));
   if (pad.life <= warnTime) {
     const t = warnTime - pad.life;
     if (Math.sin(t * (6 + t * 5)) < 0) a *= 0.3;
@@ -383,7 +385,7 @@ function drawPads() {
     ctx.lineWidth = 2;
     def.icon(ctx, cx, cy, pad.w * 0.36);
     ctx.globalAlpha = 1;
-    if (pad.life <= warnTime) drawHourglass(pad.x + pad.w, pad.y - 4, 7);
+    if (pad.life <= warnTime && pad.usedLeft === undefined) drawHourglass(pad.x + pad.w, pad.y - 4, 7);
   }
 }
 

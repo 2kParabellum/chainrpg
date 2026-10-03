@@ -28,7 +28,7 @@ function drawHud() {
   ctx.fillText(`${where}   ВРАГОВ ЗДЕСЬ: ${inRoom}${goal}   ЦЕПОЧКА: ${state.party.length}/${maxParty()}`, 12, 22);
 
   ctx.fillStyle = '#8a8a95';
-  ctx.fillText('ПРОБЕЛ — взять способность подиума, на котором стоят звенья', 12, 38);
+  ctx.fillText('Подиумы подбираются сами: проедь по нему цепочкой', 12, 38);
   let y = 58;
   for (const a of state.party) {
     ctx.fillStyle = allyColor(a);

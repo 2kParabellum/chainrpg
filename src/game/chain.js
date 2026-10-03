@@ -7,7 +7,7 @@ const { CONFIG, COLORS, state } = G;
 const { clamp, dist, removeFrom } = G.math;
 const { moveAndCollide, slideAlongWall } = G.collision;
 const { world, buttonUnder } = G.world;
-const { padUnder } = G.pads;
+const { padUnder, markPadUsed } = G.pads;
 const { leader, maxParty, setAbility } = G.session;
 const { allyTypes } = G;
 
@@ -120,14 +120,16 @@ function isSturdy(u) {
   return !!(u.buffs && Object.keys(u.buffs).some((k) => u.buffs[k] > 0 && G.buffs[k].sturdy));
 }
 
-// проехав по подиуму, звено (и Герой) получает его способность вместо текущей
+// автоподбор: каждое звено (и Герой), которое касается подиума, сразу получает его способность вместо
+// текущей или его усиление. Подиум одноразовый: касание запускает (и продлевает) его таймер исчезновения,
+// так что вся цепочка успевает проехать по нему, а после хвоста он пропадает
 function touchPads() {
-  if (!state.padRequest) return;
-  state.padRequest = false;
   for (const u of state.party) {
     const pad = padUnder(u);
-    if (pad && G.buffs[pad.ability]) { giveBuff(u, pad.ability); continue; }
-    if (!pad || u.ability === pad.ability) continue;
+    if (!pad) continue;
+    markPadUsed(pad);
+    if (G.buffs[pad.ability]) { giveBuff(u, pad.ability); continue; }
+    if (u.ability === pad.ability) continue;
     setAbility(u, pad.ability);
     state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 8, life: 0.4, color: G.abilities[pad.ability].color });
   }
