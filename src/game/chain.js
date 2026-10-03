@@ -8,7 +8,7 @@ const { clamp, dist, removeFrom } = G.math;
 const { moveAndCollide, slideAlongWall } = G.collision;
 const { world, buttonUnder } = G.world;
 const { padUnder, markPadUsed, consumePad } = G.pads;
-const { leader, maxParty, setAbility, recalcStats } = G.session;
+const { leader, setAbility, recalcStats } = G.session;
 const { allyTypes } = G;
 
 // --- след ---
@@ -18,7 +18,7 @@ function pushTrail() {
   const head = state.trail[0];
   if (!head || Math.hypot(head.x - lead.x, head.y - lead.y) > CONFIG.CHAIN.trailStep) {
     state.trail.unshift({ x: lead.x, y: lead.y });
-    const maxLen = Math.ceil((maxParty() * CONFIG.CHAIN.spacing + 200) / CONFIG.CHAIN.trailStep);
+    const maxLen = Math.ceil((state.party.length * CONFIG.CHAIN.spacing + 200) / CONFIG.CHAIN.trailStep);
     if (state.trail.length > maxLen) state.trail.pop();
   }
 }
@@ -64,7 +64,7 @@ function followChain(a, dt, i) {
   const cap = whip.maxSpeed * 2;
   const tvx = clamp((target.x - prev.x) / dt, -cap, cap);
   const tvy = clamp((target.y - prev.y) / dt, -cap, cap);
-  const t = (i - 1) / Math.max(1, maxParty() - 2);
+  const t = (i - 1) / Math.max(1, state.party.length - 2);
   const k = whip.stiffness * (1 - whip.tailSoftness * clamp(t, 0, 1));
   // затухание тоже слабеет к хвосту: поворот доходит до дальних звеньев и раскачивает их сильнее
   const c = 2 * (whip.dampingHead + (whip.dampingTail - whip.dampingHead) * clamp(t, 0, 1)) * Math.sqrt(k);
@@ -172,7 +172,6 @@ function nearestPickup() {
 
 function tryRecruit() {
   if (state.status !== 'play') return;
-  if (state.party.length >= maxParty()) return;
   const u = nearestPickup();
   if (!u) return;
   removeFrom(u.kind === 'downed' ? state.downed : state.neutrals, u);

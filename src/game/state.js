@@ -194,11 +194,15 @@ function chainUnits() { return state.party.slice(); }
 // враг, которого уже можно видеть, целить и рубить: скрытые типы (мина) — только после обнаружения
 function isSpotted(e) { return !enemyTypes[e.type].hiddenUntilRevealed || e.revealed; }
 
-// сколько тел в цепочке вместе с Героем: уровень может задать свой предел, иначе общий
-function maxParty() { return state.level.maxParty || CONFIG.CHAIN.maxParty; }
+// множитель скорости Героя от длины цепочки: до 4 звеньев — 1, с 5-го падает и к 9-му — 0.5 (см. CHAIN.slowdown)
+function chainSpeedMul() {
+  const { fromLink, fullLink, minMul } = CONFIG.CHAIN.slowdown;
+  const k = clamp((state.party.length - (fromLink - 1)) / (fullLink - (fromLink - 1)), 0, 1);
+  return 1 - (1 - minMul) * k;
+}
 
 function currentRoom() { return roomIndexAt(leader().x, leader().y); }
 
 G.state = state;
-G.session = { makeUnit, makeAlly, setAbility, recalcStats, spawnEnemy, resetGame, leader, chainUnits, isSpotted, currentRoom, maxParty };
+G.session = { makeUnit, makeAlly, setAbility, recalcStats, spawnEnemy, resetGame, leader, chainUnits, isSpotted, currentRoom, chainSpeedMul };
 })(window.Game = window.Game || {});

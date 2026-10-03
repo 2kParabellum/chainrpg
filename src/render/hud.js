@@ -4,7 +4,7 @@
 
 const { CONFIG, state } = G;
 const { abilities } = G;
-const { currentRoom, isSpotted, maxParty, leader } = G.session;
+const { currentRoom, isSpotted, chainSpeedMul, leader } = G.session;
 const { roomCount, roomIndexAt, buttonUnder } = G.world;
 const { nearestPickup } = G.chain;
 const { ctx, allyColor } = G.shapes;
@@ -25,7 +25,7 @@ function drawHud() {
   const goal = rule.kind === 'destroyType'
     ? `   ${rule.label}: ${state.enemies.filter((e) => e.type === rule.type).length}` : '';
   ctx.fillStyle = '#c8c8d2';
-  ctx.fillText(`${where}   ВРАГОВ ЗДЕСЬ: ${inRoom}${goal}   ЦЕПОЧКА: ${state.party.length}/${maxParty()}`, 12, 22);
+  ctx.fillText(`${where}   ВРАГОВ ЗДЕСЬ: ${inRoom}${goal}   ЦЕПОЧКА: ${state.party.length}   СКОРОСТЬ: ${Math.round(chainSpeedMul() * 100)}%`, 12, 22);
 
   ctx.fillStyle = '#8a8a95';
   ctx.fillText('Подиумы подбираются сами: проедь по нему цепочкой', 12, 38);
@@ -47,8 +47,7 @@ function drawHud() {
   } else if (pickup && state.status === 'play') {
     ctx.fillStyle = '#f0f0f5';
     ctx.textAlign = 'center';
-    const msg = state.party.length >= maxParty() ? 'ЦЕПОЧКА ПОЛНАЯ'
-      : pickup.kind === 'downed' ? 'ПРОБЕЛ — ПОДНЯТЬ' : 'ПРОБЕЛ — ПРИСОЕДИНИТЬ';
+    const msg = pickup.kind === 'downed' ? 'ПРОБЕЛ — ПОДНЯТЬ' : 'ПРОБЕЛ — ПРИСОЕДИНИТЬ';
     ctx.fillText(msg, CONFIG.VIEW.w / 2, CONFIG.VIEW.h - 30);
   }
 
