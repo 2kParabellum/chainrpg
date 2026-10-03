@@ -18,6 +18,8 @@ const world = {
   base: null, home: null, nests: [],
   solids: [],        // твёрдые постройки (база): держат движение, но не обзор и не выстрелы
   moveBlockers: [], sightBlockers: [],
+  pathBlockers: [],  // мешают идти по прямой: стены, колонны, двери и пропасти (без построек — база бывает целью)
+  baseFlow: null,    // поле путей к базе «Обороны» (строится один раз при сборке мира)
   width: 0, height: 0,
 };
 
@@ -188,7 +190,8 @@ function addRoomContent(plan, i) {
 function rebuildBlockers() {
   const closedDoors = world.doors.filter((d) => !d.open);
   world.sightBlockers = world.walls.concat(world.pillars, closedDoors);
-  world.moveBlockers = world.sightBlockers.concat(world.pits, world.solids);
+  world.pathBlockers = world.sightBlockers.concat(world.pits);
+  world.moveBlockers = world.pathBlockers.concat(world.solids);
 }
 
 // применить новое состояние дверей (id открытых); перестраивает блокеры, только если что-то изменилось
@@ -331,31 +334,40 @@ function buildRect(level) {
   addRoomContent(level.rooms[0], 0);
 }
 
-// --- поле направлений к базе ---
-// Враги волн идут к базе через проходы двора, а прямой путь к ней упирается в стены. Поэтому при сборке
-// мира от базы по сетке клеток один раз расходится волна расстояний (Дейкстра по 8 соседям, диагональ
-// не срезает углы), и враг шагает в соседнюю клетку, которая ближе к базе. Мир по ходу партии не меняется
-// (двери на этом уровне не используются), так что поле не пересчитывается
-let flow = null;
+// --- поля путей ---
+// Прямой путь к цели может упереться в пропасть или длинную стену. Поэтому мир покрыт сеткой клеток
+// (CONFIG.NAV.cell): клетка закрыта, если ближе clearance к стене, колонне, двери или пропасти. Поле путей —
+// расстояния от целей до каждой клетки (Дейкстра по 8 соседям, диагональ не срезает углы); враг шагает
+// в соседнюю клетку, которая ближе к цели. Сетка строится при сборке мира; поле к базе «Обороны» —
+// тоже (база не двигается), а поле к союзникам пересчитывает game/roaming.js по ходу партии
+let nav = null;
 const FLOW_STEPS = [[1, 0, 10], [-1, 0, 10], [0, 1, 10], [0, -1, 10], [1, 1, 14], [1, -1, 14], [-1, 1, 14], [-1, -1, 14]];
 
-function buildFlow(goal) {
-  const S = CONFIG.SIEGE.flowCell, C = CONFIG.SIEGE.flowClearance;
-  const cols = Math.ceil(world.width / S), rows = Math.ceil(world.height / S), n = cols * rows;
-  // сама база клеток не закрывает: в неё волна и стекается
-  const blockers = world.sightBlockers.concat(world.pits);
-  const open = new Uint8Array(n);
-  const dist = new Int32Array(n).fill(0x3fffffff);
-  const buckets = [];
-  const push = (k, d) => { (buckets[d] || (buckets[d] = [])).push(k); };
+function buildNav() {
+  const S = CONFIG.NAV.cell, C = CONFIG.NAV.clearance;
+  const cols = Math.ceil(world.width / S), rows = Math.ceil(world.height / S);
+  const open = new Uint8Array(cols * rows);
   for (let j = 0; j < rows; j++) {
     for (let i = 0; i < cols; i++) {
-      const x = (i + 0.5) * S, y = (j + 0.5) * S, k = j * cols + i;
-      open[k] = blockers.some((r) => circleRectOverlap(x, y, C, r)) ? 0 : 1;
-      // источник — клетки под базой и вплотную к ней
-      if (open[k] && x > goal.x - S && x < goal.x + goal.w + S && y > goal.y - S && y < goal.y + goal.h + S) {
-        dist[k] = 0; push(k, 0);
-      }
+      const x = (i + 0.5) * S, y = (j + 0.5) * S;
+      open[j * cols + i] = world.pathBlockers.some((r) => circleRectOverlap(x, y, C, r)) ? 0 : 1;
+    }
+  }
+  nav = { S, cols, rows, open };
+}
+
+// поле путей к ближайшей из целей: points — точки ({ x, y }) или прямоугольники ({ x, y, w, h }:
+// источником становятся все клетки под ним и вплотную к нему). Источник может лежать и в закрытой клетке
+function buildFlowField(points) {
+  const { S, cols, rows, open } = nav;
+  const dist = new Int32Array(cols * rows).fill(0x3fffffff);
+  const buckets = [[]];
+  const push = (k, d) => { (buckets[d] || (buckets[d] = [])).push(k); };
+  const cellOf = (x, y) => clamp(Math.floor(y / S), 0, rows - 1) * cols + clamp(Math.floor(x / S), 0, cols - 1);
+  for (const p of points) {
+    if (p.w === undefined) { const k = cellOf(p.x, p.y); dist[k] = 0; push(k, 0); continue; }
+    for (let y = p.y - S / 2; y < p.y + p.h + S; y += S) {
+      for (let x = p.x - S / 2; x < p.x + p.w + S; x += S) { const k = cellOf(x, y); dist[k] = 0; push(k, 0); }
     }
   }
   const passable = (i, j) => i >= 0 && j >= 0 && i < cols && j < rows && open[j * cols + i] === 1;
@@ -372,14 +384,14 @@ function buildFlow(goal) {
       }
     }
   }
-  flow = { S, cols, rows, open, dist };
+  return dist;
 }
 
-// куда шагать из точки (x, y), чтобы приблизиться к базе: единичный вектор к центру соседней клетки,
-// которая ближе к базе; null — поля нет или ближе уже некуда (стоим у самой базы)
-function flowDir(x, y) {
-  if (!flow) return null;
-  const { S, cols, rows, open, dist } = flow;
+// куда шагать из точки (x, y) по полю field, чтобы приблизиться к цели: единичный вектор к центру соседней
+// клетки, которая ближе к цели; null — поля нет или ближе уже некуда (стоим у самой цели)
+function flowDir(field, x, y) {
+  if (!field || !nav) return null;
+  const { S, cols, rows, open } = nav, dist = field;
   const i = clamp(Math.floor(x / S), 0, cols - 1), j = clamp(Math.floor(y / S), 0, rows - 1);
   let best = dist[j * cols + i], bi = -1, bj = -1;
   for (const [di, dj] of FLOW_STEPS) {
@@ -412,8 +424,20 @@ function buildWorld(level) {
   else if (level.geometry.kind === 'rect') buildRect(level);
   else buildLine(level);
   rebuildBlockers();
-  flow = null;
-  if (world.base) buildFlow(world.base);
+  buildNav();
+  world.baseFlow = world.base ? buildFlowField([world.base]) : null;
+}
+
+// путь по прямой от a до b свободен для тела радиуса r: средняя линия и линии по краям тела не задевают
+// ни стен, ни колонн, ни пропастей
+function pathClear(a, b, r) {
+  const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+  const nx = (-dy / d) * r, ny = (dx / d) * r;
+  for (const k of [0, 1, -1]) {
+    const x1 = a.x + nx * k, y1 = a.y + ny * k, x2 = b.x + nx * k, y2 = b.y + ny * k;
+    for (const rect of world.pathBlockers) if (segmentHitsRect(x1, y1, x2, y2, rect)) return false;
+  }
+  return true;
 }
 
 function hasLineOfSight(a, b) {
@@ -442,7 +466,8 @@ function buttonUnder(u) {
 function standsOnSpikes(u) { return spikeRectAt(u) !== null; }
 
 // точка для перебежки врага: сперва поближе к нему самому (на узких тропах так он бродит по своему
-// куску тропы, а не целится в соседний через пропасть), потом по всей комнате
+// куску тропы, а не целится в соседний через пропасть), потом по всей комнате; точки, до которых не дойти
+// по прямой (за пропастью или колонной), берутся только если других не нашлось
 function freeSpotInRoom(e) {
   const room = roomInterior(e.room);
   const pad = e.r + 12;
@@ -461,6 +486,7 @@ function freeSpotInRoom(e) {
     if (!fallback) fallback = p;
     if (standsOnSpikes(p)) continue;
     if (world.moveBlockers.some((rect) => circleRectOverlap(p.x, p.y, p.r, rect))) continue;
+    if (!pathClear(e, p, e.r)) { fallback = p; continue; }
     return p;
   }
   return fallback;
@@ -524,6 +550,6 @@ function freeSquareNear(x, y, minR, maxR, size, avoid, accept) {
 G.world = {
   world, roomCount, roomIndexAt, roomInterior, localToWorld, buildWorld, hasLineOfSight,
   spikeRectAt, standsOnSpikes, buttonUnder, freeSpotInRoom, scatterSpot, freeSpotNear, freeSquareNear, setDoorsOpen,
-  flowDir, inHome,
+  flowDir, buildFlowField, pathClear, inHome,
 };
 })(window.Game = window.Game || {});

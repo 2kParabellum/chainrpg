@@ -15,6 +15,7 @@ const { updateWaves } = G.waves;
 const combat = G.combat;
 const { updateProjectiles, updateClouds, applySpikes, applyFirewalls, updateEffects, updateCannons } = combat;
 const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
+const { separateBodies } = G.bodies;
 const { enemyTypes, weapons } = G;
 
 // типы, которые может породить портал: только те, что умеют гнаться за игроком
@@ -62,22 +63,6 @@ function updateLeader(dt) {
     // упёршись в стену, не тормозим в ноль, а скользим вдоль неё
     const normal = moveAndCollide(lead, lead.vx * dt, lead.vy * dt, world.moveBlockers);
     if (normal) slideAlongWall(lead, normal, cfg.wallFriction);
-  }
-  if (state.level.solidEnemies) pushOutOfEnemies(lead);
-}
-
-// уровень с твёрдыми врагами: Герой не проходит сквозь тела врагов — на узкой тропе один
-// враг перекрывает её целиком, пока его не убьют или не оттеснят
-function pushOutOfEnemies(u) {
-  for (const e of state.enemies) {
-    if (!isSpotted(e)) continue;
-    const dx = u.x - e.x, dy = u.y - e.y;
-    const d = Math.hypot(dx, dy), min = u.r + e.r;
-    if (d >= min) continue;
-    const nx = d > 0.01 ? dx / d : 1, ny = d > 0.01 ? dy / d : 0;
-    moveAndCollide(u, nx * (min - d), ny * (min - d), world.moveBlockers);
-    const into = u.vx * nx + u.vy * ny;
-    if (into < 0) { u.vx -= nx * into; u.vy -= ny * into; }
   }
 }
 
@@ -190,6 +175,7 @@ function update(dt) {
   updateDoors();
   updateWaves(dt);
   for (const e of state.enemies.slice()) updateEnemy(e, dt);
+  separateBodies();
   updateCannons(dt);
   updateProjectiles(dt);
   updateClouds(dt);

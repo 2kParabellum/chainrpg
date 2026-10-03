@@ -7,7 +7,7 @@ const { CONFIG, state } = G;
 const { dist } = G.math;
 const { moveAndCollide, circleRectOverlap } = G.collision;
 const { leader, chainUnits } = G.session;
-const { world, spikeRectAt, standsOnSpikes, freeSpotInRoom, hasLineOfSight, flowDir } = G.world;
+const { world, spikeRectAt, standsOnSpikes, freeSpotInRoom, hasLineOfSight, flowDir, buildFlowField, pathClear } = G.world;
 const { nearestTarget } = G.combat;
 
 // враг, оказавшийся на шипах не в рывке, сходит с них кратчайшим путём
@@ -51,9 +51,10 @@ function wanderStep(e, dt, speed) {
   }
 }
 
-// погоня: враг идёт к цели напрямую, где бы та ни была (по умолчанию — к Герою: так идут порождённые
-// порталом). Поиска пути нет: упёршись в препятствие, враг идёт вдоль него, пока путь к цели снова
-// не освободится; если обход упёрся в тупик или затянулся, меняет сторону.
+// погоня: враг идёт к цели, где бы та ни была (по умолчанию — к Герою: так идут порождённые порталом).
+// Если путь по прямой свободен — идёт напрямую, иначе — по полю путей в обход пропастей и стен (к союзникам
+// или к базе). Без поля (у самой цели) — по-старому: упёршись в препятствие, идёт вдоль него, пока путь
+// к цели снова не освободится; если обход упёрся в тупик или затянулся, меняет сторону.
 // stopDist — на каком расстоянии от цели остановиться, если её видно (стрелки держат дистанцию)
 const DETOUR_MAX = 3;       // дольше этого одну сторону обхода не держим
 const DETOUR_MIN = 0.4;     // раньше этого обход не заканчиваем, чтобы не дёргаться у стены
@@ -70,31 +71,33 @@ function siegeTarget(e) {
   return nearestTarget(e, chainUnits().concat(state.downed), state.level.waves.sight) || state.base;
 }
 
-// путь по прямой свободен для тела радиуса r: ни стены, ни колонны на средней линии и на краях тела
-function clearPath(a, b, r) {
-  const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
-  const nx = (-dy / d) * r, ny = (dx / d) * r;
-  return [0, 1, -1].every((k) => hasLineOfSight({ x: a.x + nx * k, y: a.y + ny * k }, { x: b.x + nx * k, y: b.y + ny * k }));
+// поле путей к союзникам (цепочка и лежачие — к ближайшему из них): одно на всех врагов, пересчитывается
+// не чаще раза в NAV.allyEvery; после сброса партии (state.allyFlow === null) — сразу
+function allyFlow() {
+  const f = state.allyFlow;
+  if (f && state.time - f.at < CONFIG.NAV.allyEvery) return f.field;
+  const field = buildFlowField(chainUnits().concat(state.downed));
+  state.allyFlow = { at: state.time, field };
+  return field;
 }
 
 function chaseStep(e, dt, speed, stopDist, target) {
-  if (!target && e.siege && state.base) {
-    target = siegeTarget(e);
-    // к базе по прямой — только если путь до неё свободен; иначе по полю направлений через проходы двора
-    if (target === state.base && !clearPath(e, target, e.r)) {
-      const dir = flowDir(e.x, e.y);
-      if (dir) {
-        e.detour = 0;
-        moveAndCollide(e, dir.x * speed * dt, dir.y * speed * dt, world.moveBlockers);
-        return;
-      }
-    }
-  }
+  if (!target && e.siege && state.base) target = siegeTarget(e);
   target = target || leader();
   const dx = target.x - e.x, dy = target.y - e.y;
   const d = Math.hypot(dx, dy);
   if (d < 1) return;
   if (stopDist && d < stopDist && hasLineOfSight(e, target)) return;
+
+  // прямой путь закрыт пропастью или стеной — идём в обход по полю путей (к базе — по её полю)
+  if (!pathClear(e, target, e.r)) {
+    const dir = flowDir(target.kind === 'base' ? world.baseFlow : allyFlow(), e.x, e.y);
+    if (dir) {
+      e.detour = 0;
+      moveAndCollide(e, dir.x * speed * dt, dir.y * speed * dt, world.moveBlockers);
+      return;
+    }
+  }
 
   let ux = dx / d, uy = dy / d;
   if (e.detour > 0) {

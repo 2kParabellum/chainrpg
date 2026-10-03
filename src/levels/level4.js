@@ -66,9 +66,14 @@ G.level4 = {
   },
   // победа: продержаться 5 минут; поражение — ещё и разрушенная база
   victory: { kind: 'survive', time: 300, label: 'ДО ПОБЕДЫ' },
-  // на старте во дворе — несколько подиумов профессий и дружочков, дальше — только снаружи и чуть дальше обычного
-  padSpawn: { ringMax: 900, jobs: { startCount: 4 } },
-  allySpawn: { startCount: 4, ringMax: 800 },
+  // на старте во дворе — несколько подиумов профессий и дружочков, дальше — только снаружи и чуть дальше обычного.
+  // За ними надо выходить в поле, поэтому они появляются чаще, живут дольше и их больше разом, чем на других уровнях
+  padSpawn: {
+    ringMax: 900, lifetime: [22, 32],
+    jobs: { startCount: 4, maxActive: 6, interval: [3, 6] },
+    buffs: { maxActive: 4, interval: [8, 15] },
+  },
+  allySpawn: { startCount: 4, ringMax: 800, maxActive: 5, interval: [3, 6], lifetime: [28, 38] },
   rooms: [ROOM_PLAN],
 };
 })(window.Game = window.Game || {});
