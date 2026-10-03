@@ -194,11 +194,12 @@ function chainUnits() { return state.party.slice(); }
 // враг, которого уже можно видеть, целить и рубить: скрытые типы (мина) — только после обнаружения
 function isSpotted(e) { return !enemyTypes[e.type].hiddenUntilRevealed || e.revealed; }
 
-// множитель скорости Героя от длины цепочки: до 4 звеньев — 1, с 5-го падает и к 9-му — 0.5 (см. CHAIN.slowdown)
+// множитель скорости Героя от длины цепочки: замедление — сумма первых k членов арифметической прогрессии
+// (first, first + step, ...), k — сколько звеньев сверх fromLink; см. CHAIN.slowdown
 function chainSpeedMul() {
-  const { fromLink, fullLink, minMul } = CONFIG.CHAIN.slowdown;
-  const k = clamp((state.party.length - (fromLink - 1)) / (fullLink - (fromLink - 1)), 0, 1);
-  return 1 - (1 - minMul) * k;
+  const { fromLink, first, step, max } = CONFIG.CHAIN.slowdown;
+  const k = Math.max(0, state.party.length - fromLink);
+  return 1 - Math.min(max, k * first + (step * k * (k - 1)) / 2);
 }
 
 function currentRoom() { return roomIndexAt(leader().x, leader().y); }
