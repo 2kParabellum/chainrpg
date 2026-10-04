@@ -377,6 +377,22 @@ function fadeAlpha(life, maxLife, warnTime) {
   return a;
 }
 
+// мягкое белое пульсирующее свечение под телом: этого дружочка можно подобрать в цепочку
+function drawPickupGlow(u) {
+  const k = 0.5 + 0.5 * Math.sin(state.time * 3.5);
+  const R = u.r * (2 + 0.7 * k);
+  const g = ctx.createRadialGradient(u.x, u.y, u.r * 0.6, u.x, u.y, R);
+  g.addColorStop(0, 'rgba(255,255,255,0.5)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  const a = ctx.globalAlpha;
+  ctx.globalAlpha = a * (0.45 + 0.55 * k);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(u.x, u.y, R, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = a;
+}
+
 // ждущие вербовки дружочки появляются и уходят так же, как подиумы: перед уходом — часы и мигание
 function drawNeutrals() {
   const warnTime = G.pads.allySettings().warnTime;
@@ -384,6 +400,7 @@ function drawNeutrals() {
     if (!onScreen(n)) continue;
     const timed = n.life !== undefined;
     if (timed) ctx.globalAlpha = fadeAlpha(n.life, n.maxLife, warnTime);
+    drawPickupGlow(n);
     ctx.setLineDash([4, 4]);
     drawUnitBody(n, COLORS.neutral, false);
     ctx.setLineDash([]);
@@ -419,6 +436,7 @@ function drawDowned() {
   for (const d of state.downed) {
     if (!onScreen(d)) continue;
     const color = allyColor(d);
+    drawPickupGlow(d);
     ctx.globalAlpha = 0.55;
     drawUnitBody(d, color, true);
     ctx.globalAlpha = 1;
@@ -514,11 +532,11 @@ function drawPadMarks() {
 }
 
 // подиум профессии — круглый дружочек (диаметр — сторона подиума) цвета профессии с её знаком на теле: сразу
-// видно, каким станет звено, которое его получит. Смотрит на Героя, снизу — подпись. Пока отдать его некому
+// видно, каким станет звено, которое его получит. Стоит неподвижно, смотрит вверх, снизу — подпись. Пока отдать его некому
 // (в цепочке нет дружочка без профессии и нет звена этой профессии ниже 3-го уровня) — он серый и тусклый
 function drawJobPad(pad, def, alpha, wave) {
-  const r = pad.w / 2, lead = state.party[0];
-  const body = { x: pad.x + r, y: pad.y + r, r: r - 1, facing: Math.atan2(lead.y - pad.y - r, lead.x - pad.x - r) };
+  const r = pad.w / 2;
+  const body = { x: pad.x + r, y: pad.y + r, r: r - 1, facing: -Math.PI / 2 };
   const active = !!G.chain.jobTarget(pad.ability);
   const color = active ? def.color : COLORS.neutral;
   ctx.globalAlpha = (active ? 0.85 + 0.1 * wave : 0.45) * alpha;
