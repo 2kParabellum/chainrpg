@@ -527,7 +527,7 @@ const boss = {
            // атака 2 — один огромный снаряд в игрока: выбивает задетых из цепочки; прицел ведётся
            // с упреждением по скорости игрока (megaLeadFactor — доля предсказанного смещения),
            // сверху ещё случайный сдвиг в пределах megaAimError — не гарантированное попадание, но точнее «в лоб»
-           megaDmg: 26, megaEdgeDmg: 10, megaBlast: 190, megaFlight: 1.8, megaKnockback: 420,
+           megaDmg: 26, megaEdgeDmg: 10, megaBlast: 171, megaFlight: 1.8, megaKnockback: 420,
            megaLeadFactor: 0.5, megaAimError: 90,
            // атака 3 — луч: сперва секунда прицеливания (боссу видно, куда целится), затем луч растёт
            // от босса с постоянной скоростью 820 px/с — ровно столько, чтобы из центра арены (её радиус
@@ -536,8 +536,8 @@ const boss = {
            // атака 4 — вызов подкрепления
            summonMin: 4, summonMax: 6, summonTypes: ['zombie', 'hunter'],
            // щит: включён постоянно. Ранит выстрелами босса не достать (кроме усиления «сила»),
-           // а тот, кто подошёл слишком близко, получает урон сам
-           shieldAuraExtra: 55, shieldContactDmg: 14, shieldContactInterval: 0.4 },
+           // а тот, кто подошёл вплотную (на полдружочка от тела), получает урон сам
+           shieldAuraExtra: 12, shieldContactDmg: 7, shieldContactInterval: 0.4 },
   noRegen: true,
   alwaysActive: true,
   deathFlash: 220,
