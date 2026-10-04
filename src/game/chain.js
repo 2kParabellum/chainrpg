@@ -143,6 +143,8 @@ function touchPads() {
       markPadUsed(pad);
       // каждое звено берёт с одного подиума один раз, хотя касается его много кадров подряд
       if (pad.takenBy.includes(u)) continue;
+      // о взятом усилении — надпись на экране, один раз на подиум (первым его касается Герой)
+      if (!pad.takenBy.length) state.notice = { key: pad.ability, at: state.time };
       pad.takenBy.push(u);
       giveBuff(u, pad.ability);
       continue;

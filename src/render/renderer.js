@@ -494,20 +494,51 @@ function drawPadMarks() {
     const k = 1 - clamp(m.left / m.total, 0, 1);     // 0 — только появилась, 1 — сейчас будет подиум
     const cx = m.x + m.w / 2, cy = m.y + m.h / 2;
     const half = (m.w / 2) * (2.2 - 1.2 * k);
+    // у будущей профессии тень круглая, как сам подиум, у усиления — квадратная
+    const round = G.pads.padKind(m.ability) === 'jobs';
     ctx.fillStyle = '#000';
     ctx.globalAlpha = 0.2 + 0.45 * k;
-    ctx.fillRect(cx - half, cy - half, half * 2, half * 2);
+    ctx.beginPath();
+    if (round) ctx.arc(cx, cy, half, 0, Math.PI * 2); else ctx.rect(cx - half, cy - half, half * 2, half * 2);
+    ctx.fill();
     ctx.globalAlpha = 0.35 + 0.4 * k;
     ctx.strokeStyle = '#8a8a95';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([6, 5]);
-    ctx.strokeRect(m.x + 1, m.y + 1, m.w - 2, m.h - 2);
+    ctx.beginPath();
+    if (round) ctx.arc(cx, cy, m.w / 2 - 1, 0, Math.PI * 2); else ctx.rect(m.x + 1, m.y + 1, m.w - 2, m.h - 2);
+    ctx.stroke();
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
   }
 }
 
-// подиумы: светящийся квадрат на полу. Подиумы усилений окружены ещё и широким мягким свечением
+// подиум профессии — большой круглый дружочек цвета профессии с её знаком на теле: сразу видно,
+// каким станет звено, которое его получит. Смотрит на Героя, вокруг пульсирует кольцо, снизу — подпись
+function drawJobPad(pad, def, alpha, wave) {
+  const r = pad.w / 2, lead = state.party[0];
+  const body = { x: pad.x + r, y: pad.y + r, r, facing: Math.atan2(lead.y - pad.y - r, lead.x - pad.x - r) };
+  ctx.globalAlpha = (0.35 + 0.25 * wave) * alpha;
+  ctx.strokeStyle = def.color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(body.x, body.y, r + 7 + 3 * wave, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 0.9 * alpha;
+  drawUnitBody(body, def.color, true);
+  ctx.lineWidth = 3.5;
+  ctx.strokeStyle = '#0e0e10';
+  allyTypes.buddy.mark(body, body.facing, ctx);
+  def.mark(body, body.facing, ctx);
+  ctx.fillStyle = def.color;
+  ctx.font = '12px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(def.name, body.x, body.y + r + 16);
+  ctx.globalAlpha = 1;
+}
+
+// подиумы: профессии — большие дружочки (см. drawJobPad), усиления — светящийся квадрат на полу
+// в широком мягком свечении
 function drawPads() {
   const { pulse } = CONFIG.PADS;
   const warnTime = G.pads.settings().warnTime;
@@ -519,17 +550,20 @@ function drawPads() {
     const buff = G.buffs[pad.ability];
     const def = buff || abilities[pad.ability];
     const cx = pad.x + pad.w / 2, cy = pad.y + pad.h / 2;
-    const halo = pad.w * (buff ? 0.75 : 0);
-    if (buff) {
-      const g = ctx.createRadialGradient(cx, cy, pad.w * 0.4, cx, cy, halo * (1 + 0.06 * wave));
-      g.addColorStop(0, def.color);
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g;
-      ctx.globalAlpha = (0.22 + 0.08 * wave) * alpha;
-      ctx.beginPath();
-      ctx.arc(cx, cy, halo * 1.1, 0, Math.PI * 2);
-      ctx.fill();
+    if (!buff) {
+      drawJobPad(pad, def, alpha, wave);
+      if (pad.life <= warnTime) drawHourglass(pad.x + pad.w, pad.y - 4, 7);
+      continue;
     }
+    const halo = pad.w * 0.75;
+    const g = ctx.createRadialGradient(cx, cy, pad.w * 0.4, cx, cy, halo * (1 + 0.06 * wave));
+    g.addColorStop(0, def.color);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.globalAlpha = (0.22 + 0.08 * wave) * alpha;
+    ctx.beginPath();
+    ctx.arc(cx, cy, halo * 1.1, 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = def.color;
     ctx.globalAlpha = glow * alpha;
     ctx.fillRect(pad.x, pad.y, pad.w, pad.h);

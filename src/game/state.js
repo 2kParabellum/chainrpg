@@ -35,6 +35,7 @@ const state = {
   base: null,        // уровень «Оборона»: база — цель врагов с запасом HP (null на других уровнях)
   nests: [],         // гнёзда врагов: таймер следующей волны и сколько волн уже вышло (см. game/waves.js)
   allyFlow: null,    // поле путей к союзникам и когда оно посчитано (см. game/roaming.js); null — посчитать заново
+  notice: null,      // надпись на экране о взятом усилении: { key, at } — что взято и когда (по state.time)
 };
 
 function makeUnit(kind, type, x, y, cfg) {
@@ -139,6 +140,7 @@ function resetGame(level) {
   state.targetableEnemies = [];
   state.base = world.base ? makeBase(world.base) : null;
   state.allyFlow = null;
+  state.notice = null;
   // у каждого гнезда свой таймер волн; порядок, в котором гнёзда выпускают первые волны, бросается заново
   const waves = level.waves;
   state.nests = waves ? shuffled(world.nests).map((p, k) => ({

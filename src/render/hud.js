@@ -46,6 +46,55 @@ function drawEdgeMarkers() {
   if (state.base && state.base.regenTimer < 1) drawEdgeMarker(state.base.x, state.base.y, COLORS.baseEdge, 'БАЗА');
 }
 
+// яркость надписи, которая видна duration секунд с момента age = 0: быстро проявляется, в конце гаснет
+function bannerAlpha(age, duration) {
+  return clamp(age / 0.25, 0, 1) * clamp((duration - age) / 0.6, 0, 1);
+}
+
+// в начале партии — название уровня и его цель
+function drawLevelGoal() {
+  const { goal, name } = state.level;
+  const a = bannerAlpha(state.time, 4.5);
+  if (!goal || a <= 0 || state.status !== 'play') return;
+  const V = CONFIG.VIEW, y = 130;
+  ctx.globalAlpha = a;
+  ctx.fillStyle = 'rgba(10,10,12,0.75)';
+  ctx.fillRect(0, y - 42, V.w, 74);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#8a8a95';
+  ctx.font = '14px monospace';
+  ctx.fillText(name.toUpperCase(), V.w / 2, y - 18);
+  ctx.fillStyle = '#f0f0f5';
+  ctx.font = 'bold 22px monospace';
+  ctx.fillText(`ЦЕЛЬ: ${goal}`, V.w / 2, y + 14);
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
+}
+
+// надпись о только что взятом усилении: что оно даёт и на сколько секунд; чуть всплывает и гаснет
+function drawNotice() {
+  const n = state.notice;
+  if (!n || state.status !== 'play') return;
+  const age = state.time - n.at, a = bannerAlpha(age, 2.8);
+  if (a <= 0) return;
+  const def = G.buffs[n.key], V = CONFIG.VIEW;
+  const y = V.h / 2 - 90 - Math.min(age, 1) * 10;
+  const text = `${def.name.toUpperCase()}: ${def.desc}, ${def.duration} с`;
+  ctx.font = 'bold 18px monospace';
+  const w = ctx.measureText(text).width + 32;
+  ctx.globalAlpha = a;
+  ctx.fillStyle = 'rgba(10,10,12,0.8)';
+  ctx.fillRect(V.w / 2 - w / 2, y - 22, w, 34);
+  ctx.strokeStyle = def.color;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(V.w / 2 - w / 2, y - 22, w, 34);
+  ctx.fillStyle = def.color;
+  ctx.textAlign = 'center';
+  ctx.fillText(text, V.w / 2, y + 2);
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
+}
+
 function drawHud() {
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -82,6 +131,9 @@ function drawHud() {
   }
 
   drawEdgeMarkers();
+  drawLevelGoal();
+  drawNotice();
+  ctx.font = '13px monospace';
 
   const pickup = nearestPickup();
   const btn = buttonUnder(leader());

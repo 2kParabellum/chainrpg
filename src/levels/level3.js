@@ -24,6 +24,7 @@ const ROOM_PLAN = {
 G.level3 = {
   name: 'Boss Fight',
   blurb: 'Круглая арена: демон с четырьмя атаками',
+  goal: 'Победи демона',
   geometry: { kind: 'arena', radius: 820, margin: 40 },
   spawn: { room: 0, at: [0.5, 0.90] }, // игрок стартует внизу арены
   enemyPool: ['boss'],

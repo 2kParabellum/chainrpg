@@ -56,10 +56,17 @@ function runSpawner(timerKey, cfg, count, spawn, dt) {
 
 function padColor(key) { return (G.buffs[key] || G.abilities[key]).color; }
 
-// подиум, которого касается тело юнита (или null): берётся при пересечении круга тела и квадрата подиума
+// касается ли тело юнита подиума: подиум профессии круглый (вписан в свой квадрат), усиления — квадратный
+function touchesPad(u, pad) {
+  if (padKind(pad.ability) === 'buffs') return circleRectOverlap(u.x, u.y, u.r, pad);
+  const r = pad.w / 2;
+  return Math.hypot(u.x - (pad.x + r), u.y - (pad.y + r)) < u.r + r;
+}
+
+// подиум, которого касается тело юнита (или null)
 function padUnder(u) {
   for (const pad of state.pads) {
-    if (circleRectOverlap(u.x, u.y, u.r, pad)) return pad;
+    if (touchesPad(u, pad)) return pad;
   }
   return null;
 }
@@ -158,5 +165,5 @@ function updateAllySpawns(dt) {
   runSpawner('allySpawnIn', cfg, state.neutrals.length, spawnAlly, dt);
 }
 
-G.pads = { padUnder, markPadUsed, consumePad, updatePads, settings, updateAllySpawns, allySettings };
+G.pads = { padKind, padUnder, markPadUsed, consumePad, updatePads, settings, updateAllySpawns, allySettings };
 })(window.Game = window.Game || {});
