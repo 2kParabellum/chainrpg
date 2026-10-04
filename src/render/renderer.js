@@ -513,27 +513,27 @@ function drawPadMarks() {
   }
 }
 
-// подиум профессии — большой круглый дружочек цвета профессии с её знаком на теле: сразу видно,
-// каким станет звено, которое его получит. Смотрит на Героя, вокруг пульсирует кольцо, снизу — подпись
+// подиум профессии — круглый дружочек (диаметр — сторона подиума) цвета профессии с её знаком на теле: сразу
+// видно, каким станет звено, которое его получит. Смотрит на Героя, снизу — подпись. Пока отдать его некому
+// (в цепочке нет дружочка без профессии и нет звена этой профессии ниже 3-го уровня) — он серый и тусклый
 function drawJobPad(pad, def, alpha, wave) {
   const r = pad.w / 2, lead = state.party[0];
-  const body = { x: pad.x + r, y: pad.y + r, r, facing: Math.atan2(lead.y - pad.y - r, lead.x - pad.x - r) };
-  ctx.globalAlpha = (0.35 + 0.25 * wave) * alpha;
-  ctx.strokeStyle = def.color;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(body.x, body.y, r + 7 + 3 * wave, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.globalAlpha = 0.9 * alpha;
-  drawUnitBody(body, def.color, true);
-  ctx.lineWidth = 3.5;
+  const body = { x: pad.x + r, y: pad.y + r, r: r - 1, facing: Math.atan2(lead.y - pad.y - r, lead.x - pad.x - r) };
+  const active = !!G.chain.jobTarget(pad.ability);
+  const color = active ? def.color : COLORS.neutral;
+  ctx.globalAlpha = (active ? 0.85 + 0.1 * wave : 0.45) * alpha;
+  if (!active) ctx.setLineDash([5, 4]);
+  drawUnitBody(body, color, true);
+  ctx.setLineDash([]);
+  ctx.lineWidth = 3;
   ctx.strokeStyle = '#0e0e10';
   allyTypes.buddy.mark(body, body.facing, ctx);
   def.mark(body, body.facing, ctx);
-  ctx.fillStyle = def.color;
+  ctx.fillStyle = color;
+  ctx.globalAlpha = (active ? 0.9 : 0.75) * alpha;
   ctx.font = '12px monospace';
   ctx.textAlign = 'center';
-  ctx.fillText(def.name, body.x, body.y + r + 16);
+  ctx.fillText(def.name, body.x, body.y + r + 14);
   ctx.globalAlpha = 1;
 }
 
@@ -610,6 +610,8 @@ function drawPadLinks() {
   for (const u of state.party) {
     const pad = padUnder(u);
     if (!pad) continue;
+    // серый подиум профессии отдать некому — и подсказка «кто подберёт» не нужна
+    if (!G.buffs[pad.ability] && !G.chain.jobTarget(pad.ability)) continue;
     const def = G.buffs[pad.ability] || abilities[pad.ability];
     const cx = pad.x + pad.w / 2, cy = pad.y + pad.h / 2;
     const pulse = 0.75 + 0.25 * Math.sin(state.time * 6);

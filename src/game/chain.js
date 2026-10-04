@@ -250,7 +250,7 @@ function updateDowned(d, dt) {
 }
 
 G.chain = {
-  pushTrail, trailPointAt, followChain, touchPads, updateBuffs,
+  pushTrail, trailPointAt, followChain, touchPads, updateBuffs, jobTarget,
   nearestPickup, tryRecruit, canBeDisplaced, knockOutAlly, dropLastAlly, hookAlly, updateDowned,
 };
 })(window.Game = window.Game || {});

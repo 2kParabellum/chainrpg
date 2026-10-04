@@ -71,28 +71,30 @@ function drawLevelGoal() {
   ctx.textAlign = 'left';
 }
 
-// надпись о только что взятом усилении: что оно даёт и на сколько секунд; чуть всплывает и гаснет
+// надпись о только что взятом усилении: что оно даёт и на сколько секунд — спокойным серым текстом,
+// только название цветом усиления; чуть всплывает и гаснет
 function drawNotice() {
   const n = state.notice;
   if (!n || state.status !== 'play') return;
   const age = state.time - n.at, a = bannerAlpha(age, 2.8);
   if (a <= 0) return;
   const def = G.buffs[n.key], V = CONFIG.VIEW;
-  const y = V.h / 2 - 90 - Math.min(age, 1) * 10;
-  const text = `${def.name.toUpperCase()}: ${def.desc}, ${def.duration} с`;
-  ctx.font = 'bold 18px monospace';
-  const w = ctx.measureText(text).width + 32;
-  ctx.globalAlpha = a;
-  ctx.fillStyle = 'rgba(10,10,12,0.8)';
-  ctx.fillRect(V.w / 2 - w / 2, y - 22, w, 34);
-  ctx.strokeStyle = def.color;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(V.w / 2 - w / 2, y - 22, w, 34);
-  ctx.fillStyle = def.color;
-  ctx.textAlign = 'center';
-  ctx.fillText(text, V.w / 2, y + 2);
-  ctx.globalAlpha = 1;
+  const y = V.h / 2 - 80 - Math.min(age, 1) * 8;
+  const name = def.name[0].toUpperCase() + def.name.slice(1) + ': ';
+  const rest = `${def.desc}, ${def.duration} с`;
+  ctx.font = '14px monospace';
+  const nw = ctx.measureText(name).width, x = V.w / 2 - (nw + ctx.measureText(rest).width) / 2;
+  ctx.globalAlpha = 0.85 * a;
+  ctx.shadowColor = 'rgba(0,0,0,0.8)';
+  ctx.shadowBlur = 4;
   ctx.textAlign = 'left';
+  ctx.fillStyle = def.color;
+  ctx.fillText(name, x, y);
+  ctx.fillStyle = '#b4b4be';
+  ctx.fillText(rest, x + nw, y);
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = 'transparent';
+  ctx.globalAlpha = 1;
 }
 
 function drawHud() {
