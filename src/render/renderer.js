@@ -377,20 +377,19 @@ function fadeAlpha(life, maxLife, warnTime) {
   return a;
 }
 
-// мягкое белое пульсирующее свечение под телом: этого дружочка можно подобрать в цепочку
-function drawPickupGlow(u) {
-  const k = 0.5 + 0.5 * Math.sin(state.time * 3.5);
-  const R = u.r * (2 + 0.7 * k);
-  const g = ctx.createRadialGradient(u.x, u.y, u.r * 0.6, u.x, u.y, R);
-  g.addColorStop(0, 'rgba(255,255,255,0.5)');
+// дружочек, которого можно подобрать в цепочку, «дышит»: тело плавно увеличивается до +15% и обратно,
+// по краю — еле заметный белый ореол, как от света. Возвращает копию юнита с текущим радиусом тела
+function drawPickupPulse(u) {
+  const k = 0.5 - 0.5 * Math.cos(state.time * 3); // 0..1
+  const r = u.r * (1 + 0.15 * k);
+  const g = ctx.createRadialGradient(u.x, u.y, r * 0.9, u.x, u.y, r * 1.7);
+  g.addColorStop(0, 'rgba(255,255,255,0.14)');
   g.addColorStop(1, 'rgba(255,255,255,0)');
-  const a = ctx.globalAlpha;
-  ctx.globalAlpha = a * (0.45 + 0.55 * k);
   ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.arc(u.x, u.y, R, 0, Math.PI * 2);
+  ctx.arc(u.x, u.y, r * 1.7, 0, Math.PI * 2);
   ctx.fill();
-  ctx.globalAlpha = a;
+  return { ...u, r };
 }
 
 // ждущие вербовки дружочки появляются и уходят так же, как подиумы: перед уходом — часы и мигание
@@ -400,11 +399,11 @@ function drawNeutrals() {
     if (!onScreen(n)) continue;
     const timed = n.life !== undefined;
     if (timed) ctx.globalAlpha = fadeAlpha(n.life, n.maxLife, warnTime);
-    drawPickupGlow(n);
+    const body = drawPickupPulse(n);
     ctx.setLineDash([4, 4]);
-    drawUnitBody(n, COLORS.neutral, false);
+    drawUnitBody(body, COLORS.neutral, false);
     ctx.setLineDash([]);
-    drawMark(n, allyTypes[n.type].mark);
+    drawMark(body, allyTypes[n.type].mark);
     ctx.fillStyle = COLORS.neutral;
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
@@ -436,18 +435,18 @@ function drawDowned() {
   for (const d of state.downed) {
     if (!onScreen(d)) continue;
     const color = allyColor(d);
-    drawPickupGlow(d);
+    const body = drawPickupPulse(d), r = body.r;
     ctx.globalAlpha = 0.55;
-    drawUnitBody(d, color, true);
+    drawUnitBody(body, color, true);
     ctx.globalAlpha = 1;
     ctx.setLineDash([3, 3]);
-    drawUnitBody(d, color, false);
+    drawUnitBody(body, color, false);
     ctx.setLineDash([]);
     ctx.strokeStyle = '#0e0e10';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(d.x - d.r * 0.5, d.y - d.r * 0.5); ctx.lineTo(d.x + d.r * 0.5, d.y + d.r * 0.5);
-    ctx.moveTo(d.x + d.r * 0.5, d.y - d.r * 0.5); ctx.lineTo(d.x - d.r * 0.5, d.y + d.r * 0.5);
+    ctx.moveTo(d.x - r * 0.5, d.y - r * 0.5); ctx.lineTo(d.x + r * 0.5, d.y + r * 0.5);
+    ctx.moveTo(d.x + r * 0.5, d.y - r * 0.5); ctx.lineTo(d.x - r * 0.5, d.y + r * 0.5);
     ctx.stroke();
     drawHpBar(d);
     ctx.fillStyle = color;
