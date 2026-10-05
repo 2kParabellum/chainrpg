@@ -31,8 +31,12 @@ G.level3 = {
   zoneNames: ['АРЕНА БОССА'],
   // победа: демон уничтожен
   victory: { kind: 'destroyType', type: 'boss', label: 'БОСС' },
-  // подиумы появляются случайно; «сила» — единственная пробивает щит босса выстрелами, поэтому здесь она чаще
-  padSpawn: { buffs: { weights: { speed: 1, power: 3, regen: 1, sturdy: 1, spiky: 1, will: 1 } } },
+  // подиумы появляются случайно и на 20% чаще обычного (паузы между ними — общие, делённые на 1.2);
+  // «сила» — единственная пробивает щит босса выстрелами, поэтому здесь она чаще
+  padSpawn: {
+    jobs: { interval: [4.2, 9.2] },
+    buffs: { interval: [10, 20.8], weights: { speed: 1, power: 3, regen: 1, sturdy: 1, spiky: 1, will: 1 } },
+  },
   rooms: [ROOM_PLAN],
 };
 })(window.Game = window.Game || {});
