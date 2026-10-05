@@ -461,7 +461,8 @@ const portal = {
 // тела видно, что сейчас готовится.
 const BOSS_ATTACKS = ['barrage', 'mega', 'beam', 'summon'];
 const BOSS_TELEGRAPH = { barrage: 0.6, mega: 1.1, summon: 0.5 };
-const BOSS_ATTACK_COLOR = { barrage: COLORS.blast, mega: COLORS.bossGlow, beam: COLORS.fire, summon: COLORS.portal };
+const BOSS_ATTACK_COLOR = { barrage: COLORS.blast, mega: COLORS.bossGlow, beam: COLORS.fire, summon: COLORS.portal,
+                            ram: COLORS.bossRam };
 
 function pickBossAttack(e) {
   const options = BOSS_ATTACKS.filter((a) => a !== e.lastAttack);
@@ -517,6 +518,46 @@ function bossExecuteAttack(e, game, lead) {
   e.timer = cfg.attackCooldownMin + Math.random() * (cfg.attackCooldownMax - cfg.attackCooldownMin);
 }
 
+// шаг тарана демона: разгон по прямой, вдоль стены — скольжение, лобовой удар в стену или пройденный
+// ramDist — конец. Задетых ранит; дружочков выбивает из цепочки в сторону от линии тарана, Героя отшвыривает
+function bossRamStep(e, dt, chain, game) {
+  const cfg = e.cfg;
+  e.chargeSpeed = Math.min(cfg.ramSpeed, e.chargeSpeed + cfg.ramAccel * dt);
+  const step = e.chargeSpeed * dt;
+  const normal = moveAndCollide(e, e.dir.x * step, e.dir.y * step, game.world.moveBlockers);
+  e.travelled += step;
+  let crashed = false;
+  if (normal) {
+    const into = e.dir.x * normal.x + e.dir.y * normal.y;
+    if (into < -0.5) crashed = true;
+    else {
+      e.dir.x -= normal.x * into; e.dir.y -= normal.y * into;
+      const len = Math.hypot(e.dir.x, e.dir.y) || 1;
+      e.dir.x /= len; e.dir.y /= len;
+      e.facing = Math.atan2(e.dir.y, e.dir.x);
+    }
+  }
+  for (const u of chain.concat(game.state.downed)) {
+    if (e.hitThisCharge.includes(u) || dist(e, u) >= e.r + u.r) continue;
+    e.hitThisCharge.push(u);
+    game.damageUnit(u, cfg.ramDmg);
+    if (u.hp <= 0) continue;
+    // отлетает вперёд-вбок от линии тарана — в ту сторону, где тело и было
+    const side = (u.x - e.x) * -e.dir.y + (u.y - e.y) * e.dir.x >= 0 ? 1 : -1;
+    const a = Math.atan2(e.dir.y, e.dir.x) + side * Math.PI * 0.35;
+    if (game.canBeDisplaced(u)) game.knockOutAlly(u, a, cfg.ramKnockback);
+    else { u.vx = Math.cos(a) * cfg.ramShove; u.vy = Math.sin(a) * cfg.ramShove; }
+    game.state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 10, life: 0.35, color: COLORS.bossRam });
+  }
+  if (crashed || e.travelled >= cfg.ramDist) {
+    e.state = 'idle';
+    e.passThrough = false;
+    e.attack = null;
+    e.ramCd = cfg.ramCooldown;
+    e.timer = cfg.attackCooldownMin + Math.random() * (cfg.attackCooldownMax - cfg.attackCooldownMin);
+  }
+}
+
 const boss = {
   stats: { name: 'Демон', hp: 1800, radius: 50, mass: Infinity, walkSpeed: 40, approachStop: 260,
            attackCooldownMin: 2.6, attackCooldownMax: 4.2,
@@ -537,7 +578,14 @@ const boss = {
            summonMin: 4, summonMax: 6, summonTypes: ['zombie', 'hunter'],
            // щит: включён постоянно. Ранит выстрелами босса не достать (кроме усиления «сила»),
            // а тот, кто подошёл вплотную (на полдружочка от тела), получает урон сам
-           shieldAuraExtra: 12, shieldContactDmg: 7, shieldContactInterval: 0.4 },
+           shieldAuraExtra: 12, shieldContactDmg: 7, shieldContactInterval: 0.4,
+           // таран — не из очереди атак: стоит Герою подойти ближе ramTrigger (от края до края), босс
+           // ramAim секунд злобно целится в него (последние ramLock секунд направление уже не меняется),
+           // потом бросается по прямой, как Бычок, и проносится насквозь на ramDist. Каждого задетого ранит
+           // на ramDmg; дружочков выбивает из цепочки в стороны, Героя отшвыривает вбок. Снова — не раньше ramCooldown
+           ramTrigger: 115, ramAim: 2, ramLock: 0.3, ramCooldown: 8,
+           ramStartSpeed: 220, ramAccel: 1600, ramSpeed: 780, ramDist: 800,
+           ramDmg: 20, ramKnockback: 460, ramShove: 340 },
   noRegen: true,
   alwaysActive: true,
   deathFlash: 220,
@@ -546,12 +594,16 @@ const boss = {
     e.shielded = true;
     e.shieldContactCd = 0;
     e.beam = null;
+    e.ramCd = 0;
   },
   update(e, dt, chain, game) {
     const cfg = e.cfg;
     e.age += dt;
     const lead = chain[0];
-    e.facing = Math.atan2(lead.y - e.y, lead.x - e.x);
+    e.ramCd -= dt;
+    // во время тарана и в последние мгновения прицела направление зафиксировано
+    const locked = e.state === 'ram' || (e.state === 'ramAim' && e.timer <= cfg.ramLock);
+    if (!locked) e.facing = Math.atan2(lead.y - e.y, lead.x - e.x);
 
     // щит держится постоянно: всё, что подошло слишком близко, получает урон сам
     e.shieldContactCd -= dt;
@@ -562,6 +614,25 @@ const boss = {
       }
       if (hit) e.shieldContactCd = cfg.shieldContactInterval;
     }
+
+    // Герой подошёл слишком близко — босс бросает всё (кроме уже начатой атаки) и готовит таран
+    if (e.state === 'idle' && e.ramCd <= 0 && dist(e, lead) - e.r - lead.r <= cfg.ramTrigger) {
+      e.state = 'ramAim'; e.attack = 'ram'; e.timer = cfg.ramAim;
+      return;
+    }
+    if (e.state === 'ramAim') {
+      e.timer -= dt;
+      if (e.timer <= 0) {
+        e.state = 'ram';
+        e.passThrough = true; // проносится сквозь цепочку (см. game/bodies.js)
+        e.dir = { x: Math.cos(e.facing), y: Math.sin(e.facing) };
+        e.travelled = 0;
+        e.hitThisCharge = [];
+        e.chargeSpeed = cfg.ramStartSpeed;
+      }
+      return;
+    }
+    if (e.state === 'ram') { bossRamStep(e, dt, chain, game); return; }
 
     if (e.state === 'idle') {
       if (dist(e, lead) > cfg.approachStop) {
@@ -613,7 +684,49 @@ const boss = {
   },
   draw(e, g) {
     const { ctx } = g;
-    const glowing = e.state === 'telegraph' || e.state === 'beamAim' || e.state === 'beamFire';
+    const glowing = e.state === 'telegraph' || e.state === 'beamAim' || e.state === 'beamFire'
+      || e.state === 'ramAim' || e.state === 'ram';
+    const angry = e.state === 'ramAim' || e.state === 'ram';
+    // таран: прицел — коридор шириной в тело на всю длину броска, к концу прицела ярче; зафиксирован — сплошной
+    if (e.state === 'ramAim') {
+      const fa = e.facing, k = 1 - e.timer / e.cfg.ramAim, locked = e.timer <= e.cfg.ramLock;
+      const nx = -Math.sin(fa) * e.r, ny = Math.cos(fa) * e.r;
+      const ex = e.x + Math.cos(fa) * e.cfg.ramDist, ey = e.y + Math.sin(fa) * e.cfg.ramDist;
+      ctx.fillStyle = COLORS.bossRam;
+      ctx.globalAlpha = 0.05 + 0.12 * k;
+      ctx.beginPath();
+      ctx.moveTo(e.x + nx, e.y + ny); ctx.lineTo(ex + nx, ey + ny);
+      ctx.lineTo(ex - nx, ey - ny); ctx.lineTo(e.x - nx, e.y - ny);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = COLORS.bossRam;
+      ctx.globalAlpha = 0.3 + 0.5 * k;
+      ctx.lineWidth = 2;
+      if (!locked) { ctx.setLineDash([10, 8]); ctx.lineDashOffset = -e.age * 60; }
+      for (const s of [1, -1]) {
+        ctx.beginPath();
+        ctx.moveTo(e.x + nx * s, e.y + ny * s);
+        ctx.lineTo(ex + nx * s, ey + ny * s);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.lineDashOffset = 0;
+      ctx.globalAlpha = 1;
+    }
+    // в броске за ним тянутся полосы скорости
+    if (e.state === 'ram') {
+      ctx.strokeStyle = COLORS.bossRam;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.45;
+      for (const s of [-0.6, 0, 0.6]) {
+        const px = e.x - e.dir.y * e.r * s, py = e.y + e.dir.x * e.r * s;
+        ctx.beginPath();
+        ctx.moveTo(px - e.dir.x * e.r * 0.8, py - e.dir.y * e.r * 0.8);
+        ctx.lineTo(px - e.dir.x * e.r * 2.6, py - e.dir.y * e.r * 2.6);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
     const color = glowing ? BOSS_ATTACK_COLOR[e.attack] : COLORS.boss;
     g.drawUnitBody(e, color, true);
     ctx.strokeStyle = '#0e0e10';
@@ -625,11 +738,22 @@ const boss = {
       ctx.lineTo(e.x + Math.cos(f + s) * e.r * 1.25, e.y + Math.sin(f + s) * e.r * 1.25);
       ctx.stroke();
     }
+    // злобный взгляд перед тараном: глаза больше, над ними сведённые к переносице брови
     ctx.fillStyle = glowing ? '#fff3c0' : COLORS.bossGlow;
     for (const s of [0.35, -0.35]) {
       ctx.beginPath();
-      ctx.arc(e.x + Math.cos(f + s) * e.r * 0.5, e.y + Math.sin(f + s) * e.r * 0.5, e.r * 0.13, 0, Math.PI * 2);
+      ctx.arc(e.x + Math.cos(f + s) * e.r * 0.5, e.y + Math.sin(f + s) * e.r * 0.5, e.r * (angry ? 0.17 : 0.13), 0, Math.PI * 2);
       ctx.fill();
+    }
+    if (angry) {
+      ctx.strokeStyle = '#0e0e10';
+      ctx.lineWidth = 4;
+      for (const s of [1, -1]) {
+        ctx.beginPath();
+        ctx.moveTo(e.x + Math.cos(f + s * 0.75) * e.r * 0.62, e.y + Math.sin(f + s * 0.75) * e.r * 0.62);
+        ctx.lineTo(e.x + Math.cos(f + s * 0.12) * e.r * 0.78, e.y + Math.sin(f + s * 0.12) * e.r * 0.78);
+        ctx.stroke();
+      }
     }
     // прицел луча: пока целится, видно линию, куда он выстрелит
     if (e.state === 'beamAim') {

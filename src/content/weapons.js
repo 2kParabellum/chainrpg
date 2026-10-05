@@ -97,9 +97,12 @@ const spear = {
 // молнией, которая держится на цели и жжёт её непрерывно (dps в секунду). Чем цель ближе, тем больнее:
 // ближе fullRange — полный урон, к краю дальности падает до farMul и дальше не меняется. Цель ушла
 // дальше breakMul·range или погибла — молния рвётся, искра ищет новую цель и снова целится.
-// Щит босса молнию не гасит, но босс всегда получает от неё только bossMul урона (с «силой» или без)
+// Щит босса молнию не гасит, но босс всегда получает от неё только bossMul урона (с «силой» или без).
+// Разгон: каждая полная секунда непрерывного удара по одной цели прибавляет rampStep базового урона
+// (через 1 с — 120%, через 2 с — 140% …); новая цель или разрыв молнии сбрасывают разгон
 const spark = {
-  stats: { range: 230, fullRange: 110, farMul: 0.5, breakMul: 1.25, aimTime: 1.2, dps: 31.2, bossMul: 0.3, color: COLORS.spark },
+  stats: { range: 230, fullRange: 110, farMul: 0.5, breakMul: 1.25, aimTime: 1.2, dps: 31.2, bossMul: 0.3,
+           rampStep: 0.2, color: COLORS.spark },
   update(u, w, dt, game) {
     const t = w.target;
     if (t && (!game.state.enemies.includes(t) || dist(u, t) > w.range * w.breakMul)) w.target = null;
@@ -108,6 +111,7 @@ const spark = {
       if (!foe) return;
       w.target = foe;
       w.aim = w.aimTime;
+      w.held = 0;
     }
     const foe = w.target;
     u.facing = Math.atan2(foe.y - u.y, foe.x - u.x);
@@ -115,7 +119,9 @@ const spark = {
 
     const k = Math.min(1, Math.max(0, (dist(u, foe) - w.fullRange) / (w.range - w.fullRange)));
     const bossMul = foe.type === 'boss' ? w.bossMul : 1;
-    game.damageUnit(foe, w.dps * (1 - (1 - w.farMul) * k) * (u.dmgMul || 1) * bossMul * dt);
+    const ramp = 1 + w.rampStep * Math.floor(w.held);
+    w.held += dt;
+    game.damageUnit(foe, w.dps * ramp * (1 - (1 - w.farMul) * k) * (u.dmgMul || 1) * bossMul * dt);
   },
   // прицел — пунктир, который разгорается к выстрелу; молния — ломаная, каждый кадр новая
   draw(u, w, g) {
@@ -148,7 +154,9 @@ const spark = {
       pts.push([u.x + (dx * i) / n + nx * j, u.y + (dy * i) / n + ny * j]);
     }
     pts.push([foe.x, foe.y]);
-    for (const [width, color, alpha] of [[5, w.color, 0.35], [1.6, '#eef4ff', 0.95]]) {
+    // чем дольше держится молния (чем сильнее разогналась), тем она толще
+    const thick = Math.min(2.2, 1 + 0.25 * Math.floor(w.held || 0));
+    for (const [width, color, alpha] of [[5 * thick, w.color, 0.35], [1.6 * thick, '#eef4ff', 0.95]]) {
       ctx.globalAlpha = alpha;
       ctx.strokeStyle = color;
       ctx.lineWidth = width;
