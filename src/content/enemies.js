@@ -582,8 +582,9 @@ const boss = {
            // таран — не из очереди атак: стоит Герою подойти ближе ramTrigger (от края до края), босс
            // ramAim секунд злобно целится в него (последние ramLock секунд направление уже не меняется),
            // потом бросается по прямой, как Бычок, и проносится насквозь на ramDist. Каждого задетого ранит
-           // на ramDmg; дружочков выбивает из цепочки в стороны, Героя отшвыривает вбок. Снова — не раньше ramCooldown
-           ramTrigger: 115, ramAim: 2, ramLock: 0.3, ramCooldown: 8,
+           // на ramDmg; дружочков выбивает из цепочки в стороны, Героя отшвыривает вбок. Редкая: при сближении
+           // срабатывает лишь с шансом ramChance, не вышло — следующая попытка через ramCooldown (как и после тарана)
+           ramTrigger: 115, ramAim: 2, ramLock: 0.3, ramCooldown: 8, ramChance: 0.2,
            ramStartSpeed: 220, ramAccel: 1600, ramSpeed: 780, ramDist: 800,
            ramDmg: 20, ramKnockback: 460, ramShove: 340 },
   noRegen: true,
@@ -617,8 +618,8 @@ const boss = {
 
     // Герой подошёл слишком близко — босс бросает всё (кроме уже начатой атаки) и готовит таран
     if (e.state === 'idle' && e.ramCd <= 0 && dist(e, lead) - e.r - lead.r <= cfg.ramTrigger) {
-      e.state = 'ramAim'; e.attack = 'ram'; e.timer = cfg.ramAim;
-      return;
+      if (Math.random() >= cfg.ramChance) e.ramCd = cfg.ramCooldown;
+      else { e.state = 'ramAim'; e.attack = 'ram'; e.timer = cfg.ramAim; return; }
     }
     if (e.state === 'ramAim') {
       e.timer -= dt;
