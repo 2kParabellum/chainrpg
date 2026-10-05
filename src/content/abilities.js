@@ -93,7 +93,7 @@ const spark = {
   color: COLORS.spark,
   weapons: { spark: {} },
   // прокачка: урон
-  levels: [{}, { weapons: { spark: { dps: 32 } } }, { weapons: { spark: { dps: 42 } } }],
+  levels: [{}, { weapons: { spark: { dps: 41.6 } } }, { weapons: { spark: { dps: 54.6 } } }],
   // ломаная молния вдоль взгляда
   mark(u, f, ctx) {
     const px = Math.cos(f + Math.PI / 2), py = Math.sin(f + Math.PI / 2);
@@ -150,10 +150,10 @@ const speed = {
 
 const power = {
   name: 'сила',
-  desc: 'урон и здоровье +30%',
+  desc: 'урон +50%, здоровье +30%',
   color: COLORS.power,
   duration: 30,
-  dmg: 1.3, hp: 1.3,
+  dmg: 1.5, hp: 1.3,
   icon(ctx, x, y, s) {
     ctx.beginPath();
     ctx.moveTo(x, y - s * 0.6);

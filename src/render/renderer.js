@@ -724,6 +724,53 @@ function drawProjectiles() {
   }
 }
 
+// удар копейщика: яркая вспышка зоны удара и расходящееся толстое кольцо; на ходу — ещё и выпад копья
+// из тела в зону с острым наконечником, стоя — восемь лучей-уколов во все стороны
+function drawSpearHit(fx) {
+  const t = 1 - clamp(fx.life / fx.maxLife, 0, 1); // 0 — только ударил, 1 — эффект догорел
+  const fade = 1 - t;
+  ctx.fillStyle = fx.color;
+  ctx.globalAlpha = 0.35 * fade;
+  ctx.beginPath();
+  ctx.arc(fx.x, fx.y, fx.r * (0.8 + 0.3 * t), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = fx.color;
+  ctx.lineWidth = 4 * fade + 1;
+  ctx.globalAlpha = 0.95 * fade;
+  ctx.beginPath();
+  ctx.arc(fx.x, fx.y, fx.r * (0.9 + 0.5 * t), 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.lineCap = 'round';
+  const thrust = (x0, y0, a, len) => {
+    const x1 = x0 + Math.cos(a) * len, y1 = y0 + Math.sin(a) * len;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x1 + Math.cos(a) * 9, y1 + Math.sin(a) * 9);
+    ctx.lineTo(x1 + Math.cos(a + 2.6) * 7, y1 + Math.sin(a + 2.6) * 7);
+    ctx.lineTo(x1 + Math.cos(a - 2.6) * 7, y1 + Math.sin(a - 2.6) * 7);
+    ctx.closePath();
+    ctx.fill();
+  };
+  ctx.fillStyle = fx.color;
+  ctx.lineWidth = 3;
+  // копьё выбрасывается за первую четверть эффекта и дальше держится, пока гаснет
+  const reach = Math.min(1, t * 4);
+  if (fx.from) {
+    const a = Math.atan2(fx.y - fx.from.y, fx.x - fx.from.x);
+    thrust(fx.from.x, fx.from.y, a, (dist(fx.from, fx) + fx.r * 0.6) * reach);
+  } else {
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      thrust(fx.x + Math.cos(a) * fx.r * 0.35, fx.y + Math.sin(a) * fx.r * 0.35, a, fx.r * 0.55 * reach);
+    }
+  }
+  ctx.lineCap = 'butt';
+  ctx.globalAlpha = 1;
+}
+
 function drawEffects() {
   for (const fx of state.effects) {
     if (fx.type === 'beam') {
@@ -743,6 +790,8 @@ function drawEffects() {
       ctx.arc(fx.x, fx.y, fx.r, 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
+    } else if (fx.type === 'spearHit') {
+      drawSpearHit(fx);
     } else if (fx.type === 'blast') {
       const grow = fx.r * (1.15 - fx.life * 0.45);
       ctx.globalAlpha = clamp(fx.life * 1.6, 0, 0.22);

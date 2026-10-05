@@ -86,9 +86,10 @@ const spear = {
     if (!hit.length) return;
     for (const e of hit) game.damageUnit(e, w.dmg * (u.dmgMul || 1));
     w.cd = w.cooldown;
-    const fx = (x, y, r) => game.state.effects.push({ type: 'ring', x, y, r, life: 0.3, color: w.color });
-    if (moving) for (const z of zones) fx(z.x, z.y, w.zoneRadius);
-    else fx(u.x, u.y, u.r + w.aroundReach);
+    // заметный удар: на ходу — выпад копья из тела в каждую боковую зону, стоя — круговой взмах (см. render)
+    const fx = (x, y, r, from) => game.state.effects.push({ type: 'spearHit', x, y, r, from, life: 0.4, maxLife: 0.4, color: w.color });
+    if (moving) for (const z of zones) fx(z.x, z.y, w.zoneRadius, { x: u.x, y: u.y });
+    else fx(u.x, u.y, u.r + w.aroundReach, null);
   },
 };
 
@@ -96,9 +97,9 @@ const spear = {
 // молнией, которая держится на цели и жжёт её непрерывно (dps в секунду). Чем цель ближе, тем больнее:
 // ближе fullRange — полный урон, к краю дальности падает до farMul и дальше не меняется. Цель ушла
 // дальше breakMul·range или погибла — молния рвётся, искра ищет новую цель и снова целится.
-// Щит босса молнию гасит, как и выстрелы, а усиление «сила» его пробивает (см. game/combat.js)
+// Щит босса молнию не гасит, но босс всегда получает от неё только bossMul урона (с «силой» или без)
 const spark = {
-  stats: { range: 230, fullRange: 110, farMul: 0.5, breakMul: 1.25, aimTime: 1.2, dps: 24, color: COLORS.spark },
+  stats: { range: 230, fullRange: 110, farMul: 0.5, breakMul: 1.25, aimTime: 1.2, dps: 31.2, bossMul: 0.3, color: COLORS.spark },
   update(u, w, dt, game) {
     const t = w.target;
     if (t && (!game.state.enemies.includes(t) || dist(u, t) > w.range * w.breakMul)) w.target = null;
@@ -112,10 +113,9 @@ const spark = {
     u.facing = Math.atan2(foe.y - u.y, foe.x - u.x);
     if (w.aim > 0) { w.aim -= dt; return; }
 
-    const power = !!(u.buffs && u.buffs.power > 0);
-    if (foe.type === 'boss' && foe.shielded && !power) return;
     const k = Math.min(1, Math.max(0, (dist(u, foe) - w.fullRange) / (w.range - w.fullRange)));
-    game.damageUnit(foe, w.dps * (1 - (1 - w.farMul) * k) * (u.dmgMul || 1) * dt);
+    const bossMul = foe.type === 'boss' ? w.bossMul : 1;
+    game.damageUnit(foe, w.dps * (1 - (1 - w.farMul) * k) * (u.dmgMul || 1) * bossMul * dt);
   },
   // прицел — пунктир, который разгорается к выстрелу; молния — ломаная, каждый кадр новая
   draw(u, w, g) {
