@@ -625,6 +625,7 @@ function drawCannonShots() {
 // его цвета — толстая мягкая подложка снизу и бегущий пунктир поверх, чтобы луч не терялся на полу
 function drawPadLinks() {
   for (const u of state.party) {
+    if (u.absorbed) continue;
     const pad = padUnder(u);
     if (!pad) continue;
     // серый подиум профессии отдать некому — и подсказка «кто подберёт» не нужна
@@ -675,11 +676,78 @@ function drawBuffRings(u) {
   }
 }
 
-// цепочка: с хвоста, чтобы Герой оказался сверху.
+// светлый портал выхода: мягкое тёплое свечение, светлый диск, два пунктирных кольца крутятся навстречу,
+// в середине пульсирует ядро; появляется, разрастаясь, над ним подпись. Пока в него уходит цепочка — крутится быстрее
+function drawExit() {
+  const ex = state.exit;
+  if (!ex || !onScreen(ex, ex.r * 2.4)) return;
+  const age = state.time - ex.at, grow = clamp(age / 0.6, 0, 1), r = ex.r * grow;
+  if (r < 1) return;
+  const spin = state.time * (state.leaving ? 4 : 1.2);
+  const pulse = 0.5 + 0.5 * Math.sin(state.time * 3);
+  const g = ctx.createRadialGradient(ex.x, ex.y, r * 0.5, ex.x, ex.y, r * 2.4);
+  g.addColorStop(0, 'rgba(255,240,190,0.45)');
+  g.addColorStop(1, 'rgba(255,230,150,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(ex.x, ex.y, r * 2.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = COLORS.exit;
+  ctx.globalAlpha = 0.55 + 0.1 * pulse;
+  ctx.beginPath();
+  ctx.arc(ex.x, ex.y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = COLORS.exitGlow;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(ex.x, ex.y, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([9, 7]);
+  for (const [k, dir] of [[0.72, 1], [0.45, -1.6]]) {
+    ctx.lineDashOffset = -spin * 30 * dir;
+    ctx.beginPath();
+    ctx.arc(ex.x, ex.y, r * k, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.lineDashOffset = 0;
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(ex.x, ex.y, r * (0.18 + 0.06 * pulse), 0, Math.PI * 2);
+  ctx.fill();
+  if (state.leaving) return;
+  ctx.globalAlpha = grow;
+  ctx.fillStyle = COLORS.exitGlow;
+  ctx.font = 'bold 13px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('ВЫХОД', ex.x, ex.y - r - 12);
+  ctx.globalAlpha = 1;
+}
+
+// «Оборона»: волна от базы — толстое светлое кольцо, расходящееся до краёв поля
+function drawShockwave() {
+  const w = state.shockwave;
+  if (!w) return;
+  ctx.strokeStyle = COLORS.baseEdge;
+  for (const [width, alpha] of [[60, 0.12], [22, 0.35], [6, 0.9]]) {
+    ctx.lineWidth = width;
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// цепочка: с хвоста, чтобы Герой оказался сверху. Ушедшие в портал выхода не рисуются.
 // Знаки на теле: сначала знак типа, затем знак способности
 function drawChain() {
   for (let i = state.party.length - 1; i >= 0; i--) {
     const a = state.party[i];
+    if (a.absorbed) continue;
     drawUnitBody(a, allyColor(a), true);
     drawMark(a, allyTypes[a.type].mark);
     if (a.ability) drawMark(a, abilities[a.ability].mark);
@@ -689,6 +757,7 @@ function drawChain() {
   }
   // шеврон перед Героем: куда он поедет по W
   const lead = state.party[0], h = lead.heading || 0;
+  if (lead.absorbed) return;
   const tip = lead.r + 13, back = lead.r + 6;
   ctx.strokeStyle = allyColor(lead);
   ctx.globalAlpha = 0.85;
@@ -704,6 +773,7 @@ function drawChain() {
 // оружие поверх тел, если у него есть своё рисование (и у цепочки, и у выбитых — они дерутся лёжа)
 function drawWeapons() {
   for (const u of state.party.concat(state.downed)) {
+    if (u.absorbed) continue;
     for (const w of u.gear) {
       const def = weapons[w.type];
       if (def.draw) def.draw(u, w, shapes);
@@ -827,6 +897,7 @@ function drawScene() {
   drawPadMarks();
   drawPads();
   drawPadLinks();
+  drawExit();
   // облака и стенки огня лежат на земле: под всеми телами, иначе огонь закрывает стоящих в нём врагов
   drawClouds();
   drawFirewalls();
@@ -838,6 +909,7 @@ function drawScene() {
   drawWeapons();
   drawProjectiles();
   drawEffects();
+  drawShockwave();
 }
 
 G.renderer = { drawScene, drawCannonShots };

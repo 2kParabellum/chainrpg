@@ -38,6 +38,8 @@ function drawEdgeMarker(x, y, color, text) {
 // и где база, если её бьют, пока она за экраном
 function drawEdgeMarkers() {
   if (state.status !== 'play') return;
+  // портал выхода с уровня открыт, а он за экраном
+  if (state.exit && !state.leaving) drawEdgeMarker(state.exit.x, state.exit.y, COLORS.exitGlow, 'ВЫХОД');
   // обучение: выход из текущей комнаты открылся, а он за экраном
   for (const d of world.doors) {
     if (d.open && d.room === currentRoom()) drawEdgeMarker(d.x + d.w / 2, d.y + d.h / 2, COLORS.doorEdge, 'ДАЛЬШЕ');
@@ -56,11 +58,10 @@ function bannerAlpha(age, duration) {
   return clamp(age / 0.25, 0, 1) * clamp((duration - age) / 0.6, 0, 1);
 }
 
-// в начале партии — название уровня и его цель
-function drawLevelGoal() {
-  const { goal, name } = state.level;
-  const a = bannerAlpha(state.time, 4.5);
-  if (!goal || a <= 0 || state.status !== 'play') return;
+// плашка поперёк экрана: мелкий заголовок и крупный текст; age — сколько секунд она уже видна
+function drawBanner(title, text, age, duration, color = '#f0f0f5') {
+  const a = bannerAlpha(age, duration);
+  if (a <= 0 || state.status !== 'play') return;
   const V = CONFIG.VIEW, y = 130;
   ctx.globalAlpha = a;
   ctx.fillStyle = 'rgba(10,10,12,0.75)';
@@ -68,12 +69,48 @@ function drawLevelGoal() {
   ctx.textAlign = 'center';
   ctx.fillStyle = '#8a8a95';
   ctx.font = '14px monospace';
-  ctx.fillText(name.toUpperCase(), V.w / 2, y - 18);
-  ctx.fillStyle = '#f0f0f5';
+  ctx.fillText(title, V.w / 2, y - 18);
+  ctx.fillStyle = color;
   ctx.font = 'bold 22px monospace';
-  ctx.fillText(`ЦЕЛЬ: ${goal}`, V.w / 2, y + 14);
+  ctx.fillText(text, V.w / 2, y + 14);
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
+}
+
+// в начале партии — название уровня и его цель; после победы — что база выстояла и что открылся портал выхода
+function drawBanners() {
+  const { goal, name } = state.level;
+  if (goal) drawBanner(name.toUpperCase(), `ЦЕЛЬ: ${goal}`, state.time, 4.5);
+  if (state.cleared && state.base) drawBanner('БАЗА ВЫСТОЯЛА', 'Волна от базы сносит всех врагов и гнёзда', state.time - state.clearedAt, 3.2, COLORS.baseEdge);
+  if (state.exit && !state.leaving) drawBanner('ПОРТАЛ ОТКРЫТ', 'Заедь в светлый портал — уровень пройден', state.time - state.exit.at, 4, COLORS.exitGlow);
+}
+
+// цепочка уходит в портал выхода: тьма затягивает экран с краёв, оставляя сужающийся круг вокруг портала;
+// когда партия уже выиграна — экран тёмный целиком (поверх него экран «уровень пройден»)
+function drawIris() {
+  const V = CONFIG.VIEW;
+  if (state.status === 'win') { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, V.w, V.h); return; }
+  if (!state.leaving || state.status !== 'play') return;
+  const k = clamp(state.leaving.t / CONFIG.EXIT.irisTime, 0, 1);
+  const ease = k * k * (3 - 2 * k);
+  const cx = state.exit.x - state.camera.x, cy = state.exit.y - state.camera.y;
+  const far = Math.max(...[[0, 0], [V.w, 0], [0, V.h], [V.w, V.h]].map(([x, y]) => Math.hypot(x - cx, y - cy)));
+  const r = far * (1 - ease);
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.rect(0, 0, V.w, V.h);
+  if (r > 0.5) ctx.arc(cx, cy, r, 0, Math.PI * 2, true);
+  ctx.fill('evenodd');
+  // светлая кромка круга
+  if (r > 0.5) {
+    ctx.strokeStyle = COLORS.exitGlow;
+    ctx.globalAlpha = 0.5 * (1 - ease);
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
 }
 
 // надпись о только что взятом усилении: что оно даёт и на сколько секунд — спокойным серым текстом,
@@ -140,13 +177,15 @@ function drawHud() {
   }
 
   drawEdgeMarkers();
-  drawLevelGoal();
+  drawBanners();
   drawNotice();
   ctx.font = '13px monospace';
 
   const pickup = nearestPickup();
   const btn = buttonUnder(leader());
-  if (btn && !btn.pressed && state.party.length > 1 && state.status === 'play') {
+  if (state.leaving) {
+    // цепочка уходит в портал — подсказки внизу не нужны
+  } else if (btn && !btn.pressed && state.party.length > 1 && state.status === 'play') {
     ctx.fillStyle = '#8ce27a';
     ctx.textAlign = 'center';
     ctx.fillText('X — ОСТАВИТЬ ДРУЖОЧКА НА КНОПКЕ', CONFIG.VIEW.w / 2, CONFIG.VIEW.h - 30);
@@ -157,14 +196,17 @@ function drawHud() {
     ctx.fillText(msg, CONFIG.VIEW.w / 2, CONFIG.VIEW.h - 30);
   }
 
-  if (state.status === 'dead' || state.status === 'win') {
+  // шторка поверх всего, включая интерфейс; экран «уровень пройден» — в HTML поверх канваса (см. main.js)
+  drawIris();
+
+  if (state.status === 'dead') {
     ctx.fillStyle = 'rgba(10,10,12,0.75)';
     ctx.fillRect(0, CONFIG.VIEW.h / 2 - 50, CONFIG.VIEW.w, 100);
     ctx.textAlign = 'center';
-    ctx.fillStyle = state.status === 'win' ? '#8ce27a' : '#e06060';
+    ctx.fillStyle = '#e06060';
     ctx.font = '28px monospace';
     const lostBase = state.base && state.base.hp <= 0;
-    ctx.fillText(state.status === 'win' ? 'ПОБЕДА' : lostBase ? 'БАЗА РАЗРУШЕНА' : 'ПОРАЖЕНИЕ', CONFIG.VIEW.w / 2, CONFIG.VIEW.h / 2);
+    ctx.fillText(lostBase ? 'БАЗА РАЗРУШЕНА' : 'ПОРАЖЕНИЕ', CONFIG.VIEW.w / 2, CONFIG.VIEW.h / 2);
     ctx.font = '14px monospace';
     ctx.fillStyle = '#c8c8d2';
     ctx.fillText('R — начать заново', CONFIG.VIEW.w / 2, CONFIG.VIEW.h / 2 + 28);

@@ -17,6 +17,7 @@ const COLORS = {
   // двери, кнопки и неуязвимая пушка-ловушка (уровень «Тропа над пропастью»)
   door: '#6b4a4a', doorEdge: '#c07a5c', button: '#4a4a55', buttonEdge: '#8a8a9a', buttonPressed: '#8ce27a',
   cannon: '#3a3a44', cannonShot: '#ff7a2e', finish: '#63d2ff', bridge: '#24242b',
+  exit: '#fff2b8', exitGlow: '#ffe58a', // светлый портал выхода с уровня
   // база и гнёзда врагов (уровень «Оборона»)
   base: '#2f5a78', baseEdge: '#8fd6ff', baseHit: '#ff7a7a', nest: '#e04a5a',
 };

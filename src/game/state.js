@@ -36,6 +36,12 @@ const state = {
   nests: [],         // гнёзда врагов: таймер следующей волны и сколько волн уже вышло (см. game/waves.js)
   allyFlow: null,    // поле путей к союзникам и когда оно посчитано (см. game/roaming.js); null — посчитать заново
   notice: null,      // надпись на экране о взятом усилении: { key, at } — что взято и когда (по state.time)
+  // выход с уровня (см. game/exit.js)
+  cleared: false,    // условие победы выполнено: дальше — портал выхода (новые волны не выходят)
+  clearedAt: 0,      // когда (по state.time)
+  shockwave: null,   // «Оборона»: волна от базы { x, y, r, max }, сносит врагов и гнёзда, потом открывается портал
+  exit: null,        // светлый портал выхода { x, y, r, at }; null — ещё не открыт
+  leaving: null,     // Герой заехал в портал: { t, pull } — сколько секунд уходим и насколько втянута цепочка
 };
 
 // время жизни постоянного подиума уровня: дольше любой партии
@@ -144,6 +150,7 @@ function resetGame(level) {
   state.base = world.base ? makeBase(world.base) : null;
   state.allyFlow = null;
   state.notice = null;
+  state.cleared = false; state.clearedAt = 0; state.shockwave = null; state.exit = null; state.leaving = null;
   // у каждого гнезда свой таймер волн; порядок, в котором гнёзда выпускают первые волны, бросается заново
   const waves = level.waves;
   state.nests = waves ? shuffled(world.nests).map((p, k) => ({

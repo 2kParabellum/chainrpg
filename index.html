@@ -23,6 +23,9 @@
   #levelList { display: flex; flex-direction: column; align-items: center; gap: 14px; }
   .panel button.level { width: 420px; text-align: left; }
   .panel button.level small { display: block; margin-top: 4px; font-size: 12px; color: #8a8a95; }
+  #overlay.win { background: #000; }
+  #panelWin h1 { color: #fff2b8; }
+  #panelWin p { margin: 0 0 10px; font-size: 16px; color: #c8c8d2; }
   #controlsList { margin: 0 0 8px; border-collapse: collapse; font-size: 14px; }
   #controlsList td { padding: 5px 10px; }
   #controlsList td:first-child { color: #f0f0f5; text-align: right; white-space: nowrap; }
@@ -46,6 +49,12 @@
         <h2>Выбор уровня</h2>
         <div id="levelList"></div>
         <button id="levelsBackBtn">Назад</button>
+      </div>
+      <div id="panelWin" class="panel">
+        <h1 id="winTitle"></h1>
+        <p id="winText"></p>
+        <button id="nextBtn"></button>
+        <button id="winMenuBtn">В меню</button>
       </div>
       <div id="panelControls" class="panel">
         <h2>Управление</h2>
@@ -82,6 +91,7 @@
   <script src="src/game/roaming.js"></script>
   <script src="src/game/waves.js"></script>
   <script src="src/game/bodies.js"></script>
+  <script src="src/game/exit.js"></script>
   <script src="src/game/update.js"></script>
   <script src="src/render/shapes.js"></script>
   <script src="src/render/renderer.js"></script>

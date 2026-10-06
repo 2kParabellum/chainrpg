@@ -231,7 +231,7 @@ const hunter = {
 };
 
 const bull = {
-  stats: { name: 'Бычок', hp: 44, radius: 18, mass: 3, dmg: 12, aggro: 430, walkSpeed: 55,
+  stats: { name: 'Бычок', hp: 88, radius: 18, mass: 3, dmg: 12, aggro: 430, walkSpeed: 55,
            telegraph: 0.7, chargeSpeed: 540, chargeMaxDist: 720, chargeCooldown: 1.6,
            chargeStartSpeed: 150,   // с какой скорости начинается рывок
            chargeAccel: 780,        // разгон во время рывка

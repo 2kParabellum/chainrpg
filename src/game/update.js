@@ -16,6 +16,7 @@ const combat = G.combat;
 const { updateProjectiles, updateClouds, applySpikes, applyFirewalls, updateEffects, updateCannons } = combat;
 const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
 const { separateBodies } = G.bodies;
+const { onVictory, updateExit, updateLeavingLink } = G.exit;
 const { enemyTypes, weapons } = G;
 
 // типы, которые может породить портал: только те, что умеют гнаться за игроком
@@ -91,8 +92,10 @@ function updateWeapons(a, dt) {
   if (a.buffs.spiky > 0) applySpikyContact(a, dt);
 }
 
-// звено цепочки: Герой идёт сам, остальные бегут за ним
+// звено цепочки: Герой идёт сам, остальные бегут за ним; когда цепочка уходит в портал выхода — не дерутся,
+// а втягиваются в него
 function updateAlly(a, dt, i) {
+  if (state.leaving) { if (i > 0) updateLeavingLink(a, dt, i); return; }
   if (i > 0) followChain(a, dt, i);
   updateWeapons(a, dt);
 }
@@ -171,7 +174,7 @@ function update(dt) {
   if (state.status !== 'play') return;
 
   state.time += dt;
-  updateLeader(dt);
+  if (!state.leaving) updateLeader(dt); // в портале Герой уже не управляется
   pushTrail();
 
   // дальнее оружие бьёт по любому врагу в пределах своей дальности, а мину — только после обнаружения
@@ -200,7 +203,9 @@ function update(dt) {
   updateLate();
   updateEffects(dt);
 
-  if (state.status === 'play' && isVictory()) state.status = 'win';
+  // победа открывает портал выхода (на «Обороне» — после волны от базы); заехал в него — уровень пройден
+  if (state.status === 'play' && !state.cleared && isVictory()) onVictory();
+  updateExit(dt);
 
   // камера
   const targetX = clamp(leader().x - CONFIG.VIEW.w / 2, 0, world.width - CONFIG.VIEW.w);

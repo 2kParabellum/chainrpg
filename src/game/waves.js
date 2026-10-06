@@ -30,7 +30,7 @@ function releaseWave(nest, cfg) {
 
 function updateWaves(dt) {
   const cfg = state.level.waves;
-  if (!cfg) return;
+  if (!cfg || state.cleared) return; // база выстояла: новых волн нет
   if (state.base) state.base.regenTimer += dt; // сколько секунд базу не задевали
   for (const nest of state.nests) {
     nest.nextIn -= dt;

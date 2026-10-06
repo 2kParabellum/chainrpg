@@ -23,6 +23,7 @@ function nearestTarget(from, list, range) {
 
 function damageUnit(u, dmg) {
   if (u.hp <= 0) return;
+  if (state.leaving && u.kind === 'ally') return; // цепочка уже уходит в портал выхода
   u.hp -= dmg;
   u.regenTimer = 0;
   if (u.hp <= 0) {

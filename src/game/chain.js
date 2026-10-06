@@ -40,10 +40,11 @@ function trailPointAt(distBack) {
 }
 
 // звено i (i ≥ 1) тянется к своей точке на следе Героя пружиной с затуханием: на поворотах
-// хвост заносит, при остановке звенья проскакивают вперёд и возвращаются («плётка»)
-function followChain(a, dt, i) {
+// хвост заносит, при остановке звенья проскакивают вперёд и возвращаются («плётка»).
+// pull — на сколько точка звена подтянута по следу к Герою (цепочка втягивается в портал выхода)
+function followChain(a, dt, i, pull = 0) {
   const cfg = CONFIG.CHAIN, whip = cfg.whip;
-  const target = trailPointAt(i * cfg.spacing);
+  const target = trailPointAt(Math.max(0, i * cfg.spacing - pull));
   const prev = a.prevTarget;
   a.prevTarget = target;
   if (dt <= 0) return;
