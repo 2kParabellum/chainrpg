@@ -464,11 +464,31 @@ function drawWarnings() {
   }
 }
 
+// горящий враг (огненные стрелы): над телом пляшут язычки огня
+function drawBurn(e) {
+  if (!e.burn || e.burn.left <= 0) return;
+  ctx.globalAlpha = 0.85 * clamp(e.burn.left / 0.5, 0, 1);
+  for (let i = 0; i < 3; i++) {
+    const a = -Math.PI / 2 + (i - 1) * 0.7, s = e.r * (0.45 + 0.12 * Math.sin(state.time * 14 + i * 2));
+    const x = e.x + Math.cos(a) * e.r * 0.7, y = e.y + Math.sin(a) * e.r * 0.7;
+    for (const [k, c] of [[1, COLORS.fire], [0.55, COLORS.speed]]) {
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.moveTo(x, y - s * 1.3 * k);
+      ctx.quadraticCurveTo(x + s * k, y, x, y + s * 0.6 * k);
+      ctx.quadraticCurveTo(x - s * k, y, x, y - s * 1.3 * k);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
 function drawEnemies() {
   for (const e of state.enemies) {
     if (!onScreen(e)) continue;
     if (!isSpotted(e)) continue;
     drawEnemy(e);
+    drawBurn(e);
   }
 }
 

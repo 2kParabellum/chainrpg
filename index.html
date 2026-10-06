@@ -26,6 +26,19 @@
   #overlay.win { background: #000; }
   #panelWin h1 { color: #fff2b8; }
   #panelWin p { margin: 0 0 10px; font-size: 16px; color: #c8c8d2; }
+  #panelWin p.pickHint { margin: 4px 0 0; font-size: 13px; color: #8a8a95; }
+  #cards { display: flex; gap: 16px; }
+  #cards:empty, #cards:empty + .pickHint { display: none; }
+  .card { position: relative; width: 220px; padding: 10px 10px 12px; background: #1b1b21; border: 2px solid #3a3a44;
+          display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; text-align: center; }
+  .card:hover { border-color: #6b6b78; background: #212128; }
+  .card.selected { border-color: #fff2b8; background: #26262e; box-shadow: 0 0 18px rgba(255,230,150,0.25); }
+  .card canvas { width: 200px; height: 120px; display: block; }
+  .card .who { font-size: 11px; letter-spacing: 2px; }
+  .card .num { position: absolute; top: 4px; left: 8px; font-size: 11px; color: #6b6b78; }
+  .card h3 { margin: 0; font: bold 15px monospace; color: #f0f0f5; }
+  .card .desc { margin: 0; font-size: 12px; color: #9a9aa5; min-height: 30px; }
+  button:disabled { opacity: 0.35; cursor: default; }
   #controlsList { margin: 0 0 8px; border-collapse: collapse; font-size: 14px; }
   #controlsList td { padding: 5px 10px; }
   #controlsList td:first-child { color: #f0f0f5; text-align: right; white-space: nowrap; }
@@ -53,6 +66,8 @@
       <div id="panelWin" class="panel">
         <h1 id="winTitle"></h1>
         <p id="winText"></p>
+        <div id="cards"></div>
+        <p class="pickHint">Выбери улучшение (мышью или 1 / 2 / 3) — оно останется до конца игры</p>
         <button id="nextBtn"></button>
         <button id="winMenuBtn">В меню</button>
       </div>
@@ -77,6 +92,7 @@
   <script src="src/content/weapons.js"></script>
   <script src="src/content/abilities.js"></script>
   <script src="src/content/allies.js"></script>
+  <script src="src/content/upgrades.js"></script>
   <script src="src/content/enemies.js"></script>
   <script src="src/levels/level1.js"></script>
   <script src="src/levels/level2.js"></script>
@@ -96,6 +112,7 @@
   <script src="src/render/shapes.js"></script>
   <script src="src/render/renderer.js"></script>
   <script src="src/render/hud.js"></script>
+  <script src="src/render/cards.js"></script>
   <script src="src/main.js"></script>
 </body>
 </html>

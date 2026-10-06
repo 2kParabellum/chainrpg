@@ -6,7 +6,7 @@ const { CONFIG, COLORS, state } = G;
 const { dist, removeFrom } = G.math;
 const { circleRectOverlap, distToSegment } = G.collision;
 const { world, hasLineOfSight, standsOnSpikes } = G.world;
-const { chainUnits, enemyTargets } = G.session;
+const { chainUnits, enemyTargets, upgrade } = G.session;
 const { hookAlly, knockOutAlly } = G.chain;
 const { allyTypes, enemyTypes } = G;
 
@@ -21,9 +21,30 @@ function nearestTarget(from, list, range) {
   return best;
 }
 
-function damageUnit(u, dmg) {
+// улучшения копейщика против ближних атак врага (hit.melee, hit.by — кто бьёт): «шипастая броня» — копейщик
+// возвращает напавшему весь урон; «прикрытие» — звено прямо перед копейщиком в цепочке получает меньше.
+// Шипы считаются от урона до прикрытия. Возвращает урон, который дойдёт до цели
+function meleeDefense(u, dmg, hit) {
+  if (u.ability === 'spear' && hit.by && state.enemies.includes(hit.by) && upgrade('spikedArmor')) {
+    damageUnit(hit.by, dmg);
+    state.effects.push({ type: 'beam', x1: u.x, y1: u.y, x2: hit.by.x, y2: hit.by.y, life: 0.2, color: COLORS.spiky });
+  }
+  const c = upgrade('cover');
+  if (c && u.kind === 'ally') {
+    const behind = state.party[state.party.indexOf(u) + 1];
+    if (behind && behind.ability === 'spear') {
+      dmg *= 1 - c.cut;
+      state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 5, life: 0.2, color: COLORS.sturdy });
+    }
+  }
+  return dmg;
+}
+
+// hit — необязательно, откуда урон: { by: враг, melee: true } для ближних атак (укус, таран)
+function damageUnit(u, dmg, hit) {
   if (u.hp <= 0) return;
   if (state.leaving && u.kind === 'ally') return; // цепочка уже уходит в портал выхода
+  if (hit && hit.melee && (u.kind === 'ally' || u.kind === 'downed')) dmg = meleeDefense(u, dmg, hit);
   u.hp -= dmg;
   u.regenTimer = 0;
   if (u.hp <= 0) {
@@ -171,6 +192,10 @@ function updateProjectiles(dt) {
           state.effects.push({ type: 'ring', x: t.x, y: t.y, r: t.r + 6, life: 0.2, color: COLORS.shield });
         } else {
           damageUnit(t, p.dmg);
+          // огненная стрела поджигает: повторное попадание горение обновляет, не складывает
+          if (p.burn && t.kind === 'enemy' && t.hp > 0) {
+            t.burn = { left: p.burn.time, dps: Math.max(p.burn.dps, t.burn && t.burn.left > 0 ? t.burn.dps : 0) };
+          }
         }
         // игрока гарпун только ранит, а вот союзника уносит к Скорпиону
         if (p.kind === 'hook' && t.kind === 'ally' && t.hp > 0) hookAlly(t, p.owner);
@@ -179,6 +204,16 @@ function updateProjectiles(dt) {
       }
     }
     if (dead) state.projectiles.splice(i, 1);
+  }
+}
+
+// горение врагов (огненные стрелы): урон в секунду, пока не догорит
+function updateBurns(dt) {
+  for (const e of state.enemies.slice()) {
+    const b = e.burn;
+    if (!b || b.left <= 0) continue;
+    b.left -= dt;
+    damageUnit(e, b.dps * dt);
   }
 }
 
@@ -276,6 +311,6 @@ G.combat = {
   nearestTarget, damageUnit,
   spawnProjectile, spawnMortar, spawnBigMortar, spawnHook,
   spawnFirewall, applyFirewalls, updateCannons,
-  blast, updateProjectiles, applySpikes, updateClouds, updateEffects,
+  blast, updateProjectiles, updateBurns, applySpikes, updateClouds, updateEffects,
 };
 })(window.Game = window.Game || {});

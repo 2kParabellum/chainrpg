@@ -18,6 +18,8 @@
 //   noRegen      — не отлечивается сам (портал)
 //   alwaysActive — живёт и действует на любом расстоянии от игрока (портал)
 //   deathFlash   — радиус вспышки при гибели (только вид)
+// Ближние атаки (укус, таран) передают в game.damageUnit третий параметр { by: e, melee: true } —
+// на них отвечают улучшения копейщика (см. game/combat.js).
 // Всё, что нужно от игры, запись получает параметром game, а от рисования — параметром g
 // и никогда не подключает game/ и render/ сама.
 (function (G) {
@@ -202,7 +204,7 @@ const hunter = {
     const gap = dist(e, foe) - e.r - foe.r;
     if (gap > e.cfg.reach * 0.5) game.chaseStep(e, dt, e.cfg.runSpeed, e.r + foe.r + e.cfg.reach * 0.5, foe);
     if (gap <= e.cfg.reach && e.cd <= 0) {
-      game.damageUnit(foe, e.cfg.dmg);
+      game.damageUnit(foe, e.cfg.dmg, { by: e, melee: true });
       e.cd = e.cfg.cooldown;
       game.state.effects.push({ type: 'beam', x1: e.x, y1: e.y, x2: foe.x, y2: foe.y, life: 0.12, color: COLORS.hunter });
     }
@@ -300,7 +302,7 @@ const bull = {
       if (dist(e, u) >= e.r + u.r) continue;
       const dmg = e.hitThisCharge.length ? cfg.dmg * cfg.repeatDamage : cfg.dmg;
       e.hitThisCharge.push(u);
-      game.damageUnit(u, dmg);
+      game.damageUnit(u, dmg, { by: e, melee: true });
       if (u.kind === 'ally' && u.hp > 0 && Math.random() < cfg.knockoutChance) {
         game.knockOutAlly(u, Math.atan2(u.y - e.y, u.x - e.x), cfg.knockbackSpeed);
       }
@@ -634,7 +636,7 @@ function bossRamStep(e, dt, chain, game) {
   for (const u of chain.concat(game.state.downed)) {
     if (e.hitThisCharge.includes(u) || dist(e, u) >= e.r + u.r) continue;
     e.hitThisCharge.push(u);
-    game.damageUnit(u, cfg.ramDmg);
+    game.damageUnit(u, cfg.ramDmg, { by: e, melee: true });
     if (u.hp <= 0) continue;
     // отлетает вперёд-вбок от линии тарана — в ту сторону, где тело и было
     const side = (u.x - e.x) * -e.dir.y + (u.y - e.y) * e.dir.x >= 0 ? 1 : -1;

@@ -175,6 +175,19 @@ function drawHud() {
     ctx.fillText(`${label.padEnd(34, ' ')} ${Math.max(0, Math.ceil(a.hp))}/${a.maxHp}`, 12, y);
     y += 16;
   }
+  // улучшения прохождения: названия цветом того, чьё улучшение
+  if (state.upgrades.length) {
+    y += 4;
+    ctx.fillStyle = '#8a8a95';
+    ctx.fillText('УЛУЧШЕНИЯ:', 12, y);
+    let x = 12 + ctx.measureText('УЛУЧШЕНИЯ: ').width;
+    for (const key of state.upgrades) {
+      const def = G.upgrades[key], who = def.who === 'hero' ? COLORS.hero : abilities[def.who].color;
+      ctx.fillStyle = who;
+      ctx.fillText(def.name, x, y);
+      x += ctx.measureText(def.name + '  ').width;
+    }
+  }
 
   drawEdgeMarkers();
   drawBanners();

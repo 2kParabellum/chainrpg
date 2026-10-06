@@ -3,7 +3,7 @@
 // Клавиши определяются по физическому положению (ev.code), поэтому раскладка не важна.
 //
 // handlers:
-//   onCommand(name)   'restart' | 'recruit' | 'drop'
+//   onCommand(name)   'restart' | 'recruit' | 'drop' | 'pick1' | 'pick2' | 'pick3' (выбор карточки улучшения)
 // moveAxes() -> { throttle, turn } — опрос зажатых клавиш движения:
 //   throttle  +1 вперёд (W), -1 назад (S), 0 — ни одной или обе
 //   turn      -1 налево (A), +1 направо (D), 0 — ни одной или обе
@@ -14,6 +14,8 @@ const KEY_COMMANDS = {
   KeyR: { name: 'restart', repeatable: true },
   Space: { name: 'recruit', repeatable: true, preventDefault: true },
   KeyX: { name: 'drop' },
+  Digit1: { name: 'pick1' }, Digit2: { name: 'pick2' }, Digit3: { name: 'pick3' },
+  Numpad1: { name: 'pick1' }, Numpad2: { name: 'pick2' }, Numpad3: { name: 'pick3' },
 };
 
 // клавиши движения дублируются стрелками

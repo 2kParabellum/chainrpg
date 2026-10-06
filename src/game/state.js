@@ -42,6 +42,9 @@ const state = {
   shockwave: null,   // «Оборона»: волна от базы { x, y, r, max }, сносит врагов и гнёзда, потом открывается портал
   exit: null,        // светлый портал выхода { x, y, r, at }; null — ещё не открыт
   leaving: null,     // Герой заехал в портал: { t, pull } — сколько секунд уходим и насколько втянута цепочка
+  // прохождение: взятые улучшения (ключи content/upgrades.js). Живут между уровнями — сброс партии их не трогает,
+  // новое прохождение (уровень выбран из меню) начинается без них, см. startRun
+  upgrades: [],
 };
 
 // время жизни постоянного подиума уровня: дольше любой партии
@@ -222,6 +225,12 @@ function resetGame(level) {
   state.camera.y = clamp(state.party[0].y - CONFIG.VIEW.h / 2, 0, world.height - CONFIG.VIEW.h);
 }
 
+// новое прохождение: без улучшений
+function startRun() { state.upgrades = []; }
+
+// запись улучшения key, если оно взято в этом прохождении, иначе null
+function upgrade(key) { return state.upgrades.includes(key) ? G.upgrades[key] : null; }
+
 // ведущий — всегда Герой, первое звено цепочки: от него считаются камера, активация врагов и цель порождённых порталами
 function leader() { return state.party[0]; }
 
@@ -241,12 +250,13 @@ function isSpotted(e) { return !enemyTypes[e.type].hiddenUntilRevealed || e.reve
 // (first, first + step, ...), k — сколько звеньев сверх fromLink; см. CHAIN.slowdown
 function chainSpeedMul() {
   const { fromLink, first, step, max } = CONFIG.CHAIN.slowdown;
-  const k = Math.max(0, state.party.length - fromLink);
+  const m = upgrade('march'); // «Марш»: замедление начинается позже
+  const k = Math.max(0, state.party.length - fromLink - (m ? m.links : 0));
   return 1 - Math.min(max, k * first + (step * k * (k - 1)) / 2);
 }
 
 function currentRoom() { return roomIndexAt(leader().x, leader().y); }
 
 G.state = state;
-G.session = { makeUnit, makeAlly, setAbility, recalcStats, spawnEnemy, resetGame, leader, chainUnits, enemyTargets, isSpotted, currentRoom, chainSpeedMul };
+G.session = { makeUnit, makeAlly, setAbility, recalcStats, spawnEnemy, resetGame, startRun, upgrade, leader, chainUnits, enemyTargets, isSpotted, currentRoom, chainSpeedMul };
 })(window.Game = window.Game || {});

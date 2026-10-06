@@ -7,13 +7,13 @@ const { CONFIG, COLORS, state } = G;
 const { clamp, dist, removeFrom, pickWeighted } = G.math;
 const { moveAndCollide, slideAlongWall, circleRectOverlap } = G.collision;
 const { world, setDoorsOpen } = G.world;
-const { leader, chainSpeedMul, currentRoom, chainUnits, enemyTargets, isSpotted, spawnEnemy } = G.session;
+const { leader, chainSpeedMul, currentRoom, chainUnits, enemyTargets, isSpotted, spawnEnemy, upgrade } = G.session;
 const { freeSpotNear } = G.world;
 const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly, canBeDisplaced } = G.chain;
 const { updatePads, updateAllySpawns } = G.pads;
 const { updateWaves } = G.waves;
 const combat = G.combat;
-const { updateProjectiles, updateClouds, applySpikes, applyFirewalls, updateEffects, updateCannons } = combat;
+const { updateProjectiles, updateBurns, updateClouds, applySpikes, applyFirewalls, updateEffects, updateCannons } = combat;
 const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
 const { separateBodies } = G.bodies;
 const { onVictory, updateExit, updateLeavingLink } = G.exit;
@@ -30,7 +30,7 @@ function pickChaser() { return pickWeighted(chaserTypes, state.level.enemyWeight
 
 // то, что игра даёт записям типов из content/ параметром: сами они game/ не подключают
 const game = {
-  state, world, chainUnits, isSpotted, meleeHittable,
+  state, world, chainUnits, isSpotted, meleeHittable, upgrade,
   nearestTarget: combat.nearestTarget, damageUnit: combat.damageUnit, blast: combat.blast,
   spawnProjectile: combat.spawnProjectile, spawnMortar: combat.spawnMortar,
   spawnBigMortar: combat.spawnBigMortar, spawnHook: combat.spawnHook,
@@ -67,6 +67,24 @@ function updateLeader(dt) {
     // упёршись в стену, не тормозим в ноль, а скользим вдоль неё
     const normal = moveAndCollide(lead, lead.vx * dt, lead.vy * dt, world.moveBlockers);
     if (normal) slideAlongWall(lead, normal, cfg.wallFriction);
+  }
+}
+
+// улучшение «таран»: Герой, врезавшись во врага, ранит его — тем сильнее, чем быстрее сближался (на полной
+// скорости хода — dmg); одного врага — не чаще раза в cooldown. Тела у края касаются после расталкивания прошлого кадра
+function applyHeroRam() {
+  const up = upgrade('ram');
+  if (!up) return;
+  const lead = leader();
+  for (const e of state.enemies.slice()) {
+    if (!meleeHittable(e)) continue;
+    const d = dist(lead, e);
+    if (d > lead.r + e.r + 2 || state.time - (e.rammedAt || -99) < up.cooldown) continue;
+    const closing = (lead.vx * (e.x - lead.x) + lead.vy * (e.y - lead.y)) / (d || 1);
+    if (closing < up.minSpeed) continue;
+    e.rammedAt = state.time;
+    combat.damageUnit(e, up.dmg * Math.min(1.3, closing / CONFIG.LEADER.speed) * (lead.dmgMul || 1));
+    state.effects.push({ type: 'ring', x: (lead.x + e.x) / 2, y: (lead.y + e.y) / 2, r: 16, life: 0.25, color: COLORS.speed });
   }
 }
 
@@ -174,7 +192,7 @@ function update(dt) {
   if (state.status !== 'play') return;
 
   state.time += dt;
-  if (!state.leaving) updateLeader(dt); // в портале Герой уже не управляется
+  if (!state.leaving) { updateLeader(dt); applyHeroRam(); } // в портале Герой уже не управляется
   pushTrail();
 
   // дальнее оружие бьёт по любому врагу в пределах своей дальности, а мину — только после обнаружения
@@ -197,6 +215,7 @@ function update(dt) {
   separateBodies();
   updateCannons(dt);
   updateProjectiles(dt);
+  updateBurns(dt);
   updateClouds(dt);
   applySpikes(dt);
   applyFirewalls(dt);
