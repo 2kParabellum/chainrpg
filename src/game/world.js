@@ -11,7 +11,7 @@ const { circleRectOverlap, segmentHitsRect } = G.collision;
 
 const world = {
   walls: [], pillars: [], pits: [], spikes: [], floors: [], warnings: [],
-  // двери, кнопки, неуязвимые пушки-ловушки и финишная зона — см. «Тропа над пропастью»
+  // двери (кнопочные и выходы из комнат линии), кнопки, неуязвимые пушки-ловушки и финишная зона
   doors: [], buttons: [], cannons: [], finish: null,
   bridges: [],       // проходимые тропы и островки комнат-пропастей (только для рисования)
   // уровень «Оборона»: база (прямоугольник здания с запасом HP), двор вокруг неё и гнёзда врагов (точки)
@@ -253,6 +253,8 @@ function buildLine(level) {
       world.floors.push({ x: cx0, y: gapTop, w: CORRIDOR_LEN, h: CORRIDOR_H });
       world.walls.push({ x: cx0, y: gapTop - WALL, w: CORRIDOR_LEN, h: WALL });
       world.walls.push({ x: cx0, y: gapBottom, w: CORRIDOR_LEN, h: WALL });
+      // выход из комнаты закрыт дверью, пока в комнате есть враги (room — чья это дверь)
+      if (g.gates) world.doors.push({ x: rx, y: gapTop, w: WALL, h: CORRIDOR_H, id: 'exit' + i, room: i, open: false });
     }
 
     addRoomContent(level.rooms[i], i);

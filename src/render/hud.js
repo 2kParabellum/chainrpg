@@ -5,7 +5,7 @@
 const { CONFIG, COLORS, state } = G;
 const { abilities } = G;
 const { currentRoom, isSpotted, chainSpeedMul, leader } = G.session;
-const { roomCount, roomIndexAt, buttonUnder } = G.world;
+const { world, roomCount, roomIndexAt, buttonUnder } = G.world;
 const { clamp } = G.math;
 const { nearestPickup } = G.chain;
 const { ctx, allyColor } = G.shapes;
@@ -37,8 +37,13 @@ function drawEdgeMarker(x, y, color, text) {
 // «Оборона»: откуда сейчас идёт волна (гнездо за краем экрана разгорается или только что выпустило отряд)
 // и где база, если её бьют, пока она за экраном
 function drawEdgeMarkers() {
+  if (state.status !== 'play') return;
+  // обучение: выход из текущей комнаты открылся, а он за экраном
+  for (const d of world.doors) {
+    if (d.open && d.room === currentRoom()) drawEdgeMarker(d.x + d.w / 2, d.y + d.h / 2, COLORS.doorEdge, 'ДАЛЬШЕ');
+  }
   const cfg = state.level.waves;
-  if (!cfg || state.status !== 'play') return;
+  if (!cfg) return;
   for (const n of state.nests) {
     if (n.nextIn < cfg.telegraph) drawEdgeMarker(n.x, n.y, COLORS.nest, `×${G.waves.waveSize(cfg, n.wave)}`);
     else if (state.time - n.releasedAt < 3) drawEdgeMarker(n.x, n.y, COLORS.nest, '');
@@ -121,8 +126,10 @@ function drawHud() {
   ctx.fillStyle = '#c8c8d2';
   ctx.fillText(`${where}   ВРАГОВ ЗДЕСЬ: ${inRoom}${goal}   ЦЕПОЧКА: ${state.party.length}   СКОРОСТЬ: ${Math.round(chainSpeedMul() * 100)}%`, 12, 22);
 
-  ctx.fillStyle = '#8a8a95';
-  ctx.fillText('Подиумы подбираются сами: проедь по нему цепочкой', 12, 38);
+  // подсказка комнаты (обучение), иначе — общее напоминание
+  const hint = level.rooms[here] && level.rooms[here].hint;
+  ctx.fillStyle = hint ? '#e8d48a' : '#8a8a95';
+  ctx.fillText(hint || 'Подиумы подбираются сами: проедь по нему цепочкой', 12, 38);
   let y = 58;
   for (const a of state.party) {
     ctx.fillStyle = allyColor(a);

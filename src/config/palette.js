@@ -9,7 +9,7 @@ const COLORS = {
   regen: '#5be0c0', spear: '#e8e8f0', sturdy: '#8fa8d8', spiky: '#c23b4a', will: '#c090f0', spark: '#7a9cff',
   neutral: '#6b6b78', enemy: '#e06060', bull: '#e08040', tower: '#c05ce0',
   scorpion: '#c8a45c', hunter: '#ff4fa0', zombie: '#7fa64a', cloud: '#9ccc6a', portal: '#b070ff',
-  boss: '#7a1830', bossGlow: '#ff5a3c', bossRam: '#ff3048', fire: '#ff6a2e', shield: '#8fd6ff',
+  turret: '#5c8fb0', boss: '#7a1830', bossGlow: '#ff5a3c', bossRam: '#ff3048', fire: '#ff6a2e', shield: '#8fd6ff',
   // подсветка пола зон поля: по ней видно, насколько зона опасна
   zoneTint: { calm: 'rgba(90,150,210,0.07)', easy: 'rgba(110,200,120,0.06)', danger: 'rgba(220,140,60,0.06)', deadly: 'rgba(220,50,70,0.10)' },
   allyShot: '#d8f8b0', enemyShot: '#ff9a7a', blast: '#ff8a3c',

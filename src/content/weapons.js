@@ -20,12 +20,12 @@ function ready(w, dt) {
   return w.cd === 0;
 }
 
-// ближний удар по одной цели: ближайший обнаруженный враг вплотную
+// ближний удар по одной цели: ближайший враг вплотную, которого можно бить вблизи (game.meleeHittable)
 function meleeUpdate(u, w, dt, game) {
   if (!ready(w, dt)) return;
   let foe = null, best = Infinity;
   for (const e of game.state.enemies) {
-    if (!game.isSpotted(e)) continue;
+    if (!game.meleeHittable(e)) continue;
     const gap = dist(u, e) - u.r - e.r;
     if (gap <= w.reach && gap < best) { best = gap; foe = e; }
   }
@@ -48,7 +48,7 @@ function shootUpdate(fire) {
   };
 }
 
-// усиление «сила» пробивает выстрелом щит босса насквозь (см. game/combat.js)
+// усиление «сила» пробивает выстрелом щит (босса, турели) насквозь (см. game/combat.js)
 const arrow = (u, w, foe, game) => game.spawnProjectile(u, foe.x, foe.y, w.projSpeed, w.dmg * (u.dmgMul || 1),
   'ally', w.projRadius, { pierceShield: !!(u.buffs && u.buffs.power > 0) });
 
@@ -82,7 +82,7 @@ const spear = {
     } else {
       inZone = (e) => gap(e) <= w.aroundReach;
     }
-    const hit = game.state.enemies.filter((e) => game.isSpotted(e) && inZone(e));
+    const hit = game.state.enemies.filter((e) => game.meleeHittable(e) && inZone(e));
     if (!hit.length) return;
     for (const e of hit) game.damageUnit(e, w.dmg * (u.dmgMul || 1));
     w.cd = w.cooldown;

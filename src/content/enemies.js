@@ -14,6 +14,7 @@
 //   draw         — (e, g): тело врага; полоску HP рисует сцена
 //   hiddenUntilRevealed — враг невидим и неуязвим для прицеливания, пока e.revealed не станет true
 //   ignoredForVictory   — не считается в условии победы
+//   rangedOnly   — ближний бой (меч, кулак, копьё, шипастость) его не ранит, только выстрелы и молния
 //   noRegen      — не отлечивается сам (портал)
 //   alwaysActive — живёт и действует на любом расстоянии от игрока (портал)
 //   deathFlash   — радиус вспышки при гибели (только вид)
@@ -454,6 +455,99 @@ const portal = {
   },
 };
 
+// щит (босс, турель): тот, кто подошёл вплотную (shieldAuraExtra от края тела), раз в shieldContactInterval
+// получает shieldContactDmg. Выстрелы щит гасит сам (см. e.shielded в game/combat.js)
+function shieldContact(e, dt, chain, game) {
+  const cfg = e.cfg;
+  e.shieldContactCd -= dt;
+  if (e.shieldContactCd > 0) return;
+  let hit = false;
+  for (const u of chain) {
+    if (dist(e, u) <= e.r + cfg.shieldAuraExtra + u.r) { game.damageUnit(u, cfg.shieldContactDmg); hit = true; }
+  }
+  if (hit) e.shieldContactCd = cfg.shieldContactInterval;
+}
+
+// кольцо щита вокруг тела: пульсирует, пока щит включён
+function drawShield(e, g, extra) {
+  const { ctx } = g;
+  ctx.strokeStyle = COLORS.shield;
+  ctx.lineWidth = 3;
+  ctx.globalAlpha = 0.65 + 0.2 * Math.sin(e.age * 4);
+  ctx.beginPath();
+  ctx.arc(e.x, e.y, e.r + extra, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+// Дверь-мишень (обучение): стоит в проходе из комнаты и не пускает дальше. Сама не действует, не лечится;
+// ближний бой её не берёт — только выстрелы. Рисуется плитой двери во всю высоту прохода с мишенью
+const doorTarget = {
+  stats: { name: 'Дверь-мишень', hp: 60, radius: 20, mass: Infinity,
+           slabW: 26, slabH: 120 },     // плита двери (только вид): ширина и высота прохода
+  rangedOnly: true,
+  noRegen: true,
+  deathFlash: 90,
+  draw(e, g) {
+    const { ctx } = g;
+    const w = e.cfg.slabW, h = e.cfg.slabH;
+    ctx.fillStyle = COLORS.door;
+    ctx.fillRect(e.x - w / 2, e.y - h / 2, w, h);
+    ctx.strokeStyle = COLORS.doorEdge;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(e.x - w / 2 + 1, e.y - h / 2 + 1, w - 2, h - 2);
+    // мишень: красно-белые кольца
+    for (const [r, color] of [[e.r, COLORS.enemy], [e.r * 0.66, '#f0f0f5'], [e.r * 0.33, COLORS.enemy]]) {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  },
+};
+
+// Турель: неподвижная башня под щитом, часто стреляет по ближайшему союзнику. Щит гасит выстрелы цепочки
+// (усиление «сила» пробивает), а тот, кто подошёл вплотную, обжигается о него, как о щит демона
+const turret = {
+  stats: { name: 'Турель', hp: 90, radius: 22, mass: Infinity, range: 400, cooldown: 0.45, dmg: 4,
+           projSpeed: 380, projRadius: 4,
+           shieldAuraExtra: 12, shieldContactDmg: 7, shieldContactInterval: 0.4 },
+  noRegen: true,
+  init(e) { e.shielded = true; e.shieldContactCd = 0; e.age = 0; },
+  draw(e, g) {
+    const { ctx } = g;
+    // восьмиугольное основание и ствол к цели
+    ctx.fillStyle = COLORS.turret;
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+      ctx.lineTo(e.x + Math.cos(a) * e.r, e.y + Math.sin(a) * e.r);
+    }
+    ctx.closePath();
+    ctx.fill();
+    const f = e.facing || 0;
+    ctx.strokeStyle = '#0e0e10';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(e.x, e.y);
+    ctx.lineTo(e.x + Math.cos(f) * e.r * 1.25, e.y + Math.sin(f) * e.r * 1.25);
+    ctx.stroke();
+    ctx.fillStyle = '#0e0e10';
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.r * 0.42, 0, Math.PI * 2);
+    ctx.fill();
+    drawShield(e, g, e.cfg.shieldAuraExtra);
+  },
+};
+const turretFire = ranged(turret, (e, foe, game) => {
+  game.spawnProjectile(e, foe.x, foe.y, e.cfg.projSpeed, e.cfg.dmg, 'enemy', e.cfg.projRadius);
+});
+turret.update = function (e, dt, chain, game) {
+  e.age += dt;
+  shieldContact(e, dt, chain, game);
+  turretFire(e, dt, chain, game);
+};
+
 // Демон: единственный враг боссовой арены. Медленно идёт к игроку и держит дистанцию, а раз
 // в несколько секунд бьёт одной из четырёх атак: обстрел множеством снарядов по случайным точкам
 // арены, один огромный снаряд, который вышибает задетых союзников из цепочки, луч, оставляющий
@@ -607,14 +701,7 @@ const boss = {
     if (!locked) e.facing = Math.atan2(lead.y - e.y, lead.x - e.x);
 
     // щит держится постоянно: всё, что подошло слишком близко, получает урон сам
-    e.shieldContactCd -= dt;
-    if (e.shieldContactCd <= 0) {
-      let hit = false;
-      for (const u of chain) {
-        if (dist(e, u) <= e.r + cfg.shieldAuraExtra + u.r) { game.damageUnit(u, cfg.shieldContactDmg); hit = true; }
-      }
-      if (hit) e.shieldContactCd = cfg.shieldContactInterval;
-    }
+    shieldContact(e, dt, chain, game);
 
     // Герой подошёл слишком близко — босс бросает всё (кроме уже начатой атаки) и готовит таран
     if (e.state === 'idle' && e.ramCd <= 0 && dist(e, lead) - e.r - lead.r <= cfg.ramTrigger) {
@@ -770,15 +857,9 @@ const boss = {
       ctx.globalAlpha = 1;
     }
     // щит: включён постоянно, вокруг тела пульсирующее кольцо
-    ctx.strokeStyle = COLORS.shield;
-    ctx.lineWidth = 3;
-    ctx.globalAlpha = 0.65 + 0.2 * Math.sin(e.age * 4);
-    ctx.beginPath();
-    ctx.arc(e.x, e.y, e.r + 10, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    drawShield(e, g, 10);
   },
 };
 
-G.enemyTypes = { shooter, bull, tower, scorpion, zombie, hunter, mine, portal, boss };
+G.enemyTypes = { shooter, bull, tower, scorpion, zombie, hunter, mine, portal, boss, doorTarget, turret };
 })(window.Game = window.Game || {});

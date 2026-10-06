@@ -7,8 +7,8 @@
 const { CONFIG, COLORS, state } = G;
 const { pickWeighted } = G.math;
 const { circleRectOverlap } = G.collision;
-const { freeSquareNear, inHome, world } = G.world;
-const { leader, makeAlly } = G.session;
+const { freeSquareNear, inHome, roomInterior, world } = G.world;
+const { leader, makeAlly, currentRoom } = G.session;
 
 const rand = ([a, b]) => a + Math.random() * (b - a);
 
@@ -33,10 +33,31 @@ function occupied() {
     .concat(state.nests.map((n) => ({ x: n.x, y: n.y, r: nestR })));
 }
 
-// уровень «Оборона»: стартовые подиумы и дружочки — во дворе базы, все следующие — только за его стенами
+// уровень «Оборона»: стартовые подиумы и дружочки — во дворе базы, все следующие — только за его стенами.
+// Уровень со spawnRooms (обучение): только внутри комнаты, где сейчас Герой
 function placeRule(atStart) {
+  if (state.level.spawnRooms) {
+    const r = roomInterior(currentRoom()), m = 30;
+    return (x, y) => x > r.x + m && x < r.x + r.w - m && y > r.y + m && y < r.y + r.h - m;
+  }
   if (!world.home) return undefined;
   return atStart ? (x, y) => inHome(x, y, 50) : (x, y) => !inHome(x, y, -50);
+}
+
+// случайные появления идут, только пока Герой в одной из комнат level.spawnRooms (если уровень их задал);
+// иначе таймеры стоят, а стартовая порция выкладывается, когда Герой впервые туда войдёт
+function spawningHere() {
+  const rooms = state.level.spawnRooms;
+  return !rooms || rooms.includes(currentRoom());
+}
+
+// постоянный подиум уровня (fixed) не исчезает насовсем: на его месте сразу появляется тень,
+// и через fixedRespawn секунд — такой же подиум
+function respawnFixed(pad) {
+  if (!pad.fixed) return;
+  const cfg = settings();
+  state.padMarks.push({ x: pad.x, y: pad.y, w: pad.w, h: pad.h, ability: pad.ability, fixed: true,
+                        life: pad.maxLife, left: cfg.fixedRespawn, total: cfg.telegraph });
 }
 
 // общий таймер появлений: после сброса партии (timer === null) сразу выкладывает startCount штук,
@@ -82,10 +103,12 @@ function consumePad(pad) {
   const i = state.pads.indexOf(pad);
   if (i >= 0) state.pads.splice(i, 1);
   state.effects.push({ type: 'ring', x: pad.x + pad.w / 2, y: pad.y + pad.h / 2, r: pad.w * 0.6, life: 0.35, color: padColor(pad.ability) });
+  respawnFixed(pad);
 }
 
 function placePad(m) {
-  state.pads.push({ x: m.x, y: m.y, w: m.w, h: m.h, ability: m.ability, life: m.life, maxLife: m.life, takenBy: [] });
+  state.pads.push({ x: m.x, y: m.y, w: m.w, h: m.h, ability: m.ability, life: m.life, maxLife: m.life, takenBy: [],
+                    fixed: m.fixed });
   state.effects.push({ type: 'ring', x: m.x + m.w / 2, y: m.y + m.h / 2, r: m.w * 0.7, life: 0.4, color: padColor(m.ability) });
 }
 
@@ -124,6 +147,7 @@ function updatePads(dt) {
     if (p.life > 0 && !(p.usedLeft <= 0)) continue;
     state.pads.splice(i, 1);
     state.effects.push({ type: 'ring', x: p.x + p.w / 2, y: p.y + p.h / 2, r: p.w * 0.5, life: 0.3, color: padColor(p.ability) });
+    respawnFixed(p);
   }
   for (let i = state.padMarks.length - 1; i >= 0; i--) {
     const m = state.padMarks[i];
@@ -132,6 +156,7 @@ function updatePads(dt) {
     state.padMarks.splice(i, 1);
     placePad(m);
   }
+  if (!spawningHere()) return;
   for (const kind of ['jobs', 'buffs']) {
     runSpawner(kind === 'jobs' ? 'jobSpawnIn' : 'buffSpawnIn', cfg[kind], padCount(kind),
       (c, atStart) => spawnPad(cfg, kind, atStart), dt);
@@ -162,6 +187,7 @@ function updateAllySpawns(dt) {
     state.neutrals.splice(i, 1);
     state.effects.push({ type: 'ring', x: n.x, y: n.y, r: 20, life: 0.3, color: COLORS.neutral });
   }
+  if (!spawningHere()) return;
   runSpawner('allySpawnIn', cfg, state.neutrals.length, spawnAlly, dt);
 }
 

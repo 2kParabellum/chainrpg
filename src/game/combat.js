@@ -165,8 +165,8 @@ function updateProjectiles(dt) {
       const targets = p.team === 'ally' ? state.enemies : allies;
       for (const t of targets) {
         if (dist(p, t) >= p.r + t.r) continue;
-        // щит босса гасит выстрелы, пока активен; усиление «сила» пробивает его насквозь
-        if (t.type === 'boss' && t.shielded && !p.pierceShield) {
+        // щит (босса, турели) гасит выстрелы, пока активен; усиление «сила» пробивает его насквозь
+        if (t.shielded && !p.pierceShield) {
           state.effects.push({ type: 'ring', x: t.x, y: t.y, r: t.r + 6, life: 0.2, color: COLORS.shield });
         } else {
           damageUnit(t, p.dmg);

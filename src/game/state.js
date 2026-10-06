@@ -38,6 +38,9 @@ const state = {
   notice: null,      // надпись на экране о взятом усилении: { key, at } — что взято и когда (по state.time)
 };
 
+// время жизни постоянного подиума уровня: дольше любой партии
+const FIXED_PAD_LIFE = 1e6;
+
 function makeUnit(kind, type, x, y, cfg) {
   return {
     kind, type, x, y, vx: 0, vy: 0, r: cfg.radius, hp: cfg.hp, maxHp: cfg.hp,
@@ -189,6 +192,13 @@ function resetGame(level) {
     for (const [cx, cy] of plan.mines || []) {
       const p = localToWorld(i, cx, cy);
       state.enemies.push(makeEnemy('mine', p.x, p.y, i));
+    }
+    // постоянные подиумы уровня: стоят на своём месте всю партию (fixed — взятый появится снова, см. game/pads.js)
+    const size = CONFIG.PADS.size;
+    for (const [cx, cy, ability] of plan.pads || []) {
+      const p = localToWorld(i, cx, cy);
+      state.pads.push({ x: p.x - size / 2, y: p.y - size / 2, w: size, h: size, ability,
+                        life: FIXED_PAD_LIFE, maxLife: FIXED_PAD_LIFE, takenBy: [], fixed: true });
     }
   });
 

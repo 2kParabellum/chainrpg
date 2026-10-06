@@ -3,7 +3,7 @@
 (function (G) {
 'use strict';
 
-const { CONFIG, state } = G;
+const { CONFIG, COLORS, state } = G;
 const { clamp, dist, removeFrom, pickWeighted } = G.math;
 const { moveAndCollide, slideAlongWall, circleRectOverlap } = G.collision;
 const { world, setDoorsOpen } = G.world;
@@ -21,12 +21,15 @@ const { enemyTypes, weapons } = G;
 // типы, которые может породить портал: только те, что умеют гнаться за игроком
 const chaserTypes = Object.keys(enemyTypes).filter((k) => enemyTypes[k].chaseSpeed !== undefined);
 
+// враг, которого можно бить вплотную (мечом, кулаком, копьём, шипастостью): обнаруженный и без флага rangedOnly
+function meleeHittable(e) { return isSpotted(e) && !enemyTypes[e.type].rangedOnly; }
+
 // случайный тип для порождения порталом: подвижные типы с весами уровня (enemyWeights)
 function pickChaser() { return pickWeighted(chaserTypes, state.level.enemyWeights || {}); }
 
 // то, что игра даёт записям типов из content/ параметром: сами они game/ не подключают
 const game = {
-  state, world, chainUnits, isSpotted,
+  state, world, chainUnits, isSpotted, meleeHittable,
   nearestTarget: combat.nearestTarget, damageUnit: combat.damageUnit, blast: combat.blast,
   spawnProjectile: combat.spawnProjectile, spawnMortar: combat.spawnMortar,
   spawnBigMortar: combat.spawnBigMortar, spawnHook: combat.spawnHook,
@@ -73,7 +76,7 @@ function applySpikyContact(a, dt) {
   const def = G.buffs.spiky;
   let hit = false;
   for (const e of state.enemies) {
-    if (!isSpotted(e)) continue;
+    if (!meleeHittable(e)) continue;
     if (dist(a, e) <= a.r + e.r) { combat.damageUnit(e, def.contactDmg); hit = true; }
   }
   if (hit) {
@@ -114,11 +117,24 @@ function updateEnemy(e, dt) {
   type.update(e, dt, enemyTargets(), game);
 }
 
-// кнопки открывают связанные двери, пока на них лежит брошенный (X) или выбитый союзник —
+// в комнате не осталось врагов (мины не в счёт)
+function roomCleared(room) {
+  return !state.enemies.some((e) => e.room === room && !enemyTypes[e.type].ignoredForVictory);
+}
+
+// выход из комнаты (дверь с полем room) открывается навсегда, как только в комнате не осталось врагов.
+// Кнопки открывают связанные двери, пока на них лежит брошенный (X) или выбитый союзник —
 // вес тела держит дверь: подняли союзника обратно — дверь снова закрывается
 function updateDoors() {
-  if (!world.buttons.length) return;
+  if (!world.doors.length) return;
   const openIds = new Set();
+  for (const d of world.doors) {
+    if (d.room === undefined) continue;
+    if (d.open || roomCleared(d.room)) openIds.add(d.id);
+    if (!d.open && openIds.has(d.id)) {
+      state.effects.push({ type: 'ring', x: d.x + d.w / 2, y: d.y + d.h / 2, r: d.h * 0.7, life: 0.6, color: COLORS.doorEdge });
+    }
+  }
   for (const btn of world.buttons) {
     btn.pressed = state.downed.some((d) => circleRectOverlap(d.x, d.y, d.r, btn));
     if (btn.pressed) for (const id of btn.doorIds) openIds.add(id);
