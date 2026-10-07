@@ -190,7 +190,9 @@ onClick('restart', () => { if (state.status !== 'menu') resetGame(state.level); 
 onClick('menuBtn', toMenu);
 onClick('nextBtn', goNext);
 onClick('winMenuBtn', toMenu);
-onClick('startBtn', () => showPanel('levels'));
+// «Играть» — новое прохождение с первого уровня; «Выбор уровня» — список уровней
+onClick('startBtn', () => { startRun(); startLevel(LEVELS[0]); });
+onClick('levelsBtn', () => showPanel('levels'));
 onClick('levelsBackBtn', () => showPanel('main'));
 onClick('controlsBtn', () => showPanel('controls'));
 onClick('backBtn', () => showPanel('main'));
