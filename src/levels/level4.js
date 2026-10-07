@@ -107,14 +107,14 @@ G.level4 = {
   victory: { kind: 'survive', time: 360, label: 'ДО ПОБЕДЫ' },
   // светлый портал выхода: открывается после победы, в него надо заехать
   exit: { room: 0, at: [1880, 640] },  // во дворе под базой
-  // на старте во дворе — несколько подиумов профессий и дружочков, дальше — только снаружи и чуть дальше обычного.
-  // За ними надо выходить в поле, поэтому они появляются чаще, живут дольше и их больше разом, чем на других уровнях
+  // стартовой порции во дворе нет: подиумы и дружочки появляются только за стенами двора, по таймерам (паузы на 15%
+  // длиннее прежних). За ними надо выходить в поле, поэтому живут дольше и их больше разом, чем на других уровнях
   padSpawn: {
     ringMax: 900, lifetime: [22, 32],
-    jobs: { startCount: 4, maxActive: 6, interval: [3, 6] },
-    buffs: { maxActive: 4, interval: [8, 15] },
+    jobs: { startCount: 0, maxActive: 6, interval: [3.5, 7.1] },
+    buffs: { startCount: 0, maxActive: 4, interval: [9.4, 17.6] },
   },
-  allySpawn: { startCount: 4, ringMax: 800, maxActive: 5, interval: [3, 6], lifetime: [28, 38] },
+  allySpawn: { startCount: 0, ringMax: 800, maxActive: 5, interval: [3.5, 7.1], lifetime: [28, 38] },
   rooms: [ROOM_PLAN],
 };
 })(window.Game = window.Game || {});

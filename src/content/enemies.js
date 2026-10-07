@@ -76,7 +76,7 @@ shooter.update = ranged(shooter, (e, foe, game) => {
 
 const tower = {
   stats: { name: 'Катапульта', hp: 55, radius: 20, mass: Infinity, range: 430, cooldown: 3.2,
-           dmg: 13,                 // урон в эпицентре
+           dmg: 17,                 // урон в эпицентре
            edgeDmg: 5,              // урон на краю радиуса (между ними урон падает линейно)
            blastRadius: 95,         // радиус поражения
            flightTime: 1.5 },       // сколько снаряд летит до земли
@@ -101,7 +101,7 @@ const tower = {
 tower.update = ranged(tower, (e, foe, game) => game.spawnMortar(e, foe.x, foe.y));
 
 const scorpion = {
-  stats: { name: 'Скорпион', hp: 30, radius: 15, mass: 1.2, range: 456, cooldown: 3.5, dmg: 6,
+  stats: { name: 'Скорпион', hp: 60, radius: 20, mass: 1.2, range: 456, cooldown: 3.5, dmg: 12,
            projSpeed: 218,         // гарпун летит медленно, его видно заранее
            projRadius: 6,
            pullSpeed: 450 },        // с какой скоростью тащит выдернутого союзника
