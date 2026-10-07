@@ -87,8 +87,9 @@ G.level4 = {
   geometry: { kind: 'rect', width: 3840, height: 3040, wall: 40 },
   spawn: { room: 0, at: [1880, 520], heading: Math.PI / 2 }, // во дворе под базой, лицом к нижнему проходу
   // волны берут типы из подвижных (катапульта стоять на месте не умеет)
-  enemyPool: ['shooter', 'bull', 'scorpion', 'zombie', 'hunter'],
-  enemyWeights: { shooter: 4, zombie: 2, hunter: 2, bull: 1, scorpion: 1 },
+  // колесница (бык с катапультой) встречается только здесь и занимает в волне два места
+  enemyPool: ['shooter', 'bull', 'scorpion', 'zombie', 'hunter', 'chariot'],
+  enemyWeights: { shooter: 4, zombie: 2, hunter: 2, bull: 1, scorpion: 1, chariot: 1 },
   zoneNames: ['ОБОРОНА'],
   // волны: у каждого гнезда свой таймер. Первая волна гнезда k (порядок гнёзд бросается заново) —
   // на firstAt + k·stagger секунде, дальше раз в interval. Размер n-й волны гнезда (с нуля) — first + grow·n,

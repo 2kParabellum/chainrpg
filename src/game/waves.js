@@ -8,18 +8,24 @@ const { COLORS, state } = G;
 const { freeSpotNear } = G.world;
 const { spawnEnemy } = G.session;
 const { rollWave } = G.populate;
+const { enemyTypes } = G;
 
 // сколько врагов в волне номер n (с нуля) одного гнезда
 function waveSize(cfg, n) { return cfg.size.first + cfg.size.grow * n; }
 
-// отряд из гнезда: не больше kinds типов; пока живых врагов волн maxAlive, лишние не выходят
+// отряд из гнезда: не больше kinds типов; пока живых врагов волн maxAlive, лишние не выходят.
+// Враг с spawnCost занимает в отряде столько мест (колесница — два); не влез — выходит следующий по списку
 function releaseWave(nest, cfg) {
   const alive = state.enemies.filter((e) => e.siege).length;
   const count = Math.min(waveSize(cfg, nest.wave), Math.max(0, cfg.maxAlive - alive));
   nest.wave += 1;
   nest.releasedAt = state.time;
   nest.lastCount = 0;
+  let slots = count;
   for (const type of rollWave(count, state.level)) {
+    const cost = enemyTypes[type].spawnCost || 1;
+    if (cost > slots) continue;
+    slots -= cost;
     const spot = freeSpotNear(nest.x, nest.y, 20, cfg.spawnRadius, 20);
     if (!spot) continue;
     spawnEnemy(type, spot.x, spot.y, 0, { chasing: true, siege: true });

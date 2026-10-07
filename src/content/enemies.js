@@ -11,7 +11,7 @@
 //   init         — (e): личные поля юнита при создании
 //   onSpawn      — (e, game): после появления посреди партии (game.spawnEnemy, game.freeSpotNear) — например,
 //                  поставить рядом связанного второго врага (колесница и её катапульта)
-//   spawnCost    — сколько мест занимает в вызове подкрепления Демона (нет поля — 1)
+//   spawnCost    — сколько мест занимает в волне «Обороны» и в вызове подкрепления Демона (нет поля — 1)
 //   update       — (e, dt, chain, game): поведение за кадр, когда враг активен и жив
 //   lateUpdate   — (e, chain, game): шаг после боя и среды (мина: обнаружение и подрыв)
 //   draw         — (e, g): тело врага; полоску HP рисует сцена
@@ -345,7 +345,8 @@ const bull = {
 // Колесница: Бычок, запряжённый в катапульту. Не разгоняется, а идёт вплотную и бодает; за собой на упряжи тащит
 // катапульту — отдельного врага (обычная катапульта, стреляет сама; её можно бить и убить отдельно, e.cart).
 // Погибла катапульта — дальше это обычный Бычок, с рывком; погиб бык — катапульта остаётся стоять, где была.
-// Появляется только вызовом Демона и занимает в нём два места
+// Появляется только в волнах «Обороны» и занимает в волне два места (spawnCost); враг волны (e.chasing) без цели
+// идёт к базе на своей скорости шага. Поля chaseSpeed нет нарочно: порталы Playground её не порождают
 const chariot = {
   stats: { ...bull.stats, name: 'Колесница', aggro: 600,
            walkSpeed: 50,           // тянет катапульту — медленнее Бычка
@@ -366,7 +367,8 @@ const chariot = {
     e.cd -= dt;
     const foe = game.nearestTarget(e, chain, e.cfg.aggro);
     if (!foe) {
-      if (!game.stepOffSpikes(e, dt, chariot.wanderSpeed * 1.6)) game.wanderStep(e, dt, chariot.wanderSpeed);
+      if (e.chasing) game.chaseStep(e, dt, e.cfg.walkSpeed);
+      else if (!game.stepOffSpikes(e, dt, chariot.wanderSpeed * 1.6)) game.wanderStep(e, dt, chariot.wanderSpeed);
     } else {
       e.facing = Math.atan2(foe.y - e.y, foe.x - e.x);
       const gap = dist(e, foe) - e.r - foe.r;
@@ -738,7 +740,7 @@ const boss = {
            // тоже 820) дойти до стены за секунду; на прожаренной земле остаётся стена огня на 10 с
            beamAimTime: 1, beamSpeed: 820, beamRange: 820, beamRadius: 24, fireDps: 11, fireLife: 10,
            // атака 4 — вызов подкрепления
-           summonMin: 4, summonMax: 6, summonTypes: ['zombie', 'hunter', 'chariot'],
+           summonMin: 4, summonMax: 6, summonTypes: ['zombie', 'hunter'],
            // щит: включён постоянно. Ранит выстрелами босса не достать (кроме усиления «сила»),
            // а тот, кто подошёл вплотную (на полдружочка от тела), получает урон сам
            shieldAuraExtra: 12, shieldContactDmg: 7, shieldContactInterval: 0.4,
