@@ -74,7 +74,7 @@ const fist = {
 // На ходу (в цепочке) — две небольшие зоны по бокам, поперёк движения, плюс вплотную со всех сторон (closeReach),
 // чтобы подошедший спереди или сзади тоже получил. Стоя на месте и выбитым — круг вокруг себя (aroundReach)
 const spear = {
-  stats: { dmg: 32, cooldown: 2.0, zoneDist: 30, zoneRadius: 24, closeReach: 14, aroundReach: 40, color: COLORS.spear },
+  stats: { dmg: 24, cooldown: 1.6, zoneDist: 30, zoneRadius: 24, closeReach: 14, aroundReach: 40, color: COLORS.spear },
   update(u, w, dt, game) {
     if (!ready(w, dt)) return;
     const gap = (e) => dist(u, e) - u.r - e.r;
@@ -107,12 +107,13 @@ const spear = {
 // дальше breakMul·range или погибла — молния рвётся, искра ищет новую цель и снова целится.
 // Щит босса молнию не гасит, но босс всегда получает от неё только bossMul урона (с «силой» или без).
 // Разгон: каждая полная секунда непрерывного удара по одной цели прибавляет rampStep базового урона
-// (через 1 с — 120%, через 2 с — 140% …); новая цель или разрыв молнии сбрасывают разгон.
+// (через 1 с — 120%, через 2 с — 140% …), но не дольше rampMax секунд (дальше — 180%, не растёт);
+// новая цель или разрыв молнии сбрасывают разгон.
 // Молний — w.beams ({ target, aim, held }): обычно одна; улучшение «двойное напряжение» — до двух на разных целях,
 // «электрическая дуга» — молния рвётся дальше (заметить цель — на прежней дальности)
 const spark = {
   stats: { range: 230, fullRange: 110, farMul: 0.5, breakMul: 1.25, aimTime: 1.2, dps: 31.2, bossMul: 0.3,
-           rampStep: 0.2, color: COLORS.spark },
+           rampStep: 0.2, rampMax: 4, color: COLORS.spark },
   update(u, w, dt, game) {
     const two = game.upgrade('doubleSpark'), arc = game.upgrade('arc');
     const breakDist = w.range * w.breakMul * (arc ? arc.breakMul : 1);
@@ -131,7 +132,7 @@ const spark = {
       const foe = b.target;
       const k = Math.min(1, Math.max(0, (dist(u, foe) - w.fullRange) / (w.range - w.fullRange)));
       const bossMul = foe.type === 'boss' ? w.bossMul : 1;
-      const ramp = 1 + w.rampStep * Math.floor(b.held);
+      const ramp = 1 + w.rampStep * Math.min(w.rampMax, Math.floor(b.held));
       b.held += dt;
       game.damageUnit(foe, w.dps * ramp * (1 - (1 - w.farMul) * k) * (u.dmgMul || 1) * bossMul * dt);
     }

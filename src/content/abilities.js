@@ -68,7 +68,7 @@ const spear = {
   color: COLORS.spear,
   weapons: { spear: {} },
   // прокачка: HP и урон
-  levels: [{}, { hp: 1.3, weapons: { spear: { dmg: 44 } } }, { hp: 1.6, weapons: { spear: { dmg: 56 } } }],
+  levels: [{}, { hp: 1.3, weapons: { spear: { dmg: 33 } } }, { hp: 1.6, weapons: { spear: { dmg: 42 } } }],
   mark(u, f, ctx) {
     ctx.beginPath();
     ctx.moveTo(u.x - Math.cos(f) * u.r * 0.6, u.y - Math.sin(f) * u.r * 0.6);
