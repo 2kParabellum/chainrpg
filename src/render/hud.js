@@ -4,7 +4,7 @@
 
 const { CONFIG, COLORS, state } = G;
 const { abilities } = G;
-const { currentRoom, isSpotted, chainSpeedMul, leader } = G.session;
+const { currentRoom, isSpotted, leaderSpeedMul, leader } = G.session;
 const { world, roomCount, roomIndexAt, buttonUnder } = G.world;
 const { clamp } = G.math;
 const { nearestPickup } = G.chain;
@@ -81,6 +81,12 @@ function drawBanner(title, text, age, duration, color = '#f0f0f5') {
 function drawBanners() {
   const { goal, name } = state.level;
   if (goal) drawBanner(name.toUpperCase(), `ЦЕЛЬ: ${goal}`, state.time, 4.5);
+  // «Оборона»: начался натиск — последние минуты волны больше
+  const w = state.level.waves;
+  if (w && w.surge && !state.cleared) {
+    const at = state.level.victory.time - w.surge.lastSeconds;
+    drawBanner('НАТИСК', `Последние ${Math.round(w.surge.lastSeconds / 60)} минуты — волны больше`, state.time - at, 4, COLORS.nest);
+  }
   if (state.cleared && state.base) drawBanner('БАЗА ВЫСТОЯЛА', 'Волна от базы сносит всех врагов и гнёзда', state.time - state.clearedAt, 3.2, COLORS.baseEdge);
   if (state.exit && !state.leaving) drawBanner('ПОРТАЛ ОТКРЫТ', 'Заедь в светлый портал — уровень пройден', state.time - state.exit.at, 4, COLORS.exitGlow);
 }
@@ -161,7 +167,7 @@ function drawHud() {
     if (state.base) goal += `   БАЗА: ${Math.max(0, Math.ceil(state.base.hp))}/${state.base.maxHp}`;
   }
   ctx.fillStyle = '#c8c8d2';
-  ctx.fillText(`${where}   ВРАГОВ ЗДЕСЬ: ${inRoom}${goal}   ЦЕПОЧКА: ${state.party.length}   СКОРОСТЬ: ${Math.round(chainSpeedMul() * 100)}%`, 12, 22);
+  ctx.fillText(`${where}   ВРАГОВ ЗДЕСЬ: ${inRoom}${goal}   ЦЕПОЧКА: ${state.party.length}   СКОРОСТЬ: ${Math.round(leaderSpeedMul() * 100)}%`, 12, 22);
 
   // подсказка комнаты (обучение), иначе — общее напоминание
   const hint = level.rooms[here] && level.rooms[here].hint;

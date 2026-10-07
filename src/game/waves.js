@@ -10,8 +10,17 @@ const { spawnEnemy } = G.session;
 const { rollWave } = G.populate;
 const { enemyTypes } = G;
 
-// сколько врагов в волне номер n (с нуля) одного гнезда
-function waveSize(cfg, n) { return cfg.size.first + cfg.size.grow * n; }
+// начался ли натиск: последние surge.lastSeconds до победы, волны больше (см. level.waves.surge)
+function surgeActive(cfg) {
+  const v = state.level.victory;
+  return !!cfg.surge && v.kind === 'survive' && state.time >= v.time - cfg.surge.lastSeconds;
+}
+
+// сколько врагов в волне номер n (с нуля) одного гнезда; в натиск — больше в surge.sizeMul раз
+function waveSize(cfg, n) {
+  const base = cfg.size.first + cfg.size.grow * n;
+  return surgeActive(cfg) ? Math.round(base * cfg.surge.sizeMul) : base;
+}
 
 // отряд из гнезда: не больше kinds типов; пока живых врагов волн maxAlive, лишние не выходят.
 // Враг с spawnCost занимает в отряде столько мест (колесница — два); не влез — выходит следующий по списку
@@ -46,5 +55,5 @@ function updateWaves(dt) {
   }
 }
 
-G.waves = { updateWaves, waveSize };
+G.waves = { updateWaves, waveSize, surgeActive };
 })(window.Game = window.Game || {});

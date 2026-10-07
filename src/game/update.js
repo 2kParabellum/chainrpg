@@ -7,7 +7,7 @@ const { CONFIG, COLORS, state } = G;
 const { clamp, dist, removeFrom, pickWeighted } = G.math;
 const { moveAndCollide, slideAlongWall, circleRectOverlap } = G.collision;
 const { world, setDoorsOpen } = G.world;
-const { leader, chainSpeedMul, currentRoom, chainUnits, enemyTargets, isSpotted, spawnEnemy, upgrade } = G.session;
+const { leader, leaderSpeedMul, currentRoom, chainUnits, enemyTargets, isSpotted, spawnEnemy, upgrade } = G.session;
 const { freeSpotNear } = G.world;
 const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly, displaceAlly, canBeDisplaced } = G.chain;
 const { updatePads, updateAllySpawns } = G.pads;
@@ -45,7 +45,7 @@ const game = {
 function updateLeader(dt) {
   const lead = leader();
   const mv = lead.moveMul || 1;   // усиление подиума скорости: быстрее ход и разворот
-  const slow = chainSpeedMul();   // длинная цепочка едет медленнее (разворот не замедляется)
+  const speedMul = leaderSpeedMul(); // длинная цепочка едет медленнее (разворот не замедляется), но под «скоростью» — не ниже базовой
   const cfg = CONFIG.LEADER;
   const { throttle, turn } = state.moveInput;
 
@@ -54,8 +54,8 @@ function updateLeader(dt) {
   lead.facing = lead.heading;
 
   const k = throttle > 0 ? 1 : throttle < 0 ? -cfg.reverseMul : 0;
-  const wantX = Math.cos(lead.heading) * cfg.speed * mv * slow * k;
-  const wantY = Math.sin(lead.heading) * cfg.speed * mv * slow * k;
+  const wantX = Math.cos(lead.heading) * cfg.speed * speedMul * k;
+  const wantY = Math.sin(lead.heading) * cfg.speed * speedMul * k;
   const dx = wantX - lead.vx, dy = wantY - lead.vy;
   const gap = Math.hypot(dx, dy);
   const step = (k ? cfg.accel : cfg.brake) * mv * dt;

@@ -104,29 +104,91 @@ const scorpion = {
   stats: { name: 'Скорпион', hp: 60, radius: 20, mass: 1.2, range: 456, cooldown: 3.5, dmg: 12,
            projSpeed: 218,         // гарпун летит медленно, его видно заранее
            projRadius: 6,
-           pullSpeed: 450 },        // с какой скоростью тащит выдернутого союзника
+           pullSpeed: 450,         // с какой скоростью тащит выдернутого союзника
+           pinchDmg: 10,           // клешни: союзник совсем рядом — удар вплотную ..
+           pinchCooldown: 1,       // .. раз в столько секунд ..
+           pinchReach: 10 },       // .. если просвет между телами не больше этого
   wanderSpeed: 48,
   chaseSpeed: 75,
+  // тело, две клешни-руки вперёд (раскрытые; при уколе смыкаются) и сегментированный хвост, загнутый вбок, с жалом
   draw(e, g) {
     const { ctx } = g;
-    g.drawUnitBody(e, COLORS.scorpion, true);
-    ctx.strokeStyle = '#0e0e10';
-    ctx.lineWidth = 2;
-    const f = e.facing || 0;
-    // две клешни вперёд и загнутый хвост с жалом назад
-    ctx.beginPath();
-    for (const s of [0.5, -0.5]) {
-      ctx.moveTo(e.x + Math.cos(f + s) * e.r * 0.4, e.y + Math.sin(f + s) * e.r * 0.4);
-      ctx.lineTo(e.x + Math.cos(f + s) * e.r * 1.1, e.y + Math.sin(f + s) * e.r * 1.1);
+    const f = e.facing || 0, r = e.r;
+    const at = (a, d) => [e.x + Math.cos(f + a) * r * d, e.y + Math.sin(f + a) * r * d];
+    const outline = (fill) => { ctx.fillStyle = fill; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#0e0e10'; ctx.stroke(); };
+    // хвост: сегменты от спины назад, загибаются вбок, на конце — жало
+    let tip = null, tipA = 0;
+    for (let i = 1; i <= 5; i++) {
+      const t = i / 5, a = Math.PI + t * 1.35;
+      const [x, y] = at(a, 0.95 + t * 1.15);
+      ctx.beginPath();
+      ctx.arc(x, y, r * (0.36 - t * 0.08), 0, Math.PI * 2);
+      outline(COLORS.scorpion);
+      tip = [x, y]; tipA = f + a + 1.45;
     }
-    ctx.stroke();
     ctx.beginPath();
-    ctx.arc(e.x - Math.cos(f) * e.r * 0.8, e.y - Math.sin(f) * e.r * 0.8, e.r * 0.55,
-      f - 1.2, f + 1.2);
-    ctx.stroke();
+    ctx.moveTo(tip[0] + Math.cos(tipA) * r * 0.7, tip[1] + Math.sin(tipA) * r * 0.7);
+    ctx.lineTo(tip[0] + Math.cos(tipA + 1.7) * r * 0.24, tip[1] + Math.sin(tipA + 1.7) * r * 0.24);
+    ctx.lineTo(tip[0] + Math.cos(tipA - 1.7) * r * 0.24, tip[1] + Math.sin(tipA - 1.7) * r * 0.24);
+    ctx.closePath();
+    outline('#5a2a1a');
+    // клешни: рука от плеча к локтю, на конце «ладонь» и две крупные челюсти — раскрытые или сомкнутые (укол — e.pinchFx)
+    const open = e.pinchFx > 0 ? 0.06 : 0.45;
+    for (const s of [1, -1]) {
+      const sh = at(s * 0.8, 0.8), el = at(s * 0.62, 1.4), hand = at(s * 0.4, 1.8);
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#0e0e10';
+      ctx.lineWidth = r * 0.36;
+      ctx.beginPath(); ctx.moveTo(...sh); ctx.lineTo(...el); ctx.lineTo(...hand); ctx.stroke();
+      ctx.strokeStyle = COLORS.scorpion;
+      ctx.lineWidth = r * 0.24;
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+      for (const jaw of [1, -1]) {
+        const ja = f + s * 0.12 + jaw * open;
+        const bx = hand[0] + Math.cos(ja) * r * 0.15, by = hand[1] + Math.sin(ja) * r * 0.15;
+        const px = Math.cos(ja + Math.PI / 2) * r * 0.15, py = Math.sin(ja + Math.PI / 2) * r * 0.15;
+        ctx.beginPath();
+        ctx.moveTo(bx + px, by + py);
+        ctx.lineTo(hand[0] + Math.cos(ja) * r * 0.85, hand[1] + Math.sin(ja) * r * 0.85);
+        ctx.lineTo(bx - px, by - py);
+        ctx.closePath();
+        outline(COLORS.scorpion);
+      }
+      ctx.beginPath();
+      ctx.arc(hand[0], hand[1], r * 0.3, 0, Math.PI * 2);
+      outline(COLORS.scorpion);
+    }
+    g.drawUnitBody(e, COLORS.scorpion, true);
+    ctx.fillStyle = '#0e0e10';
+    for (const s of [0.35, -0.35]) {
+      const [x, y] = at(s, 0.55);
+      ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill();
+    }
   },
 };
-scorpion.update = ranged(scorpion, (e, foe, game) => game.spawnHook(e, foe));
+const scorpionShoot = ranged(scorpion, (e, foe, game) => game.spawnHook(e, foe));
+// гарпун издалека, а союзника, подошедшего вплотную (в цепочке или лежачего), — клешнями раз в pinchCooldown
+scorpion.update = function (e, dt, chain, game) {
+  e.pinchCd = (e.pinchCd || 0) - dt;
+  e.pinchFx = (e.pinchFx || 0) - dt;
+  if (e.pinchCd <= 0) {
+    let foe = null, best = e.cfg.pinchReach;
+    for (const u of chain) {
+      if (u.kind === 'base') continue;
+      const gap = dist(e, u) - e.r - u.r;
+      if (gap <= best) { best = gap; foe = u; }
+    }
+    if (foe) {
+      e.facing = Math.atan2(foe.y - e.y, foe.x - e.x);
+      game.damageUnit(foe, e.cfg.pinchDmg, { by: e, melee: true });
+      e.pinchCd = e.cfg.pinchCooldown;
+      e.pinchFx = 0.2;
+      game.state.effects.push({ type: 'beam', x1: e.x, y1: e.y, x2: foe.x, y2: foe.y, life: 0.15, color: COLORS.scorpion });
+    }
+  }
+  scorpionShoot(e, dt, chain, game);
+};
 
 // зомби норовит встать рядом с цепочкой, но не вплотную, и травит всё вокруг облаком
 const zombie = {

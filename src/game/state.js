@@ -258,8 +258,15 @@ function chainSpeedMul() {
   return 1 - Math.min(max, k * first + (step * k * (k - 1)) / 2);
 }
 
+// итоговый множитель скорости хода Героя: усиление «скорость» на замедление от длины цепочки; пока «скорость»
+// действует, цепочка не едет медленнее базовой скорости, как бы длинна ни была
+function leaderSpeedMul() {
+  const mv = leader().moveMul || 1, slow = chainSpeedMul();
+  return mv > 1 ? Math.max(1, mv * slow) : mv * slow;
+}
+
 function currentRoom() { return roomIndexAt(leader().x, leader().y); }
 
 G.state = state;
-G.session = { makeUnit, makeAlly, setAbility, recalcStats, spawnEnemy, resetGame, startRun, upgrade, leader, chainUnits, enemyTargets, isSpotted, currentRoom, chainSpeedMul };
+G.session = { makeUnit, makeAlly, setAbility, recalcStats, spawnEnemy, resetGame, startRun, upgrade, leader, chainUnits, enemyTargets, isSpotted, currentRoom, chainSpeedMul, leaderSpeedMul };
 })(window.Game = window.Game || {});
