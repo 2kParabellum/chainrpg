@@ -5,7 +5,8 @@
 // Оверлей главного меню в HTML только отражает его и сам ничего не решает: при menu — меню, при win —
 // экран «уровень пройден» с тремя карточками улучшений и переходом к следующему уровню (после последнего —
 // «вы прошли игру»). Прохождение — это цепочка уровней подряд через этот экран; уровень, выбранный из меню,
-// начинает новое прохождение без улучшений.
+// начинает новое прохождение: с первого — без улучшений, с N-го — сперва N−1 раз выбор карточки (как будто
+// предыдущие уровни пройдены), потом сам уровень.
 (function (G) {
 'use strict';
 
@@ -28,14 +29,13 @@ const START_LEVEL = LEVELS[0];
 
 initInput(canvas, {
   onCommand(name) {
-    if (state.status === 'menu') return;
-    // на экране «уровень пройден»: 1/2/3 — выбрать карточку, пробел — играть дальше
-    if (state.status === 'win') {
+    // на экране карточек (уровень пройден или выбор перед стартом): 1/2/3 — выбрать карточку, пробел — дальше
+    if (state.status === 'win' || (state.status === 'menu' && afterPick)) {
       if (name === 'recruit') goNext();
       else if (name.startsWith('pick')) pickCard(Number(name.slice(4)) - 1);
       return;
     }
-    if (name.startsWith('pick')) return;
+    if (state.status === 'menu' || name.startsWith('pick')) return;
     if (name === 'restart') resetGame(state.level);
     else if (name === 'recruit') tryRecruit();
     else if (name === 'drop') dropLastAlly();
@@ -68,6 +68,9 @@ const UPGRADE_OFFERS = 3;
 const cardsEl = document.getElementById('cards');
 let offers = [];   // ключи улучшений на карточках
 let picked = null; // выбранное; без выбора дальше не пускает
+// что делать после выбора: на экране «уровень пройден» — следующий уровень; перед стартом не с первого уровня —
+// следующая карточка или сам уровень. null — дальше идти некуда (игра пройдена)
+let afterPick = null;
 
 // три случайных улучшения из тех, что ещё не взяты в этом прохождении
 function rollOffers() {
@@ -119,21 +122,41 @@ function showWin() {
   btn.textContent = next ? 'Играть дальше (ПРОБЕЛ)' : '';
   offers = next ? rollOffers() : [];
   picked = null;
+  afterPick = next ? () => startLevel(next) : null;
   renderCards();
   showPanel('win');
 }
 
-// следующий уровень того же прохождения: выбранное улучшение остаётся с игроком
+// старт не с первого уровня (для проверки уровней): перед ним picksLeft раз выбор карточки из total,
+// как будто предыдущие уровни пройдены; потом сам уровень
+function prepareLevel(level, picksLeft, total) {
+  if (picksLeft <= 0) { startLevel(level); return; }
+  const n = total - picksLeft + 1;
+  document.getElementById('winTitle').textContent = `ПЕРЕД УРОВНЕМ ${LEVELS.indexOf(level) + 1}`;
+  document.getElementById('winText').textContent = `Улучшение ${n} из ${total} — за пропущенные уровни`;
+  const btn = document.getElementById('nextBtn');
+  btn.style.display = '';
+  btn.textContent = picksLeft > 1 ? 'Дальше (ПРОБЕЛ)' : 'Начать (ПРОБЕЛ)';
+  offers = rollOffers();
+  picked = null;
+  afterPick = () => prepareLevel(level, picksLeft - 1, total);
+  renderCards();
+  showPanel('win');
+}
+
+// дальше после экрана карточек: выбранное улучшение остаётся с игроком до конца прохождения
 function goNext() {
-  const next = nextLevel();
-  if (!next) { toMenu(); return; }
+  if (!afterPick) { toMenu(); return; }
   if (offers.length && !picked) return; // карточку выбрать обязательно
   if (picked) state.upgrades.push(picked);
   offers = []; picked = null;
-  startLevel(next);
+  const then = afterPick;
+  afterPick = null;
+  then();
 }
 
 function toMenu() {
+  afterPick = null;
   state.status = 'menu';
   showPanel('main');
   syncOverlay();
@@ -157,8 +180,8 @@ LEVELS.forEach((level, i) => {
   const blurb = document.createElement('small');
   blurb.textContent = level.blurb;
   btn.append(blurb);
-  // уровень из меню — новое прохождение, без улучшений
-  btn.addEventListener('click', (ev) => { ev.currentTarget.blur(); startRun(); startLevel(level); });
+  // уровень из меню — новое прохождение; с N-го уровня сперва N−1 карточка улучшений
+  btn.addEventListener('click', (ev) => { ev.currentTarget.blur(); startRun(); prepareLevel(level, i, i); });
   levelList.append(btn);
 });
 
