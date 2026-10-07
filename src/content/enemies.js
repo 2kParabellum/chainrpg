@@ -983,7 +983,7 @@ const boss = {
 //  - плевок слизью: раз в globEvery навесом бросает ком слизи в Героя (если видит его, иначе — в ближайшего видимого
 //    союзника) с упреждением по его ходу, но неточно (globError). Ком упал на союзника — сразу взрыв; промахнулся —
 //    остаётся лежать лужей (мина) mineLife секунд. Въехало в лужу звено цепочки — через случайные mineFuse секунд
-//    взрыв: урон по площади, двух-трёх ближайших дружочков выбивает из цепочки, Героя отшвыривает.
+//    взрыв: урон по площади (никого не раскидывает).
 // Тени, тентакли, летящие комья и лужи лежат в самом спруте (e.tentacles, e.globs, e.mines) и рисуются с ним,
 // поэтому drawReach.
 const rand = ([a, b]) => a + Math.random() * (b - a);
@@ -1078,22 +1078,10 @@ function globLand(e, b, game) {
   if (e.mines.length > cfg.mineMax) e.mines.shift();
 }
 
-// взрыв мины: урон по площади (от mineDmg в центре до mineEdgeDmg на краю); из задетых дружочков ближайших к центру
-// (не больше mineMaxKnock) выбивает из цепочки, лежачих отбрасывает, Героя отшвыривает
+// взрыв слизи: только урон по площади (от mineDmg в центре до mineEdgeDmg на краю) — никого не раскидывает
 function mineBlast(e, m, game) {
   const cfg = e.cfg, st = game.state;
-  st.effects.push({ type: 'blast', x: m.x, y: m.y, r: cfg.mineBlast, life: 0.5 });
-  const hit = st.party.concat(st.downed).filter((u) => dist(m, u) < cfg.mineBlast + u.r)
-    .sort((a, b) => dist(m, a) - dist(m, b));
-  let knocked = 0;
-  for (const u of hit) {
-    const d = dist(m, u);
-    game.damageUnit(u, cfg.mineDmg + (cfg.mineEdgeDmg - cfg.mineDmg) * Math.min(1, d / cfg.mineBlast));
-    if (u.hp <= 0) continue;
-    const a = d > 1 ? Math.atan2(u.y - m.y, u.x - m.x) : Math.random() * Math.PI * 2;
-    if (knocked < cfg.mineMaxKnock && game.displaceAlly(u, a, cfg.mineKnockback)) knocked += 1;
-    else if (u === st.party[0]) { u.vx = Math.cos(a) * cfg.mineShove; u.vy = Math.sin(a) * cfg.mineShove; }
-  }
+  game.blast(m, cfg.mineBlast, cfg.mineDmg, st.party.concat(st.downed), m, cfg.mineEdgeDmg);
 }
 
 function krakenMines(e, dt, game) {
@@ -1251,10 +1239,9 @@ const kraken = {
            // с упреждением (globLead — доля предсказанного смещения цели) и мажет на случайные globError px.
            // Промах — лужа (мина): лежит mineLife секунд, луж не больше mineMax; mineArm — сколько растекается
            globEvery: [2.2, 3.6], globRange: 1400, globFlight: 1.3, globLead: 0.7, globError: [40, 190],
-           // взрыв радиусом mineBlast; выбивает из цепочки не больше mineMaxKnock ближайших к центру
-           mineMax: 8, mineRadius: 62, mineArm: 0.3, mineLife: 30,
-           mineFuse: [0, 1], mineBlast: 85, mineDmg: 30, mineEdgeDmg: 12, mineMaxKnock: 3,
-           mineKnockback: 360, mineShove: 300 },
+           // взрыв радиусом mineBlast — только урон, никого не раскидывает
+           mineMax: 8, mineRadius: 44, mineArm: 0.3, mineLife: 30,
+           mineFuse: [0, 1], mineBlast: 62, mineDmg: 30, mineEdgeDmg: 12 },
   noRegen: true,           // общая регенерация врагов не нужна: у спрута своя, постоянная
   alwaysActive: true,
   deathFlash: 260,
