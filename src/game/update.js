@@ -143,22 +143,24 @@ function roomCleared(room) {
   return !state.enemies.some((e) => e.room === room && !enemyTypes[e.type].ignoredForVictory);
 }
 
-// выход из комнаты (дверь с полем room) открывается навсегда, как только в комнате не осталось врагов.
-// Кнопки открывают связанные двери, пока на них лежит брошенный (X) или выбитый союзник —
-// вес тела держит дверь: подняли союзника обратно — дверь снова закрывается
+// выход из комнаты (дверь с clearOpens) открывается навсегда, как только в комнате не осталось врагов.
+// Кнопки открывают связанные двери, пока на них лежит брошенный (X) или выбитый союзник — вес тела держит дверь:
+// подняли союзника обратно — дверь снова закрывается; дверь с latch, открывшись, больше не закрывается
 function updateDoors() {
   if (!world.doors.length) return;
   const openIds = new Set();
   for (const d of world.doors) {
-    if (d.room === undefined) continue;
-    if (d.open || roomCleared(d.room)) openIds.add(d.id);
-    if (!d.open && openIds.has(d.id)) {
-      state.effects.push({ type: 'ring', x: d.x + d.w / 2, y: d.y + d.h / 2, r: d.h * 0.7, life: 0.6, color: COLORS.doorEdge });
-    }
+    if (d.open && d.latch) openIds.add(d.id);
+    if (d.clearOpens && (d.open || roomCleared(d.room))) openIds.add(d.id);
   }
   for (const btn of world.buttons) {
     btn.pressed = state.downed.some((d) => circleRectOverlap(d.x, d.y, d.r, btn));
     if (btn.pressed) for (const id of btn.doorIds) openIds.add(id);
+  }
+  for (const d of world.doors) {
+    if (!d.open && openIds.has(d.id)) {
+      state.effects.push({ type: 'ring', x: d.x + d.w / 2, y: d.y + d.h / 2, r: d.h * 0.7, life: 0.6, color: COLORS.doorEdge });
+    }
   }
   setDoorsOpen(openIds);
 }

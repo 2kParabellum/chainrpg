@@ -253,8 +253,14 @@ function buildLine(level) {
       world.floors.push({ x: cx0, y: gapTop, w: CORRIDOR_LEN, h: CORRIDOR_H });
       world.walls.push({ x: cx0, y: gapTop - WALL, w: CORRIDOR_LEN, h: WALL });
       world.walls.push({ x: cx0, y: gapBottom, w: CORRIDOR_LEN, h: WALL });
-      // выход из комнаты закрыт дверью, пока в комнате есть враги (room — чья это дверь)
-      if (g.gates) world.doors.push({ x: rx, y: gapTop, w: WALL, h: CORRIDOR_H, id: 'exit' + i, room: i, open: false });
+      // выход из комнаты закрыт дверью (room — чья это дверь). Обычно её открывает зачистка комнаты (clearOpens),
+      // а у комнаты с exitByButton — кнопка плана (id двери 'exit' + номер комнаты); открытая так дверь больше не
+      // закрывается (latch)
+      if (g.gates) {
+        const byButton = !!level.rooms[i].exitByButton;
+        world.doors.push({ x: rx, y: gapTop, w: WALL, h: CORRIDOR_H, id: 'exit' + i, room: i,
+                           clearOpens: !byButton, latch: byButton, open: false });
+      }
     }
 
     addRoomContent(level.rooms[i], i);

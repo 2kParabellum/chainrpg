@@ -172,9 +172,26 @@ function drawDoors() {
   }
 }
 
-// кнопки: квадрат на полу, светится зелёным, пока на ней лежит брошенный союзник
+// кнопки: квадрат на полу, светится зелёным, пока на ней лежит брошенный союзник; от кнопки к её дверям —
+// бегущий пунктир (пока дверь закрыта), чтобы было видно, что она открывает
 function drawButtons() {
   for (const b of world.buttons) {
+    const bx = b.x + b.w / 2, by = b.y + b.h / 2;
+    for (const d of world.doors) {
+      if (d.open || !b.doorIds.includes(d.id)) continue;
+      ctx.strokeStyle = COLORS.buttonEdge;
+      ctx.globalAlpha = 0.45;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 8]);
+      ctx.lineDashOffset = -state.time * 30;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(d.x + d.w / 2, d.y + d.h / 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineDashOffset = 0;
+      ctx.globalAlpha = 1;
+    }
     if (!visible(b)) continue;
     const color = b.pressed ? COLORS.buttonPressed : COLORS.button;
     ctx.fillStyle = color;
