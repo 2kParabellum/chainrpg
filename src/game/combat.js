@@ -7,7 +7,7 @@ const { dist, removeFrom } = G.math;
 const { circleRectOverlap, distToSegment } = G.collision;
 const { world, hasLineOfSight, standsOnSpikes } = G.world;
 const { chainUnits, enemyTargets, upgrade } = G.session;
-const { hookAlly, knockOutAlly } = G.chain;
+const { hookAlly, displaceAlly } = G.chain;
 const { allyTypes, enemyTypes } = G;
 
 // --- цели и урон ---
@@ -22,7 +22,7 @@ function nearestTarget(from, list, range) {
 }
 
 // улучшения копейщика против ближних атак врага (hit.melee, hit.by — кто бьёт): «шипастая броня» — копейщик
-// возвращает напавшему весь урон; «прикрытие» — звено прямо перед копейщиком в цепочке получает меньше.
+// возвращает напавшему весь урон; «прикрытие» — оба соседа копейщика в цепочке (не он сам) получают меньше.
 // Шипы считаются от урона до прикрытия. Возвращает урон, который дойдёт до цели
 function meleeDefense(u, dmg, hit) {
   if (u.ability === 'spear' && hit.by && state.enemies.includes(hit.by) && upgrade('spikedArmor')) {
@@ -30,9 +30,9 @@ function meleeDefense(u, dmg, hit) {
     state.effects.push({ type: 'beam', x1: u.x, y1: u.y, x2: hit.by.x, y2: hit.by.y, life: 0.2, color: COLORS.spiky });
   }
   const c = upgrade('cover');
-  if (c && u.kind === 'ally') {
-    const behind = state.party[state.party.indexOf(u) + 1];
-    if (behind && behind.ability === 'spear') {
+  if (c && u.kind === 'ally' && u.ability !== 'spear') {
+    const i = state.party.indexOf(u);
+    if ([state.party[i - 1], state.party[i + 1]].some((n) => n && n.ability === 'spear')) {
       dmg *= 1 - c.cut;
       state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 5, life: 0.2, color: COLORS.sturdy });
     }
@@ -132,7 +132,7 @@ function explodeMortar(p) {
 }
 
 // взрыв большого снаряда босса: тот же урон по площади, что и у обычного, но каждого задетого
-// и выжившего союзника ещё и вышибает из цепочки — как таран бычка, только без шанса, всегда
+// и выжившего союзника ещё и вышибает из цепочки (лежачего — отбрасывает) — как таран бычка, только без шанса, всегда
 function explodeBigMortar(p) {
   const center = { x: p.tx, y: p.ty };
   state.effects.push({ type: 'blast', x: center.x, y: center.y, r: p.blast, life: 0.5 });
@@ -140,9 +140,9 @@ function explodeBigMortar(p) {
     const d = dist(center, u);
     if (d >= p.blast + u.r) continue;
     damageUnit(u, p.dmg + (p.edgeDmg - p.dmg) * Math.min(1, d / p.blast));
-    if (u.kind === 'ally' && u.hp > 0) {
+    if (u.hp > 0) {
       const angle = d > 1 ? Math.atan2(u.y - center.y, u.x - center.x) : Math.random() * Math.PI * 2;
-      knockOutAlly(u, angle, p.knockback);
+      displaceAlly(u, angle, p.knockback);
     }
   }
 }
@@ -197,8 +197,8 @@ function updateProjectiles(dt) {
             t.burn = { left: p.burn.time, dps: Math.max(p.burn.dps, t.burn && t.burn.left > 0 ? t.burn.dps : 0) };
           }
         }
-        // игрока гарпун только ранит, а вот союзника уносит к Скорпиону
-        if (p.kind === 'hook' && t.kind === 'ally' && t.hp > 0) hookAlly(t, p.owner);
+        // игрока гарпун только ранит, а вот союзника (в цепочке или лежачего) уносит к Скорпиону
+        if (p.kind === 'hook' && (t.kind === 'ally' || t.kind === 'downed') && t.hp > 0) hookAlly(t, p.owner);
         dead = true;
         break;
       }

@@ -9,12 +9,15 @@
 //   chaseSpeed   — скорость погони за игроком; есть поле — тип «подвижный»: такого врага может
 //                  породить портал, и порождённый (e.chasing) идёт к игроку через всю карту
 //   init         — (e): личные поля юнита при создании
+//   onSpawn      — (e, game): после появления посреди партии (game.spawnEnemy, game.freeSpotNear) — например,
+//                  поставить рядом связанного второго врага (колесница и её катапульта)
+//   spawnCost    — сколько мест занимает в вызове подкрепления Демона (нет поля — 1)
 //   update       — (e, dt, chain, game): поведение за кадр, когда враг активен и жив
 //   lateUpdate   — (e, chain, game): шаг после боя и среды (мина: обнаружение и подрыв)
 //   draw         — (e, g): тело врага; полоску HP рисует сцена
 //   hiddenUntilRevealed — враг невидим и неуязвим для прицеливания, пока e.revealed не станет true
 //   ignoredForVictory   — не считается в условии победы
-//   rangedOnly   — ближний бой (меч, кулак, копьё, шипастость) его не ранит, только выстрелы и молния
+//   rangedOnly   — ближний бой (кулак, копьё, шипастость, таран Героя) его не ранит, только выстрелы и молния
 //   noRegen      — не отлечивается сам (портал)
 //   alwaysActive — живёт и действует на любом расстоянии от игрока (портал)
 //   deathFlash   — радиус вспышки при гибели (только вид)
@@ -240,7 +243,8 @@ const bull = {
            chargeBrake: 620,        // торможение после того, как кого-то переехал
            chargeStopSpeed: 110,    // на какой скорости рывок заканчивается
            repeatDamage: 0.5,       // множитель урона для всех целей после первой
-           knockoutChance: 0.3,     // шанс выбить из цепочки того, кого переехал
+           knockoutChance: 0.3,     // шанс выбить из цепочки того, кого переехал (лежачего — отбросить)
+           maxPushes: 2,            // больше стольких союзников за один рывок не выбивает и не отбрасывает
            knockbackSpeed: 380 },   // с какой силой отбрасывает выбитого
   wanderSpeed: 42,
   chaseSpeed: 95,
@@ -268,6 +272,7 @@ const bull = {
         e.dir = { x: Math.cos(e.facing), y: Math.sin(e.facing) };
         e.travelled = 0;
         e.hitThisCharge = [];
+        e.pushes = 0;
         e.chargeSpeed = e.cfg.chargeStartSpeed;
       }
       return;
@@ -303,9 +308,8 @@ const bull = {
       const dmg = e.hitThisCharge.length ? cfg.dmg * cfg.repeatDamage : cfg.dmg;
       e.hitThisCharge.push(u);
       game.damageUnit(u, dmg, { by: e, melee: true });
-      if (u.kind === 'ally' && u.hp > 0 && Math.random() < cfg.knockoutChance) {
-        game.knockOutAlly(u, Math.atan2(u.y - e.y, u.x - e.x), cfg.knockbackSpeed);
-      }
+      if (u.hp > 0 && e.pushes < cfg.maxPushes && Math.random() < cfg.knockoutChance
+          && game.displaceAlly(u, Math.atan2(u.y - e.y, u.x - e.x), cfg.knockbackSpeed)) e.pushes += 1;
     }
 
     if (crashed || e.travelled > cfg.chargeMaxDist || e.chargeSpeed < cfg.chargeStopSpeed) {
@@ -335,6 +339,67 @@ const bull = {
       ctx.lineTo(e.x + Math.cos(f) * e.cfg.chargeMaxDist * 0.4, e.y + Math.sin(f) * e.cfg.chargeMaxDist * 0.4);
       ctx.stroke();
     }
+  },
+};
+
+// Колесница: Бычок, запряжённый в катапульту. Не разгоняется, а идёт вплотную и бодает; за собой на упряжи тащит
+// катапульту — отдельного врага (обычная катапульта, стреляет сама; её можно бить и убить отдельно, e.cart).
+// Погибла катапульта — дальше это обычный Бычок, с рывком; погиб бык — катапульта остаётся стоять, где была.
+// Появляется только вызовом Демона и занимает в нём два места
+const chariot = {
+  stats: { ...bull.stats, name: 'Колесница', aggro: 600,
+           walkSpeed: 50,           // тянет катапульту — медленнее Бычка
+           buttDmg: 9, buttCooldown: 1.1,
+           reach: 6,                // с какого просвета между телами достаёт
+           hitch: 50 },             // длина упряжи: между центрами быка и катапульты
+  wanderSpeed: 34,
+  spawnCost: 2,
+  init(e) { bull.init(e); e.cart = null; },
+  onSpawn(e, game) {
+    const spot = game.freeSpotNear(e.x, e.y, e.cfg.hitch, e.cfg.hitch + 30, 22) || { x: e.x - e.cfg.hitch, y: e.y };
+    e.cart = game.spawnEnemy('tower', spot.x, spot.y, e.room, { linked: e }); // linked — друг друга не толкают
+    e.linked = e.cart;
+  },
+  update(e, dt, chain, game) {
+    if (e.cart && !game.state.enemies.includes(e.cart)) e.cart = null;
+    if (!e.cart) { bull.update(e, dt, chain, game); return; } // осталась без катапульты — обычный Бычок
+    e.cd -= dt;
+    const foe = game.nearestTarget(e, chain, e.cfg.aggro);
+    if (!foe) {
+      if (!game.stepOffSpikes(e, dt, chariot.wanderSpeed * 1.6)) game.wanderStep(e, dt, chariot.wanderSpeed);
+    } else {
+      e.facing = Math.atan2(foe.y - e.y, foe.x - e.x);
+      const gap = dist(e, foe) - e.r - foe.r;
+      if (gap > e.cfg.reach * 0.5) game.chaseStep(e, dt, e.cfg.walkSpeed, e.r + foe.r + e.cfg.reach * 0.5, foe);
+      if (gap <= e.cfg.reach && e.cd <= 0) {
+        game.damageUnit(foe, e.cfg.buttDmg, { by: e, melee: true });
+        e.cd = e.cfg.buttCooldown;
+        game.state.effects.push({ type: 'beam', x1: e.x, y1: e.y, x2: foe.x, y2: foe.y, life: 0.15, color: COLORS.bull });
+      }
+    }
+    // упряжь: катапульта тянется следом, если бык отошёл дальше её длины
+    const c = e.cart, d = dist(e, c);
+    if (d > e.cfg.hitch) {
+      const k = (d - e.cfg.hitch) / d;
+      moveAndCollide(c, (e.x - c.x) * k, (e.y - c.y) * k, game.world.moveBlockers);
+    }
+  },
+  draw(e, g) {
+    const c = e.cart;
+    if (c && c.hp > 0) {
+      // две оглобли от быка к катапульте
+      const { ctx } = g;
+      const a = Math.atan2(c.y - e.y, c.x - e.x), nx = -Math.sin(a), ny = Math.cos(a);
+      ctx.strokeStyle = '#8a6a48';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      for (const s of [1, -1]) {
+        ctx.moveTo(e.x + nx * e.r * 0.6 * s, e.y + ny * e.r * 0.6 * s);
+        ctx.lineTo(c.x + nx * c.r * 0.7 * s, c.y + ny * c.r * 0.7 * s);
+      }
+      ctx.stroke();
+    }
+    bull.draw(e, g);
   },
 };
 
@@ -599,9 +664,12 @@ function bossExecuteAttack(e, game, lead) {
       { flightTime: cfg.megaFlight, dmg: cfg.megaDmg, edgeDmg: cfg.megaEdgeDmg,
         blastRadius: cfg.megaBlast, knockback: cfg.megaKnockback });
   } else if (e.attack === 'summon') {
-    const n = cfg.summonMin + Math.floor(Math.random() * (cfg.summonMax - cfg.summonMin + 1));
-    for (let i = 0; i < n; i++) {
-      const type = pickOne(cfg.summonTypes);
+    // n мест; колесница занимает два (spawnCost)
+    const cost = (type) => TYPES[type].spawnCost || 1;
+    let slots = cfg.summonMin + Math.floor(Math.random() * (cfg.summonMax - cfg.summonMin + 1));
+    while (slots > 0) {
+      const type = pickOne(cfg.summonTypes.filter((t) => cost(t) <= slots));
+      slots -= cost(type);
       const spot = game.freeSpotNear(e.x, e.y, e.r + 30, e.r + 160, 20);
       if (!spot) continue;
       game.spawnEnemy(type, spot.x, spot.y, e.room, {});
@@ -641,8 +709,7 @@ function bossRamStep(e, dt, chain, game) {
     // отлетает вперёд-вбок от линии тарана — в ту сторону, где тело и было
     const side = (u.x - e.x) * -e.dir.y + (u.y - e.y) * e.dir.x >= 0 ? 1 : -1;
     const a = Math.atan2(e.dir.y, e.dir.x) + side * Math.PI * 0.35;
-    if (game.canBeDisplaced(u)) game.knockOutAlly(u, a, cfg.ramKnockback);
-    else { u.vx = Math.cos(a) * cfg.ramShove; u.vy = Math.sin(a) * cfg.ramShove; }
+    if (!game.displaceAlly(u, a, cfg.ramKnockback)) { u.vx = Math.cos(a) * cfg.ramShove; u.vy = Math.sin(a) * cfg.ramShove; }
     game.state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 10, life: 0.35, color: COLORS.bossRam });
   }
   if (crashed || e.travelled >= cfg.ramDist) {
@@ -671,7 +738,7 @@ const boss = {
            // тоже 820) дойти до стены за секунду; на прожаренной земле остаётся стена огня на 10 с
            beamAimTime: 1, beamSpeed: 820, beamRange: 820, beamRadius: 24, fireDps: 11, fireLife: 10,
            // атака 4 — вызов подкрепления
-           summonMin: 4, summonMax: 6, summonTypes: ['zombie', 'hunter'],
+           summonMin: 4, summonMax: 6, summonTypes: ['zombie', 'hunter', 'chariot'],
            // щит: включён постоянно. Ранит выстрелами босса не достать (кроме усиления «сила»),
            // а тот, кто подошёл вплотную (на полдружочка от тела), получает урон сам
            shieldAuraExtra: 12, shieldContactDmg: 7, shieldContactInterval: 0.4,
@@ -863,5 +930,6 @@ const boss = {
   },
 };
 
-G.enemyTypes = { shooter, bull, tower, scorpion, zombie, hunter, mine, portal, boss, doorTarget, turret };
+const TYPES = { shooter, bull, tower, scorpion, zombie, hunter, chariot, mine, portal, boss, doorTarget, turret };
+G.enemyTypes = TYPES;
 })(window.Game = window.Game || {});

@@ -21,7 +21,7 @@ const shooter = {
   color: COLORS.shooter,
   weapons: { bow: {} },
   // прокачка: дальность и скорость стрельбы
-  levels: [{}, { weapons: { bow: { range: 370, cooldown: 0.8 } } }, { weapons: { bow: { range: 440, cooldown: 0.64 } } }],
+  levels: [{}, { weapons: { bow: { range: 425, cooldown: 0.8 } } }, { weapons: { bow: { range: 506, cooldown: 0.64 } } }],
   mark(u, f, ctx) {
     ctx.beginPath();
     ctx.arc(u.x, u.y, u.r * 0.95, f - 1.0, f + 1.0);
@@ -131,7 +131,7 @@ const spark = {
 //   revive     — true: если HP звена падает до 0, оно не погибает, а остаётся с 1 HP
 const speed = {
   name: 'скорость',
-  desc: 'быстрее ход (+30%) и атаки (+25%)',
+  desc: 'быстрее ход и атаки',
   color: COLORS.speed,
   duration: 30,
   move: 1.3, rate: 1.25,
@@ -150,7 +150,7 @@ const speed = {
 
 const power = {
   name: 'сила',
-  desc: 'урон +50%, здоровье +30%',
+  desc: 'больше урона и здоровья',
   color: COLORS.power,
   duration: 30,
   dmg: 1.5, hp: 1.3,
@@ -171,7 +171,7 @@ const power = {
 // Регенерация: сильно лечит себя, пока действует
 const regen = {
   name: 'регенерация',
-  desc: 'лечит 18 HP в секунду',
+  desc: 'быстро лечит само себя',
   color: COLORS.regen,
   duration: 15,
   regenRate: 18,

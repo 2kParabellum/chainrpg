@@ -8,7 +8,7 @@ const { clamp, dist, removeFrom } = G.math;
 const { moveAndCollide, slideAlongWall } = G.collision;
 const { world, buttonUnder } = G.world;
 const { padUnder, markPadUsed, consumePad } = G.pads;
-const { leader, setAbility, recalcStats } = G.session;
+const { leader, setAbility, recalcStats, upgrade } = G.session;
 const { allyTypes } = G;
 
 // --- след ---
@@ -85,7 +85,13 @@ function endBuff(u, key) {
   recalcStats(u);
 }
 
-// временное усиление; у звена не больше CONFIG.BUFFS.maxActive разом: лишнее снимается самое давнее
+// сколько усилений разом держит звено: CONFIG.BUFFS.maxActive, с улучшением «аккумулирование» — больше
+function maxBuffs() {
+  const up = upgrade('accumulate');
+  return CONFIG.BUFFS.maxActive + (up ? up.extra : 0);
+}
+
+// временное усиление; у звена не больше maxBuffs() разом: лишнее снимается самое давнее
 // по времени взятия. Повторное взятие того же обновляет таймер и делает его самым свежим
 function giveBuff(u, key) {
   const def = G.buffs[key];
@@ -93,7 +99,7 @@ function giveBuff(u, key) {
   u.buffs[key] = def.duration;
   removeFrom(u.buffOrder, key);
   u.buffOrder.push(key);
-  while (u.buffOrder.length > CONFIG.BUFFS.maxActive) endBuff(u, u.buffOrder[0]);
+  while (u.buffOrder.length > maxBuffs()) endBuff(u, u.buffOrder[0]);
   recalcStats(u);
   if (fresh) state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 8, life: 0.4, color: def.color });
 }
@@ -117,7 +123,7 @@ function isSturdy(u) {
 }
 
 // кому достаётся подиум профессии key: первому от головы дружочку без профессии (Герой профессий не берёт —
-// у него всегда меч); если пустых нет — звену этой профессии с самым низким уровнем, ещё не максимальным.
+// он сам не атакует); если пустых нет — звену этой профессии с самым низким уровнем, ещё не максимальным.
 // null — отдать некому, подиум остаётся лежать
 function jobTarget(key) {
   const crew = state.party.filter((u) => !allyTypes[u.type].anchor);
@@ -204,6 +210,20 @@ function knockOutAlly(a, angle, speed) {
   state.downed.push(a);
 }
 
+// толчок атаки (таран, взрыв большого снаряда): звено цепочки вылетает из неё (если его можно выбить), лежачего
+// отбрасывает по полу. true — союзника сдвинули
+function displaceAlly(u, angle, speed) {
+  if (u.kind === 'downed') {
+    u.vx = Math.cos(angle) * speed;
+    u.vy = Math.sin(angle) * speed;
+    u.drag = null;
+    return true;
+  }
+  if (!canBeDisplaced(u)) return false;
+  knockOutAlly(u, angle, speed);
+  return true;
+}
+
 // сбросить последнего союзника: он остаётся лежать на месте, поднять его можно ПРОБЕЛОМ.
 // Если Герой стоит на кнопке, брошенный дружочек ложится прямо на неё и держит её нажатой
 function dropLastAlly() {
@@ -221,8 +241,9 @@ function dropLastAlly() {
   }
 }
 
-// попав в союзника, гарпун вырывает его из цепочки и тянет к Скорпиону
+// попав в союзника, гарпун вырывает его из цепочки и тянет к Скорпиону; лежачего — просто тянет
 function hookAlly(a, scorpion) {
+  if (a.kind === 'downed') { a.vx = 0; a.vy = 0; a.drag = scorpion; return; }
   if (!canBeDisplaced(a)) return;
   knockOutAlly(a, Math.atan2(scorpion.y - a.y, scorpion.x - a.x), 0);
   a.drag = scorpion;
@@ -252,6 +273,6 @@ function updateDowned(d, dt) {
 
 G.chain = {
   pushTrail, trailPointAt, followChain, touchPads, updateBuffs, jobTarget,
-  nearestPickup, tryRecruit, canBeDisplaced, knockOutAlly, dropLastAlly, hookAlly, updateDowned,
+  nearestPickup, tryRecruit, canBeDisplaced, knockOutAlly, displaceAlly, dropLastAlly, hookAlly, updateDowned,
 };
 })(window.Game = window.Game || {});

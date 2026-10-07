@@ -41,11 +41,15 @@ function separate(a, b) {
   if (kb) shove(b, nx * overlap * kb, ny * overlap * kb, !ia);
 }
 
-// один проход расталкивания за кадр (после ходов врагов): за пару кадров толпа расходится
+// один проход расталкивания за кадр (после ходов врагов): за пару кадров толпа расходится.
+// Связанные между собой (e.linked — колесница и её катапульта) друг друга не толкают: упряжь держит их сама
 function separateBodies() {
   const foes = state.enemies.filter(isSpotted);
   for (let i = 0; i < foes.length; i++) {
-    for (let j = i + 1; j < foes.length; j++) separate(foes[i], foes[j]);
+    for (let j = i + 1; j < foes.length; j++) {
+      if (foes[i].linked === foes[j] || foes[j].linked === foes[i]) continue;
+      separate(foes[i], foes[j]);
+    }
   }
   // Бычок в рывке проезжает сквозь цепочку (его таран бьёт всех на линии), остальные упираются
   for (const a of state.party) {

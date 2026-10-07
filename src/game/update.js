@@ -9,7 +9,7 @@ const { moveAndCollide, slideAlongWall, circleRectOverlap } = G.collision;
 const { world, setDoorsOpen } = G.world;
 const { leader, chainSpeedMul, currentRoom, chainUnits, enemyTargets, isSpotted, spawnEnemy, upgrade } = G.session;
 const { freeSpotNear } = G.world;
-const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly, canBeDisplaced } = G.chain;
+const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly, displaceAlly, canBeDisplaced } = G.chain;
 const { updatePads, updateAllySpawns } = G.pads;
 const { updateWaves } = G.waves;
 const combat = G.combat;
@@ -22,7 +22,7 @@ const { enemyTypes, weapons } = G;
 // типы, которые может породить портал: только те, что умеют гнаться за игроком
 const chaserTypes = Object.keys(enemyTypes).filter((k) => enemyTypes[k].chaseSpeed !== undefined);
 
-// враг, которого можно бить вплотную (мечом, кулаком, копьём, шипастостью): обнаруженный и без флага rangedOnly
+// враг, которого можно бить вплотную (кулаком, копьём, шипастостью, тараном Героя): обнаруженный и без флага rangedOnly
 function meleeHittable(e) { return isSpotted(e) && !enemyTypes[e.type].rangedOnly; }
 
 // случайный тип для порождения порталом: подвижные типы с весами уровня (enemyWeights)
@@ -35,7 +35,7 @@ const game = {
   spawnProjectile: combat.spawnProjectile, spawnMortar: combat.spawnMortar,
   spawnBigMortar: combat.spawnBigMortar, spawnHook: combat.spawnHook,
   spawnFirewall: combat.spawnFirewall,
-  knockOutAlly, canBeDisplaced, wanderStep, stepOffSpikes, chaseStep, removeFrom,
+  knockOutAlly, displaceAlly, canBeDisplaced, wanderStep, stepOffSpikes, chaseStep, removeFrom,
   spawnEnemy, freeSpotNear, pickChaser,
 };
 

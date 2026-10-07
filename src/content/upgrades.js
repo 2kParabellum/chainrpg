@@ -112,13 +112,16 @@ const spikedArmor = {
 const cover = {
   name: 'Прикрытие',
   who: 'spear',
-  desc: 'Звено перед копейщиком крепче вблизи',
-  cut: 0.4,          // на такую долю меньше урона от ближних атак получает звено прямо перед копейщиком
+  desc: 'Соседи копейщика крепче вблизи',
+  cut: 0.3,          // на такую долю меньше урона от ближних атак получают оба соседа копейщика в цепочке (не он сам)
   art(ctx, k) {
-    k.ally(60, 64, 'spear', 0);
-    k.ally(104, 64, null, 0);
-    k.shield(104, 64, 24);
-    k.enemy(158, 64, COLORS.hunter, 10);
+    k.ally(56, 64, null, 0);
+    k.ally(100, 64, 'spear', 0);
+    k.ally(144, 64, null, 0);
+    k.shield(56, 64, 24, true);
+    k.shield(144, 64, 24);
+    k.enemy(20, 64, COLORS.hunter, 9);
+    k.enemy(182, 64, COLORS.hunter, 9);
   },
 };
 
@@ -131,6 +134,20 @@ const march = {
     for (let i = 5; i >= 1; i--) k.ally(150 - i * 24, 64, null, 0);
     k.hero(150, 64, 0);
     k.speedLines(20, 64);
+  },
+};
+
+const accumulate = {
+  name: 'Аккумулирование',
+  who: 'hero',
+  desc: 'Три усиления разом вместо двух',
+  extra: 1,          // сколько усилений сверх CONFIG.BUFFS.maxActive держит звено
+  art(ctx, k) {
+    k.hero(100, 62, -Math.PI / 2);
+    k.ring(100, 62, 22, COLORS.speed, false);
+    k.ring(100, 62, 29, COLORS.power, false);
+    k.ring(100, 62, 36, COLORS.regen, false);
+    k.pad(38, 62, COLORS.speed); k.pad(162, 40, COLORS.power); k.pad(162, 86, COLORS.regen);
   },
 };
 
@@ -149,5 +166,5 @@ const ram = {
   },
 };
 
-G.upgrades = { tripleShot, fireArrows, doubleSpark, arc, medicRegen, adrenaline, spikedArmor, cover, march, ram };
+G.upgrades = { tripleShot, fireArrows, doubleSpark, arc, medicRegen, adrenaline, spikedArmor, cover, march, accumulate, ram };
 })(window.Game = window.Game || {});

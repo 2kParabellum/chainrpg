@@ -6,7 +6,7 @@
 
 const { CONFIG } = G;
 const { clamp, dist, shuffled } = G.math;
-const { world, localToWorld, buildWorld, roomIndexAt, scatterSpot } = G.world;
+const { world, localToWorld, buildWorld, roomIndexAt, scatterSpot, freeSpotNear } = G.world;
 const { rollEnemies, rollLevelAllies } = G.populate;
 const { allyTypes, enemyTypes, weapons, abilities } = G;
 
@@ -130,11 +130,14 @@ function makeEnemy(type, x, y, room) {
   return e;
 }
 
-// новый враг посреди партии (его порождает портал); extra — личные поля вроде chasing и spawnedBy
+// новый враг посреди партии (его порождает портал, гнездо, Демон); extra — личные поля вроде chasing и spawnedBy.
+// Тип с onSpawn после появления может поставить рядом связанного врага (колесница — свою катапульту)
 function spawnEnemy(type, x, y, room, extra) {
   const e = makeEnemy(type, x, y, room);
   Object.assign(e, extra);
   state.enemies.push(e);
+  const t = enemyTypes[type];
+  if (t.onSpawn) t.onSpawn(e, { spawnEnemy, freeSpotNear });
   return e;
 }
 

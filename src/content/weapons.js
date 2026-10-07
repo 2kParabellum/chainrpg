@@ -65,11 +65,6 @@ function arrow(u, w, foe, game) {
   }
 }
 
-const sword = {
-  stats: { reach: 30, dmg: 15.4, cooldown: 1.0, color: COLORS.hero },
-  update: meleeUpdate,
-};
-
 const fist = {
   stats: { reach: 26, dmg: 11.5, cooldown: 0.9, color: COLORS.buddy },
   update: meleeUpdate,
@@ -190,7 +185,7 @@ const spark = {
 };
 
 const bow = {
-  stats: { range: 300, dmg: 8.05, cooldown: 1.0, projSpeed: 560, projRadius: 4 },
+  stats: { range: 345, dmg: 8.05, cooldown: 1.0, projSpeed: 560, projRadius: 4 },
   update: shootUpdate(arrow),
 };
 
@@ -220,5 +215,5 @@ const heal = {
   },
 };
 
-G.weapons = { sword, fist, spear, spark, bow, heal };
+G.weapons = { fist, spear, spark, bow, heal };
 })(window.Game = window.Game || {});

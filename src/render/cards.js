@@ -122,11 +122,22 @@ function kit(ctx) {
         ctx.fill();
       }
     },
-    // щит — толстая дуга перед телом (справа), откуда идёт враг
-    shield(x, y, r) {
+    // щит — толстая дуга с той стороны тела, откуда идёт враг (справа; left — слева)
+    shield(x, y, r, left) {
       ctx.strokeStyle = COLORS.sturdy;
       ctx.lineWidth = 5;
-      ctx.beginPath(); ctx.arc(x, y, r, -1.0, 1.0); ctx.stroke();
+      const a = left ? Math.PI : 0;
+      ctx.beginPath(); ctx.arc(x, y, r, a - 1.0, a + 1.0); ctx.stroke();
+    },
+    // маленький подиум усиления: светящийся квадрат
+    pad(x, y, color) {
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.3;
+      ctx.fillRect(x - 12, y - 12, 24, 24);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x - 11, y - 11, 22, 22);
     },
     speedLines(x, y) {
       ctx.strokeStyle = '#8a8a95';
