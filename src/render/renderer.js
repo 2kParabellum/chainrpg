@@ -535,6 +535,8 @@ function drawHourglass(x, y, s) {
 
 // яркость подиума: вырастает при появлении, перед исчезновением мигает всё чаще и гаснет
 function padAlpha(pad, warnTime) {
+  // постоянный подиум не появляется и не исчезает — горит всегда (погасший рисуется отдельно, см. drawPadCooldown)
+  if (pad.permanent) return 1;
   // взятый подиум тускнеет и гаснет, как только по нему проехал хвост
   if (pad.usedLeft !== undefined) {
     return clamp((pad.maxLife - pad.life) / 0.3, 0, 1) * (0.25 + 0.75 * clamp(pad.usedLeft / 0.5, 0, 1));

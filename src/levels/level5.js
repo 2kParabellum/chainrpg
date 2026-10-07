@@ -81,8 +81,8 @@ G.level5 = {
   // волнами сокращается от interval до ramp.to за ramp.time секунд партии. Размер n-й волны гнезда (с нуля) —
   // first + grow·n с округлением вниз. Враги волн идут прямо к Герою (базы здесь нет)
   waves: {
-    firstAt: 15, stagger: 5, interval: 32,
-    ramp: { to: 12, time: 360 },
+    firstAt: 15, stagger: 5, interval: 21.3,
+    ramp: { to: 8, time: 360 },
     size: { first: 1, grow: 0.2 },
     kinds: 2,
     spawnRadius: 100,
@@ -96,10 +96,10 @@ G.level5 = {
   // anywhere — подиумы и дружочки появляются в случайном месте зала, а не около Героя
   padSpawn: {
     anywhere: true,
-    jobs: { maxActive: 5, interval: [4, 8.5] },
-    buffs: { interval: [10, 20], weights: { speed: 1, power: 3, regen: 1, sturdy: 1, spiky: 1, will: 1 } },
+    jobs: { maxActive: 5, interval: [3.6, 7.7] },
+    buffs: { interval: [9.1, 18.2], weights: { speed: 1, power: 3, regen: 1, sturdy: 1, spiky: 1, will: 1 } },
   },
-  allySpawn: { anywhere: true, maxActive: 4, interval: [5, 10] },
+  allySpawn: { anywhere: true, maxActive: 4, interval: [4.5, 9.1] },
   rooms: [ROOM_PLAN],
 };
 })(window.Game = window.Game || {});

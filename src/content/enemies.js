@@ -1290,7 +1290,7 @@ function drawSuck(e, g) {
 
 const kraken = {
   stats: { name: 'Спрут', hp: 1800, radius: 58, mass: Infinity,
-           regen: 200,              // HP в секунду, всегда, даже под огнём
+           regen: 250,              // HP в секунду, всегда, даже под огнём
            keepClear: 340,          // подиумы и дружочки не появляются ближе этого к спруту
            // тентакля: тень полосы длиной tentacleRange от центра (около 2/3 экрана), через tentacleAim — удар
            tentacleRange: 640, tentacleWidth: 46, tentacleAim: 1.5, tentacleDmg: 24,
