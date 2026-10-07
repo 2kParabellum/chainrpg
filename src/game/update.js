@@ -224,6 +224,10 @@ function update(dt) {
   updateLate();
   updateEffects(dt);
 
+  // Герой перешёл в другую комнату — запомнить когда (по этому всплывает подсказка комнаты)
+  const room = currentRoom();
+  if (room !== state.room) { state.room = room; state.roomAt = state.time; }
+
   // победа открывает портал выхода (на «Обороне» — после волны от базы); заехал в него — уровень пройден
   if (state.status === 'play' && !state.cleared && isVictory()) onVictory();
   updateExit(dt);

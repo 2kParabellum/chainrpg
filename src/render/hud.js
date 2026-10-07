@@ -58,11 +58,11 @@ function bannerAlpha(age, duration) {
   return clamp(age / 0.25, 0, 1) * clamp((duration - age) / 0.6, 0, 1);
 }
 
-// плашка поперёк экрана: мелкий заголовок и крупный текст; age — сколько секунд она уже видна
-function drawBanner(title, text, age, duration, color = '#f0f0f5') {
+// плашка поперёк экрана: мелкий заголовок и крупный текст; age — сколько секунд она уже видна, y — где по высоте
+function drawBanner(title, text, age, duration, color = '#f0f0f5', y = 130) {
   const a = bannerAlpha(age, duration);
   if (a <= 0 || state.status !== 'play') return;
-  const V = CONFIG.VIEW, y = 130;
+  const V = CONFIG.VIEW;
   ctx.globalAlpha = a;
   ctx.fillStyle = 'rgba(10,10,12,0.75)';
   ctx.fillRect(0, y - 42, V.w, 74);
@@ -81,6 +81,11 @@ function drawBanner(title, text, age, duration, color = '#f0f0f5') {
 function drawBanners() {
   const { goal, name } = state.level;
   if (goal) drawBanner(name.toUpperCase(), `ЦЕЛЬ: ${goal}`, state.time, 4.5);
+  // подсказка комнаты (обучение): всплывает ниже середины экрана, когда Герой входит в комнату
+  const plan = state.level.rooms[state.room];
+  if (plan && plan.hint) {
+    drawBanner(`КОМНАТА ${state.room + 1}`, plan.hint, state.time - state.roomAt, 5, '#e8d48a', CONFIG.VIEW.h - 150);
+  }
   // «Оборона»: начался натиск — последние минуты волны больше
   const w = state.level.waves;
   if (w && w.surge && !state.cleared) {
@@ -174,10 +179,9 @@ function drawHud() {
   ctx.fillStyle = '#c8c8d2';
   ctx.fillText(`${where}   ВРАГОВ ЗДЕСЬ: ${inRoom}${goal}   ЦЕПОЧКА: ${state.party.length}   СКОРОСТЬ: ${Math.round(leaderSpeedMul() * 100)}%`, 12, 22);
 
-  // подсказка комнаты (обучение), иначе — общее напоминание
-  const hint = level.rooms[here] && level.rooms[here].hint;
-  ctx.fillStyle = hint ? '#e8d48a' : '#8a8a95';
-  ctx.fillText(hint || 'Подиумы подбираются сами: проедь по нему цепочкой', 12, 38);
+  // общее напоминание (подсказки комнат обучения всплывают посреди экрана, см. drawBanners)
+  ctx.fillStyle = '#8a8a95';
+  ctx.fillText('Подиумы подбираются сами: проедь по нему цепочкой', 12, 38);
   let y = 58;
   for (const a of state.party) {
     ctx.fillStyle = allyColor(a);

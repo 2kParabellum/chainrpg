@@ -1251,38 +1251,54 @@ function drawKrakenMine(e, m, g) {
   ctx.globalAlpha = 1;
 }
 
-// всасывание: три спиральных рукава вихря крутятся к пасти, от каждой жертвы к пасти — толстая струя, по которой
-// бегут точки, а вокруг жертвы мерцает кольцо
+// всасывание — по направлению к каждой жертве отдельно: от пасти к жертве раскрывается воронка (узкая у пасти,
+// шире тела жертвы у неё), по воронке к пасти бегут уголки-шевроны и струйки, а жертву охватывает мерцающая скобка
+// со стороны, противоположной спруту, — её словно толкает внутрь
 function drawSuck(e, g) {
-  const { ctx } = g, R = e.cfg.suckRadius;
+  const { ctx } = g;
   ctx.strokeStyle = COLORS.krakenSuck;
+  ctx.fillStyle = COLORS.krakenSuck;
   ctx.lineCap = 'round';
-  ctx.lineWidth = 3;
-  for (let j = 0; j < 3; j++) {
-    ctx.globalAlpha = 0.35;
-    ctx.beginPath();
-    for (let i = 0; i <= 24; i++) {
-      const s = i / 24, rr = R * (1 - s) + e.r * 0.6 * s;
-      const a = -e.age * 3 + j * (Math.PI * 2 / 3) + s * 3;
-      ctx.lineTo(e.x + Math.cos(a) * rr, e.y + Math.sin(a) * rr);
-    }
-    ctx.stroke();
-  }
   for (const u of e.sucking) {
-    ctx.globalAlpha = 0.3;
-    ctx.lineWidth = u.r * 1.6;
-    ctx.beginPath(); ctx.moveTo(u.x, u.y); ctx.lineTo(e.x, e.y); ctx.stroke();
-    ctx.globalAlpha = 0.9;
-    ctx.fillStyle = COLORS.krakenSuck;
+    const a = Math.atan2(u.y - e.y, u.x - e.x), d = dist(e, u);
+    const ux = Math.cos(a), uy = Math.sin(a), nx = -uy, ny = ux;
+    const at = (t, side) => {                       // точка воронки: t — от пасти (0) к жертве (1), side — от оси
+      const w = e.r * 0.25 + (u.r * 1.6 - e.r * 0.25) * t;
+      return [e.x + ux * d * t + nx * w * side, e.y + uy * d * t + ny * w * side];
+    };
+    // воронка
+    ctx.globalAlpha = 0.18;
+    ctx.beginPath();
+    ctx.moveTo(...at(0, 1)); ctx.lineTo(...at(1, 1)); ctx.lineTo(...at(1, -1)); ctx.lineTo(...at(0, -1));
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 0.5;
+    ctx.lineWidth = 1.5;
+    for (const side of [1, -1]) { ctx.beginPath(); ctx.moveTo(...at(0, side)); ctx.lineTo(...at(1, side)); ctx.stroke(); }
+    // шевроны, бегущие к пасти: остриём к спруту
+    ctx.lineWidth = 3;
     for (let k = 0; k < 4; k++) {
-      const ph = (e.age * 2.5 + k / 4) % 1;
+      const t = 1 - ((e.age * 1.8 + k / 4) % 1);
+      const [cx, cy] = at(t, 0), w = (e.r * 0.25 + (u.r * 1.6 - e.r * 0.25) * t) * 0.8;
+      ctx.globalAlpha = 0.9 * Math.min(1, t * 3);
       ctx.beginPath();
-      ctx.arc(u.x + (e.x - u.x) * ph, u.y + (e.y - u.y) * ph, 3.5 * (1 - ph * 0.6), 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(cx + ux * w * 0.6 + nx * w, cy + uy * w * 0.6 + ny * w);
+      ctx.lineTo(cx, cy);
+      ctx.lineTo(cx + ux * w * 0.6 - nx * w, cy + uy * w * 0.6 - ny * w);
+      ctx.stroke();
     }
+    // струйки — короткие чёрточки вдоль воронки
     ctx.lineWidth = 2;
+    for (let k = 0; k < 3; k++) {
+      const t = 1 - ((e.age * 2.6 + k / 3 + 0.15) % 1), side = (k - 1) * 0.55;
+      const [x1, y1] = at(t, side), [x2, y2] = at(Math.min(1, t + 0.12), side);
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    }
+    // скобка за жертвой
+    ctx.lineWidth = 2.5;
     ctx.globalAlpha = 0.5 + 0.4 * Math.sin(e.age * 14);
-    ctx.beginPath(); ctx.arc(u.x, u.y, u.r + 6, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(u.x, u.y, u.r + 7, a - 1.1, a + 1.1); ctx.stroke();
   }
   ctx.lineCap = 'butt';
   ctx.globalAlpha = 1;
@@ -1293,8 +1309,8 @@ const kraken = {
            regen: 250,              // HP в секунду, всегда, даже под огнём
            keepClear: 340,          // подиумы и дружочки не появляются ближе этого к спруту
            // тентакля: тень полосы длиной tentacleRange от центра (около 2/3 экрана), через tentacleAim — удар.
-           // Замахивается, только если союзник ближе tentacleTrigger (80% длины удара)
-           tentacleRange: 640, tentacleTrigger: 512, tentacleWidth: 46, tentacleAim: 1.5, tentacleDmg: 24,
+           // Замахивается, только если союзник ближе tentacleTrigger (72% длины удара)
+           tentacleRange: 640, tentacleTrigger: 461, tentacleWidth: 46, tentacleAim: 1.5, tentacleDmg: 24,
            tentacleCooldown: [5, 8], // пауза между новыми ударами, сек — атака редкая
            tentacleShow: 0.6,       // сколько видна ударившая тентакля
            // всасывание: дружочков не в цепи ближе suckRadius тянет к телу — у края со скоростью suckSpeed, у тела
@@ -1334,18 +1350,16 @@ const kraken = {
   draw(e, g) {
     const { ctx } = g, cfg = e.cfg;
     for (const m of e.mines) drawKrakenMine(e, m, g);
-    // зона всасывания: пунктир всегда; пока кого-то тянет — ярче, внутри крутится вихрь, к жертвам — струи
+    // зона всасывания: неподвижный пунктир (пока кого-то тянет — ярче), к каждой жертве — своя воронка
     const sucking = e.sucking.length > 0, eating = e.eating.length > 0;
     ctx.strokeStyle = COLORS.krakenSuck;
     ctx.lineWidth = 2;
-    ctx.globalAlpha = sucking ? 0.7 : 0.2;
+    ctx.globalAlpha = sucking ? 0.4 : 0.2;
     ctx.setLineDash([6, 10]);
-    ctx.lineDashOffset = sucking ? e.age * 60 : 0;
     ctx.beginPath();
     ctx.arc(e.x, e.y, cfg.suckRadius, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.lineDashOffset = 0;
     if (sucking) drawSuck(e, g);
     ctx.globalAlpha = 1;
     for (const t of e.tentacles) if (t.phase === 'aim') drawTentacle(e, t, g);
@@ -1377,7 +1391,7 @@ const kraken = {
     ctx.fill();
     ctx.fillStyle = '#e8e0f0';
     for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * Math.PI * 2 + e.age * (sucking || eating ? 3 : 0.3);
+      const a = (i / 10) * Math.PI * 2 + e.age * 0.3;
       ctx.beginPath();
       ctx.moveTo(e.x + Math.cos(a - 0.15) * mouth, e.y + Math.sin(a - 0.15) * mouth);
       ctx.lineTo(e.x + Math.cos(a + 0.15) * mouth, e.y + Math.sin(a + 0.15) * mouth);
@@ -1385,10 +1399,10 @@ const kraken = {
       ctx.closePath();
       ctx.fill();
     }
-    // проглатываемые: тело крутится, сжимается и уходит в пасть
+    // проглатываемые: тело по прямой втягивается в пасть, сжимаясь и вытягиваясь к ней
     for (const f of e.eating) {
       const k = clamp(f.t / cfg.eatTime, 0, 1), ease = k * k;
-      const a = Math.atan2(f.y - e.y, f.x - e.x) + k * 4, d = dist(e, f) * (1 - ease);
+      const a = Math.atan2(f.y - e.y, f.x - e.x), d = dist(e, f) * (1 - ease);
       const u = { ...f.u, x: e.x + Math.cos(a) * d, y: e.y + Math.sin(a) * d, r: f.u.r * (1 - 0.8 * k), facing: a };
       ctx.globalAlpha = 1 - 0.5 * k;
       g.drawUnitBody(u, g.allyColor(f.u), true);

@@ -210,7 +210,7 @@ const spiky = {
   desc: 'ранит врагов, которые касаются тела',
   color: COLORS.spiky,
   duration: 30,
-  contactDmg: 40,
+  contactDmg: 24,
   contactInterval: 0.35,
   icon(ctx, x, y, s) {
     for (let i = 0; i < 6; i++) {
