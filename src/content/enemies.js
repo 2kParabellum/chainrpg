@@ -975,17 +975,19 @@ const boss = {
 };
 
 // Спрут: босс «Логова», прикопан посреди зала — не ходит, но лечится очень быстро (cfg.regen HP в секунду, всегда),
-// так что сбить его можно только всей цепочкой разом. Три атаки идут независимо друг от друга:
+// так что сбить его можно только всей цепочкой разом. Атаки идут независимо друг от друга:
 //  - тентакля: на полу появляется тень полосы от спрута к союзнику, через tentacleAim — удар по ней. Задетых
 //    ранит, а если задето звено цепочки — всё от него до хвоста отрезано от Героя и вылетает из цепи (game.cutChain);
-//  - всасывание: дружочков не в цепи (лежачих и ждущих вербовки) ближе suckRadius медленно тянет к телу;
-//    дотянуло — гибнут;
+//  - всасывание: дружочков не в цепи (лежачих и ждущих вербовки) ближе suckRadius тянет к телу, чем ближе — тем
+//    быстрее; дотянуло — спрут их проглатывает (видно, как тело уходит в пасть, а сам он вспухает);
+//  - пук: Герой подошёл совсем близко (fartTrigger) — раз в fartCooldown вокруг Героя кучно ложатся несколько
+//    фиолетовых облаков, как у Зомби;
 //  - плевок слизью: раз в globEvery навесом бросает ком слизи в Героя (если видит его, иначе — в ближайшего видимого
 //    союзника) с упреждением по его ходу, но неточно (globError). Ком упал на союзника — сразу взрыв; промахнулся —
 //    остаётся лежать лужей (мина) mineLife секунд. Въехало в лужу звено цепочки — через случайные mineFuse секунд
 //    взрыв: урон по площади (никого не раскидывает).
 // Тени, тентакли, летящие комья и лужи лежат в самом спруте (e.tentacles, e.globs, e.mines) и рисуются с ним,
-// поэтому drawReach.
+// поэтому drawReach. Проглоченные дружочки досматривают анимацию в e.eating.
 const rand = ([a, b]) => a + Math.random() * (b - a);
 
 function tentacleEnd(e, t) {
@@ -1023,22 +1025,46 @@ function krakenTentacles(e, dt, chain, game) {
   e.tentacleCd = rand(cfg.tentacleCooldown);
 }
 
-// всасывание: лежачих и ждущих вербовки рядом медленно тянет к телу; дотянуло — гибнут
+// всасывание: лежачих и ждущих вербовки рядом тянет к телу — у края зоны со скоростью suckSpeed, у самого тела
+// в suckAccel раз быстрее; дотянуло — проглатывает: дружочек гибнет, а его тело ещё eatTime секунд уходит в пасть
 function krakenSuck(e, dt, game) {
   const cfg = e.cfg, st = game.state;
+  for (const f of e.eating.slice()) { f.t += dt; if (f.t >= cfg.eatTime) game.removeFrom(e.eating, f); }
+  e.gulp = Math.max(0, e.gulp - dt);
   e.sucking = [];
   for (const u of st.downed.concat(st.neutrals)) {
     const d = dist(e, u), touch = e.r + u.r + 2;
     if (d > cfg.suckRadius) continue;
-    if (d <= touch) {
+    if (d <= touch + 1) {
+      e.eating.push({ u, x: u.x, y: u.y, t: 0 });
+      e.gulp = cfg.eatTime;
       game.damageUnit(u, u.hp + 1);
-      st.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 10, life: 0.4, color: COLORS.krakenSuck });
       continue;
     }
     e.sucking.push(u);
-    const step = Math.min(cfg.suckSpeed * dt, d - touch);
+    const near = 1 - (d - touch) / (cfg.suckRadius - touch);
+    const step = Math.min(cfg.suckSpeed * (1 + (cfg.suckAccel - 1) * near) * dt, d - touch);
+    u.drag = null;
     moveAndCollide(u, ((e.x - u.x) / d) * step, ((e.y - u.y) / d) * step, game.world.moveBlockers);
   }
+}
+
+// пук: Герой совсем рядом (просвет до fartTrigger) — раз в fartCooldown вокруг него кучно ложатся fartCount облаков
+function krakenFart(e, dt, game) {
+  const cfg = e.cfg, st = game.state, lead = st.party[0];
+  e.fartCd -= dt;
+  e.fartFx = Math.max(0, e.fartFx - dt);
+  if (e.fartCd > 0 || dist(e, lead) - e.r - lead.r > cfg.fartTrigger) return;
+  e.fartCd = cfg.fartCooldown;
+  e.fartFx = 0.6;
+  for (let k = 0; k < cfg.fartCount; k++) {
+    const a = Math.random() * Math.PI * 2, d = Math.random() * cfg.fartSpread;
+    const c = { x: lead.x + Math.cos(a) * d, y: lead.y + Math.sin(a) * d };
+    st.clouds.push({ ...c, r: cfg.fartRadius, cur: 0, t: 0, life: cfg.fartLife, dps: cfg.fartDps, grow: 0.6,
+                     color: COLORS.krakenFart });
+    st.effects.push({ type: 'beam', x1: e.x, y1: e.y, x2: c.x, y2: c.y, life: 0.3, color: COLORS.krakenFart });
+  }
+  st.effects.push({ type: 'ring', x: e.x, y: e.y, r: e.r + 30, life: 0.5, color: COLORS.krakenFart });
 }
 
 // плевок слизью: цель — Герой, если его видно (через стены и колонны не плюёт — за укрытием можно спрятаться),
@@ -1225,6 +1251,43 @@ function drawKrakenMine(e, m, g) {
   ctx.globalAlpha = 1;
 }
 
+// всасывание: три спиральных рукава вихря крутятся к пасти, от каждой жертвы к пасти — толстая струя, по которой
+// бегут точки, а вокруг жертвы мерцает кольцо
+function drawSuck(e, g) {
+  const { ctx } = g, R = e.cfg.suckRadius;
+  ctx.strokeStyle = COLORS.krakenSuck;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 3;
+  for (let j = 0; j < 3; j++) {
+    ctx.globalAlpha = 0.35;
+    ctx.beginPath();
+    for (let i = 0; i <= 24; i++) {
+      const s = i / 24, rr = R * (1 - s) + e.r * 0.6 * s;
+      const a = -e.age * 3 + j * (Math.PI * 2 / 3) + s * 3;
+      ctx.lineTo(e.x + Math.cos(a) * rr, e.y + Math.sin(a) * rr);
+    }
+    ctx.stroke();
+  }
+  for (const u of e.sucking) {
+    ctx.globalAlpha = 0.3;
+    ctx.lineWidth = u.r * 1.6;
+    ctx.beginPath(); ctx.moveTo(u.x, u.y); ctx.lineTo(e.x, e.y); ctx.stroke();
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = COLORS.krakenSuck;
+    for (let k = 0; k < 4; k++) {
+      const ph = (e.age * 2.5 + k / 4) % 1;
+      ctx.beginPath();
+      ctx.arc(u.x + (e.x - u.x) * ph, u.y + (e.y - u.y) * ph, 3.5 * (1 - ph * 0.6), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.5 + 0.4 * Math.sin(e.age * 14);
+    ctx.beginPath(); ctx.arc(u.x, u.y, u.r + 6, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+  ctx.globalAlpha = 1;
+}
+
 const kraken = {
   stats: { name: 'Спрут', hp: 1800, radius: 58, mass: Infinity,
            regen: 200,              // HP в секунду, всегда, даже под огнём
@@ -1233,8 +1296,12 @@ const kraken = {
            tentacleRange: 640, tentacleWidth: 46, tentacleAim: 1.5, tentacleDmg: 24,
            tentacleCooldown: [5, 8], // пауза между новыми ударами, сек — атака редкая
            tentacleShow: 0.6,       // сколько видна ударившая тентакля
-           // всасывание: дружочков не в цепи ближе suckRadius тянет к телу со скоростью suckSpeed
-           suckRadius: 320, suckSpeed: 32,
+           // всасывание: дружочков не в цепи ближе suckRadius тянет к телу — у края со скоростью suckSpeed, у тела
+           // в suckAccel раз быстрее (с края зоны до пасти — около 1.5 с); проглоченный уходит в пасть за eatTime
+           suckRadius: 320, suckSpeed: 110, suckAccel: 2.5, eatTime: 0.6,
+           // пук: Герой ближе fartTrigger от края тела — раз в fartCooldown fartCount облаков вокруг Героя (в пределах
+           // fartSpread), каждое радиусом fartRadius, fartDps урона в секунду, висит fartLife секунд
+           fartTrigger: 110, fartCooldown: 14, fartCount: 5, fartSpread: 110, fartRadius: 70, fartDps: 10, fartLife: 4.5,
            // плевок слизью: раз в globEvery, на дальность globRange по видимой цели; летит globFlight секунд, целится
            // с упреждением (globLead — доля предсказанного смещения цели) и мажет на случайные globError px.
            // Промах — лужа (мина): лежит mineLife секунд, луж не больше mineMax; mineArm — сколько растекается
@@ -1249,7 +1316,8 @@ const kraken = {
   init(e) {
     e.age = 0;
     e.tentacles = []; e.tentacleCd = 2;
-    e.sucking = [];
+    e.sucking = []; e.eating = []; e.gulp = 0;
+    e.fartCd = 3; e.fartFx = 0;
     e.globs = []; e.globCd = 3;
     e.mines = [];
   },
@@ -1258,31 +1326,26 @@ const kraken = {
     e.hp = Math.min(e.maxHp, e.hp + e.cfg.regen * dt);
     krakenTentacles(e, dt, chain, game);
     krakenSuck(e, dt, game);
+    krakenFart(e, dt, game);
     krakenSpit(e, dt, chain, game);
     krakenMines(e, dt, game);
   },
   draw(e, g) {
     const { ctx } = g, cfg = e.cfg;
     for (const m of e.mines) drawKrakenMine(e, m, g);
-    // зона всасывания: пунктир всегда, пока кого-то тянет — ярче, пунктир бежит внутрь, к жертвам — струи
-    const sucking = e.sucking.length > 0;
+    // зона всасывания: пунктир всегда; пока кого-то тянет — ярче, внутри крутится вихрь, к жертвам — струи
+    const sucking = e.sucking.length > 0, eating = e.eating.length > 0;
     ctx.strokeStyle = COLORS.krakenSuck;
     ctx.lineWidth = 2;
-    ctx.globalAlpha = sucking ? 0.6 : 0.2;
+    ctx.globalAlpha = sucking ? 0.7 : 0.2;
     ctx.setLineDash([6, 10]);
-    ctx.lineDashOffset = sucking ? e.age * 40 : 0;
+    ctx.lineDashOffset = sucking ? e.age * 60 : 0;
     ctx.beginPath();
     ctx.arc(e.x, e.y, cfg.suckRadius, 0, Math.PI * 2);
     ctx.stroke();
-    for (const u of e.sucking) {
-      ctx.globalAlpha = 0.55;
-      ctx.beginPath();
-      ctx.moveTo(u.x, u.y);
-      ctx.lineTo(e.x, e.y);
-      ctx.stroke();
-    }
     ctx.setLineDash([]);
     ctx.lineDashOffset = 0;
+    if (sucking) drawSuck(e, g);
     ctx.globalAlpha = 1;
     for (const t of e.tentacles) if (t.phase === 'aim') drawTentacle(e, t, g);
     // щупальца-обрубки вокруг тела шевелятся
@@ -1297,27 +1360,38 @@ const kraken = {
       ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(x1, y1, x2, y2); ctx.stroke();
     }
     ctx.lineCap = 'butt';
-    g.drawUnitBody(e, COLORS.kraken, true);
+    const swell = 1 + 0.12 * Math.sin((e.gulp / cfg.eatTime) * Math.PI) + 0.08 * Math.sin((e.fartFx / 0.6) * Math.PI);
+    const body = { x: e.x, y: e.y, r: e.r * swell };
+    g.drawUnitBody(body, e.fartFx > 0 ? COLORS.krakenFart : COLORS.kraken, true);
     ctx.strokeStyle = COLORS.krakenEdge;
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+    ctx.arc(e.x, e.y, body.r, 0, Math.PI * 2);
     ctx.stroke();
     // пасть: при всасывании раскрыта шире, по кругу зубы
-    const mouth = e.r * (sucking ? 0.48 + 0.06 * Math.sin(e.age * 10) : 0.36);
+    const mouth = e.r * (eating ? 0.6 : sucking ? 0.5 + 0.06 * Math.sin(e.age * 12) : 0.36);
     ctx.fillStyle = '#0e0e10';
     ctx.beginPath();
     ctx.arc(e.x, e.y, mouth, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#e8e0f0';
     for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * Math.PI * 2 + e.age * (sucking ? 2 : 0.3);
+      const a = (i / 10) * Math.PI * 2 + e.age * (sucking || eating ? 3 : 0.3);
       ctx.beginPath();
       ctx.moveTo(e.x + Math.cos(a - 0.15) * mouth, e.y + Math.sin(a - 0.15) * mouth);
       ctx.lineTo(e.x + Math.cos(a + 0.15) * mouth, e.y + Math.sin(a + 0.15) * mouth);
       ctx.lineTo(e.x + Math.cos(a) * mouth * 0.6, e.y + Math.sin(a) * mouth * 0.6);
       ctx.closePath();
       ctx.fill();
+    }
+    // проглатываемые: тело крутится, сжимается и уходит в пасть
+    for (const f of e.eating) {
+      const k = clamp(f.t / cfg.eatTime, 0, 1), ease = k * k;
+      const a = Math.atan2(f.y - e.y, f.x - e.x) + k * 4, d = dist(e, f) * (1 - ease);
+      const u = { ...f.u, x: e.x + Math.cos(a) * d, y: e.y + Math.sin(a) * d, r: f.u.r * (1 - 0.8 * k), facing: a };
+      ctx.globalAlpha = 1 - 0.5 * k;
+      g.drawUnitBody(u, g.allyColor(f.u), true);
+      ctx.globalAlpha = 1;
     }
     for (const b of e.globs) drawGlob(e, b, g);
     for (const t of e.tentacles) if (t.phase === 'slam') drawTentacle(e, t, g);

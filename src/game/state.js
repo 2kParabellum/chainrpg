@@ -207,13 +207,14 @@ function resetGame(level) {
       state.enemies.push(makeEnemy('mine', p.x, p.y, i));
     }
     // постоянные подиумы уровня: стоят на своём месте всю партию (fixed — взятый появится снова, см. game/pads.js);
-    // permanent — подиум усиления, который вовсе не исчезает: его берут сколько угодно раз (см. chain.touchPads)
+    // permanent — подиум усиления, который вовсе не исчезает: взятый, гаснет на opts.cooldown секунд и снова горит
+    // (см. game/pads.js)
     const size = CONFIG.PADS.size;
     for (const [cx, cy, ability, opts] of plan.pads || []) {
       const p = localToWorld(i, cx, cy);
       state.pads.push({ x: p.x - size / 2, y: p.y - size / 2, w: size, h: size, ability,
                         life: FIXED_PAD_LIFE, maxLife: FIXED_PAD_LIFE, takenBy: [], fixed: true,
-                        permanent: !!(opts && opts.permanent) });
+                        permanent: !!(opts && opts.permanent), cooldownTime: (opts && opts.cooldown) || 0, cooldown: 0 });
     }
   });
 

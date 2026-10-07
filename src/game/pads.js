@@ -7,7 +7,7 @@
 const { CONFIG, COLORS, state } = G;
 const { pickWeighted } = G.math;
 const { circleRectOverlap } = G.collision;
-const { freeSquareNear, inHome, roomInterior, world } = G.world;
+const { freeSquareNear, freeSquareIn, inHome, roomInterior, world } = G.world;
 const { leader, makeAlly, currentRoom } = G.session;
 
 const rand = ([a, b]) => a + Math.random() * (b - a);
@@ -86,9 +86,10 @@ function touchesPad(u, pad) {
   return Math.hypot(u.x - (pad.x + r), u.y - (pad.y + r)) < u.r + r;
 }
 
-// подиум, которого касается тело юнита (или null)
+// подиум, которого касается тело юнита (или null); погасший на перезарядку постоянный подиум не в счёт
 function padUnder(u) {
   for (const pad of state.pads) {
+    if (pad.cooldown > 0) continue;
     if (touchesPad(u, pad)) return pad;
   }
   return null;
@@ -114,6 +115,14 @@ function placePad(m) {
   state.effects.push({ type: 'ring', x: m.x + m.w / 2, y: m.y + m.h / 2, r: m.w * 0.7, life: 0.4, color: padColor(m.ability) });
 }
 
+// свободное место под новый подиум или дружочка: обычно — в кольце ringMin..ringMax около Героя, а с anywhere
+// (уровень так решил) — в любом месте комнаты, где сейчас Герой
+function spawnSpot(cfg, size, atStart) {
+  if (cfg.anywhere) return freeSquareIn(roomInterior(currentRoom()), size, occupied(), placeRule(atStart));
+  const lead = leader();
+  return freeSquareNear(lead.x, lead.y, cfg.ringMin, cfg.ringMax, size, occupied(), placeRule(atStart));
+}
+
 // новый подиум группы kind ('jobs' | 'buffs') около Героя: сперва на его месте появляется метка-тень,
 // через telegraph секунд — сам подиум (на старте партии — сразу). false, если места не нашлось
 function spawnPad(cfg, kind, atStart) {
@@ -124,8 +133,7 @@ function spawnPad(cfg, kind, atStart) {
   const fresh = all.filter((k) => !state.pads.concat(state.padMarks).some((p) => p.ability === k));
   const ability = pickWeighted(fresh.length ? fresh : all, group.weights);
 
-  const lead = leader();
-  const spot = freeSquareNear(lead.x, lead.y, cfg.ringMin, cfg.ringMax, size, occupied(), placeRule(atStart));
+  const spot = spawnSpot(cfg, size, atStart);
   if (!spot) return false;
 
   const mark = { x: spot.x - size / 2, y: spot.y - size / 2, w: size, h: size, ability,
@@ -144,6 +152,20 @@ function updatePads(dt) {
   const cfg = settings();
   for (let i = state.pads.length - 1; i >= 0; i--) {
     const p = state.pads[i];
+    // постоянный подиум не исчезает: по нему проехала цепочка (кончилось usedLeft) — гаснет на cooldownTime секунд
+    if (p.permanent) {
+      if (p.cooldown > 0) {
+        p.cooldown -= dt;
+        if (p.cooldown <= 0) state.effects.push({ type: 'ring', x: p.x + p.w / 2, y: p.y + p.h / 2, r: p.w * 0.8, life: 0.5, color: padColor(p.ability) });
+      }
+      if (p.usedLeft === undefined) continue;
+      p.usedLeft -= dt;
+      if (p.usedLeft > 0) continue;
+      p.usedLeft = undefined;
+      p.takenBy = [];
+      p.cooldown = p.cooldownTime;
+      continue;
+    }
     p.life -= dt;
     if (p.usedLeft !== undefined) p.usedLeft -= dt;
     if (p.life > 0 && !(p.usedLeft <= 0)) continue;
@@ -167,8 +189,7 @@ function updatePads(dt) {
 
 // новый нейтральный дружочек около Героя; false, если места не нашлось
 function spawnAlly(cfg, atStart) {
-  const lead = leader();
-  const spot = freeSquareNear(lead.x, lead.y, cfg.ringMin, cfg.ringMax, 40, occupied(), placeRule(atStart));
+  const spot = spawnSpot(cfg, 40, atStart);
   if (!spot) return false;
   const u = makeAlly('neutral', 'buddy', spot.x, spot.y);
   u.life = u.maxLife = rand(cfg.lifetime);

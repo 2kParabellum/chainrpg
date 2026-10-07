@@ -20,8 +20,8 @@ const COLORS = {
   exit: '#fff2b8', exitGlow: '#ffe58a', // светлый портал выхода с уровня
   // база и гнёзда врагов (уровень «Оборона»)
   base: '#2f5a78', baseEdge: '#8fd6ff', baseHit: '#ff7a7a', nest: '#e04a5a',
-  // спрут «Логова»: тело, щупальца, тень удара тентакли, всасывание и злые мины
-  kraken: '#3c2a5c', krakenEdge: '#9a6ad8', tentacle: '#7a4aa8', krakenSuck: '#6ad8c8', krakenMine: '#ff2a6a',
+  // спрут «Логова»: тело, щупальца, тень удара тентакли, всасывание, злые мины и облака пука
+  kraken: '#3c2a5c', krakenEdge: '#9a6ad8', tentacle: '#7a4aa8', krakenSuck: '#6ad8c8', krakenMine: '#ff2a6a', krakenFart: '#a060e0',
 };
 
 G.COLORS = COLORS;

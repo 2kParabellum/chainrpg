@@ -72,13 +72,14 @@ function drawHook(p) {
 function drawCloud(c) {
   if (!onScreen(c, c.cur)) return;
   const fade = clamp(c.life / 0.8, 0, 1);
-  ctx.fillStyle = COLORS.cloud;
+  const color = c.color || COLORS.cloud;
+  ctx.fillStyle = color;
   ctx.globalAlpha = 0.16 * fade;
   ctx.beginPath();
   ctx.arc(c.x, c.y, c.cur, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 0.5 * fade;
-  ctx.strokeStyle = COLORS.cloud;
+  ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   ctx.setLineDash([9, 7]);
   ctx.beginPath();
@@ -608,6 +609,35 @@ function drawPermanentFrame(pad, def) {
   ctx.globalAlpha = 1;
 }
 
+// погасший на перезарядку постоянный подиум: тёмный квадрат в тусклой рамке, по кругу — сколько осталось (сектор
+// цвета усиления убывает), посередине горят секунды до того, как он загорится снова
+function drawPadCooldown(pad, def) {
+  const cx = pad.x + pad.w / 2, cy = pad.y + pad.h / 2, k = clamp(pad.cooldown / pad.cooldownTime, 0, 1);
+  ctx.fillStyle = '#0e0e10';
+  ctx.globalAlpha = 0.6;
+  ctx.fillRect(pad.x, pad.y, pad.w, pad.h);
+  ctx.strokeStyle = COLORS.neutral;
+  ctx.globalAlpha = 0.8;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 4]);
+  ctx.strokeRect(pad.x + 1, pad.y + 1, pad.w - 2, pad.h - 2);
+  ctx.setLineDash([]);
+  ctx.strokeStyle = def.color;
+  ctx.globalAlpha = 0.55;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(cx, cy, pad.w * 0.38, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 0.85 + 0.15 * Math.sin(state.time * 4);
+  ctx.fillStyle = def.color;
+  ctx.font = 'bold 18px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(Math.ceil(pad.cooldown)), cx, cy + 1);
+  ctx.textBaseline = 'alphabetic';
+  ctx.globalAlpha = 1;
+}
+
 // подиумы: профессии — большие дружочки (см. drawJobPad), усиления — светящийся квадрат на полу
 // в широком мягком свечении; у постоянного — ещё и рамка вокруг
 function drawPads() {
@@ -621,6 +651,7 @@ function drawPads() {
     const buff = G.buffs[pad.ability];
     const def = buff || abilities[pad.ability];
     if (pad.permanent) drawPermanentFrame(pad, def);
+    if (pad.cooldown > 0) { drawPadCooldown(pad, def); continue; }
     const cx = pad.x + pad.w / 2, cy = pad.y + pad.h / 2;
     if (!buff) {
       drawJobPad(pad, def, alpha, wave);

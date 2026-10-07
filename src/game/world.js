@@ -540,12 +540,14 @@ function freeSpotNear(x, y, minR, maxR, r) {
 // целиком внутри мира, не задевает стены, колонны, пропасти и шипы, не ближе 20 к кругам avoid
 // ([{ x, y, r }]); accept(cx, cy) — необязательное правило уровня, где можно (двор базы или вне его);
 // null, если за несколько попыток места не нашлось
-function freeSquareNear(x, y, minR, maxR, size, avoid, accept) {
+// pick() — необязательный другой способ бросать точку (см. freeSquareIn)
+function freeSquareNear(x, y, minR, maxR, size, avoid, accept, pick) {
   const half = size / 2;
   for (let tries = 0; tries < 40; tries++) {
     const a = Math.random() * Math.PI * 2;
     const d = minR + Math.random() * (maxR - minR);
-    const cx = x + Math.cos(a) * d, cy = y + Math.sin(a) * d;
+    const p = pick ? pick() : { x: x + Math.cos(a) * d, y: y + Math.sin(a) * d };
+    const cx = p.x, cy = p.y;
     if (accept && !accept(cx, cy)) continue;
     const sq = { x: cx - half, y: cy - half, w: size, h: size };
     if (sq.x < 0 || sq.y < 0 || sq.x + size > world.width || sq.y + size > world.height) continue;
@@ -557,9 +559,18 @@ function freeSquareNear(x, y, minR, maxR, size, avoid, accept) {
   return null;
 }
 
+// центр свободного квадрата со стороной size в случайном месте прямоугольника area — как freeSquareNear, только
+// не около точки, а где угодно в нём
+function freeSquareIn(area, size, avoid, accept) {
+  const half = size / 2;
+  return freeSquareNear(0, 0, 0, 0, size, avoid, accept, () => ({
+    x: area.x + half + Math.random() * (area.w - size), y: area.y + half + Math.random() * (area.h - size),
+  }));
+}
+
 G.world = {
   world, roomCount, roomIndexAt, roomInterior, localToWorld, buildWorld, hasLineOfSight,
-  spikeRectAt, standsOnSpikes, buttonUnder, freeSpotInRoom, scatterSpot, freeSpotNear, freeSquareNear, setDoorsOpen,
+  spikeRectAt, standsOnSpikes, buttonUnder, freeSpotInRoom, scatterSpot, freeSpotNear, freeSquareNear, freeSquareIn, setDoorsOpen,
   flowDir, buildFlowField, pathClear, inHome,
 };
 })(window.Game = window.Game || {});

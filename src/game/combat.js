@@ -21,23 +21,28 @@ function nearestTarget(from, list, range) {
   return best;
 }
 
-// улучшения копейщика против ближних атак врага (hit.melee, hit.by — кто бьёт): «шипастая броня» — копейщик
-// возвращает напавшему весь урон; «прикрытие» — оба соседа копейщика в цепочке (не он сам) получают меньше.
-// Шипы считаются от урона до прикрытия. Возвращает урон, который дойдёт до цели
+// улучшение копейщика против ближних атак врага (hit.melee, hit.by — кто бьёт): «шипастая броня» — копейщик
+// возвращает напавшему весь урон (считается от урона до прикрытия)
 function meleeDefense(u, dmg, hit) {
   if (u.ability === 'spear' && hit.by && state.enemies.includes(hit.by) && upgrade('spikedArmor')) {
     damageUnit(hit.by, dmg);
     state.effects.push({ type: 'beam', x1: u.x, y1: u.y, x2: hit.by.x, y2: hit.by.y, life: 0.2, color: COLORS.spiky });
   }
-  const c = upgrade('cover');
-  if (c && u.kind === 'ally' && u.ability !== 'spear') {
-    const i = state.party.indexOf(u);
-    if ([state.party[i - 1], state.party[i + 1]].some((n) => n && n.ability === 'spear')) {
-      dmg *= 1 - c.cut;
-      state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 5, life: 0.2, color: COLORS.sturdy });
-    }
-  }
   return dmg;
+}
+
+// улучшение «прикрытие»: оба соседа копейщика в цепочке (не он сам) получают меньше урона — от любых атак.
+// Вспышка — не чаще раза в 0.2 с, чтобы урон в секунду (облака, огонь) не мигал каждый кадр
+function coverDefense(u, dmg) {
+  const c = upgrade('cover');
+  if (!c || u.kind !== 'ally' || u.ability === 'spear') return dmg;
+  const i = state.party.indexOf(u);
+  if (![state.party[i - 1], state.party[i + 1]].some((n) => n && n.ability === 'spear')) return dmg;
+  if (!(state.time - (u.coverFx || -1) < 0.2)) {
+    u.coverFx = state.time;
+    state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 5, life: 0.2, color: COLORS.sturdy });
+  }
+  return dmg * (1 - c.cut);
 }
 
 // hit — необязательно, откуда урон: { by: враг, melee: true } для ближних атак (укус, таран)
@@ -45,6 +50,7 @@ function damageUnit(u, dmg, hit) {
   if (u.hp <= 0) return;
   if (state.leaving && u.kind === 'ally') return; // цепочка уже уходит в портал выхода
   if (hit && hit.melee && (u.kind === 'ally' || u.kind === 'downed')) dmg = meleeDefense(u, dmg, hit);
+  dmg = coverDefense(u, dmg);
   u.hp -= dmg;
   u.regenTimer = 0;
   if (u.hp <= 0) {
@@ -235,7 +241,8 @@ function applySpikes(dt) {
   }
 }
 
-// вонючее облако висит на месте и травит только союзников (и базу) — своих оно не задевает
+// вонючее облако висит на месте и травит только союзников (и базу) — своих оно не задевает.
+// Облако может нести свои dps и grow (облака спрута), иначе — числа Зомби
 function updateClouds(dt) {
   const cfg = enemyTypes.zombie.stats;
   const victims = enemyTargets();
@@ -244,9 +251,9 @@ function updateClouds(dt) {
     c.t += dt;
     c.life -= dt;
     if (c.life <= 0) { state.clouds.splice(i, 1); continue; }
-    c.cur = c.r * (0.35 + 0.65 * Math.min(1, c.t / cfg.cloudGrow));
+    c.cur = c.r * (0.35 + 0.65 * Math.min(1, c.t / (c.grow || cfg.cloudGrow)));
     for (const u of victims) {
-      if (dist(c, u) < c.cur + u.r) damageUnit(u, cfg.cloudDps * dt);
+      if (dist(c, u) < c.cur + u.r) damageUnit(u, (c.dps || cfg.cloudDps) * dt);
     }
   }
 }
