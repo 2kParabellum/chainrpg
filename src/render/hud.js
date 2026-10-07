@@ -159,7 +159,12 @@ function drawHud() {
   // цель уровня «разрушить всё заданного типа» показываем счётчиком
   const rule = level.victory;
   let goal = '';
-  if (rule.kind === 'destroyType') goal = `   ${rule.label}: ${state.enemies.filter((e) => e.type === rule.type).length}`;
+  // showHp — цель одна (босс): вместо счётчика её HP
+  if (rule.kind === 'destroyType') {
+    const left = state.enemies.filter((e) => e.type === rule.type);
+    goal = rule.showHp && left.length === 1
+      ? `   ${rule.label}: ${Math.ceil(left[0].hp)}/${left[0].maxHp}` : `   ${rule.label}: ${left.length}`;
+  }
   // продержаться: сколько осталось и сколько HP у базы
   if (rule.kind === 'survive') {
     const left = Math.max(0, Math.ceil(rule.time - state.time));

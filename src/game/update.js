@@ -9,7 +9,7 @@ const { moveAndCollide, slideAlongWall, circleRectOverlap } = G.collision;
 const { world, setDoorsOpen } = G.world;
 const { leader, leaderSpeedMul, currentRoom, chainUnits, enemyTargets, isSpotted, spawnEnemy, upgrade } = G.session;
 const { freeSpotNear } = G.world;
-const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly, displaceAlly, canBeDisplaced } = G.chain;
+const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly, displaceAlly, cutChain, canBeDisplaced } = G.chain;
 const { updatePads, updateAllySpawns } = G.pads;
 const { updateWaves } = G.waves;
 const combat = G.combat;
@@ -35,7 +35,7 @@ const game = {
   spawnProjectile: combat.spawnProjectile, spawnMortar: combat.spawnMortar,
   spawnBigMortar: combat.spawnBigMortar, spawnHook: combat.spawnHook,
   spawnFirewall: combat.spawnFirewall,
-  knockOutAlly, displaceAlly, canBeDisplaced, wanderStep, stepOffSpikes, chaseStep, removeFrom,
+  knockOutAlly, displaceAlly, cutChain, canBeDisplaced, wanderStep, stepOffSpikes, chaseStep, removeFrom,
   spawnEnemy, freeSpotNear, pickChaser,
 };
 

@@ -141,13 +141,19 @@ function jobTarget(key) {
 // автоподбор подиумов при касании, пробел не нужен.
 // Усиление получает каждое коснувшееся звено (и Герой); подиум одноразовый: касание запускает (и продлевает)
 // таймер исчезновения, так что вся цепочка успевает проехать, а после хвоста он гаснет.
-// Профессию получает одно звено (см. jobTarget), не обязательно коснувшееся: подиум сразу исчезает
+// Профессию получает одно звено (см. jobTarget), не обязательно коснувшееся: подиум сразу исчезает.
+// Постоянный подиум усиления (pad.permanent) не исчезает вовсе и помнит только тех, кто касается его сейчас:
+// съехал и заехал снова — усиление обновилось
 function touchPads() {
+  const touching = new Map(); // постоянный подиум -> звенья, которые касаются его в этом кадре
   for (const u of state.party) {
     const pad = padUnder(u);
     if (!pad) continue;
     if (G.buffs[pad.ability]) {
-      markPadUsed(pad);
+      if (pad.permanent) {
+        if (!touching.has(pad)) touching.set(pad, []);
+        touching.get(pad).push(u);
+      } else markPadUsed(pad);
       // каждое звено берёт с одного подиума один раз, хотя касается его много кадров подряд
       if (pad.takenBy.includes(u)) continue;
       // о взятом усилении — надпись на экране, один раз на подиум (первым его касается Герой)
@@ -165,6 +171,7 @@ function touchPads() {
     state.effects.push({ type: 'beam', x1: pad.x + pad.w / 2, y1: pad.y + pad.h / 2, x2: target.x, y2: target.y, life: 0.35, color: def.color });
     state.effects.push({ type: 'ring', x: target.x, y: target.y, r: target.r + (target.abilityLevel > 1 ? 14 : 8), life: 0.5, color: def.color });
   }
+  for (const pad of state.pads) if (pad.permanent) pad.takenBy = touching.get(pad) || [];
 }
 
 // --- вербовка, бросок, выбивание ---
@@ -241,6 +248,15 @@ function dropLastAlly() {
   }
 }
 
+// цепочку перерубили перед звеном from (удар тентакли): оно и все за ним вылетают из цепи и остаются лежать там,
+// где были, — без отброса. Кого выбить нельзя (Герой, «крепкость»), тот остаётся в цепочке
+function cutChain(from) {
+  for (let k = state.party.length - 1; k >= Math.max(1, from); k--) {
+    const a = state.party[k];
+    if (canBeDisplaced(a)) knockOutAlly(a, 0, 0);
+  }
+}
+
 // попав в союзника, гарпун вырывает его из цепочки и тянет к Скорпиону; лежачего — просто тянет
 function hookAlly(a, scorpion) {
   if (a.kind === 'downed') { a.vx = 0; a.vy = 0; a.drag = scorpion; return; }
@@ -273,6 +289,6 @@ function updateDowned(d, dt) {
 
 G.chain = {
   pushTrail, trailPointAt, followChain, touchPads, updateBuffs, jobTarget,
-  nearestPickup, tryRecruit, canBeDisplaced, knockOutAlly, displaceAlly, dropLastAlly, hookAlly, updateDowned,
+  nearestPickup, tryRecruit, canBeDisplaced, knockOutAlly, displaceAlly, cutChain, dropLastAlly, hookAlly, updateDowned,
 };
 })(window.Game = window.Game || {});

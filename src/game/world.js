@@ -137,6 +137,8 @@ function addRoomContent(plan, i) {
     x: inner.x + cx * s.w - (w * s.w) / 2, y: inner.y + cy * s.h - (h * s.h) / 2,
     w: w * s.w, h: h * s.h,
   });
+  // сплошная стена внутри плана (например, вокруг квадратного зала с отростками): рисуется и держит как внешняя
+  for (const p of plan.walls || []) world.walls.push(toRect(p));
   for (const p of plan.pillars || []) world.pillars.push(toRect(p));
   for (const p of plan.pits || []) world.pits.push(toRect(p));
   for (const p of plan.spikes || []) world.spikes.push(toRect(p));

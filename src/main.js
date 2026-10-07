@@ -22,7 +22,7 @@ const { drawScene, drawCannonShots } = G.renderer;
 const { drawHud } = G.hud;
 
 // уровни в порядке их показа в меню; за фоном меню при запуске стоит первый
-const LEVELS = [G.level1, G.level2, G.level3, G.level4];
+const LEVELS = [G.level1, G.level2, G.level3, G.level4, G.level5];
 const START_LEVEL = LEVELS[0];
 
 // --- ввод: намерения игрока ---

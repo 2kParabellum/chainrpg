@@ -23,13 +23,15 @@ function allySettings() { return { ...CONFIG.ALLY_SPAWN, ...state.level.allySpaw
 // подиум профессии или усиления
 const padKind = (ability) => (G.buffs[ability] ? 'buffs' : 'jobs');
 
-// что занимает место: подиумы (и метки будущих), ждущие дружочки, громадины (порталы, босс) и зоны выхода
-// врагов у гнёзд «Обороны» — новое сюда не встаёт
+// что занимает место: подиумы (и метки будущих; у постоянного — вся подсвеченная площадка), ждущие дружочки,
+// громадины (порталы, боссы; у кого задан keepClear — круг такого радиуса) и зоны выхода врагов у гнёзд — новое
+// сюда не встаёт
 function occupied() {
   const nestR = state.level.waves ? state.level.waves.spawnRadius + 30 : 0;
-  return state.pads.concat(state.padMarks).map((p) => ({ x: p.x + p.w / 2, y: p.y + p.h / 2, r: p.w * 0.75 }))
+  return state.pads.concat(state.padMarks)
+    .map((p) => ({ x: p.x + p.w / 2, y: p.y + p.h / 2, r: p.permanent ? CONFIG.PADS.permanentAura : p.w * 0.75 }))
     .concat(state.neutrals.map((n) => ({ x: n.x, y: n.y, r: n.r + 10 })))
-    .concat(state.enemies.filter((e) => e.r >= 40).map((e) => ({ x: e.x, y: e.y, r: e.r })))
+    .concat(state.enemies.filter((e) => e.r >= 40).map((e) => ({ x: e.x, y: e.y, r: e.cfg.keepClear || e.r })))
     .concat(state.nests.map((n) => ({ x: n.x, y: n.y, r: nestR })));
 }
 
@@ -132,9 +134,9 @@ function spawnPad(cfg, kind, atStart) {
   return true;
 }
 
-// сколько подиумов группы на карте вместе с метками будущих
+// сколько подиумов группы на карте вместе с метками будущих; постоянные не в счёт — они не мешают появляться случайным
 function padCount(kind) {
-  return state.pads.concat(state.padMarks).filter((p) => padKind(p.ability) === kind).length;
+  return state.pads.concat(state.padMarks).filter((p) => !p.permanent && padKind(p.ability) === kind).length;
 }
 
 // таймеры подиумов и меток; появление новых — у профессий и усилений свои таймеры и пределы

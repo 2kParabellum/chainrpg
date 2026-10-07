@@ -502,7 +502,7 @@ function drawBurn(e) {
 
 function drawEnemies() {
   for (const e of state.enemies) {
-    if (!onScreen(e)) continue;
+    if (!onScreen(e, enemyTypes[e.type].drawReach || 0)) continue;
     if (!isSpotted(e)) continue;
     drawEnemy(e);
     drawBurn(e);
@@ -591,18 +591,60 @@ function drawJobPad(pad, def, alpha, wave) {
   ctx.globalAlpha = 1;
 }
 
+// постоянный подиум (никогда не исчезает): вокруг него подсвечена круглая площадка его цвета — мягкая заливка,
+// бегущий пунктир по кромке, стрелки-шевроны наружу и подпись снизу, чтобы место читалось издалека
+function drawPermanentZone(pad, def) {
+  const R = CONFIG.PADS.permanentAura, cx = pad.x + pad.w / 2, cy = pad.y + pad.h / 2;
+  ctx.fillStyle = def.color;
+  for (const [k, a] of [[1, 0.06], [0.6, 0.06]]) {
+    ctx.globalAlpha = a;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * k, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = def.color;
+  ctx.lineWidth = 3;
+  ctx.globalAlpha = 0.7;
+  ctx.setLineDash([16, 10]);
+  ctx.lineDashOffset = -state.time * 25;
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.lineDashOffset = 0;
+  ctx.lineWidth = 2.5;
+  ctx.globalAlpha = 0.55;
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + state.time * 0.4, d = R * (0.62 + 0.08 * Math.sin(state.time * 3 + i));
+    const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d;
+    ctx.beginPath();
+    ctx.moveTo(x + Math.cos(a + 2.4) * 9, y + Math.sin(a + 2.4) * 9);
+    ctx.lineTo(x, y);
+    ctx.lineTo(x + Math.cos(a - 2.4) * 9, y + Math.sin(a - 2.4) * 9);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = def.color;
+  ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(def.name.toUpperCase() + ' — ВСЕГДА', cx, cy + R + 16);
+  ctx.globalAlpha = 1;
+}
+
 // подиумы: профессии — большие дружочки (см. drawJobPad), усиления — светящийся квадрат на полу
-// в широком мягком свечении
+// в широком мягком свечении; у постоянного — ещё и подсвеченная площадка вокруг
 function drawPads() {
   const { pulse } = CONFIG.PADS;
   const warnTime = G.pads.settings().warnTime;
   const wave = Math.sin((state.time / pulse) * Math.PI * 2);
   const glow = 0.25 + 0.1 * wave;
   for (const pad of state.pads) {
-    if (!visible(pad)) continue;
+    const A = pad.permanent ? CONFIG.PADS.permanentAura + 20 : 0;
+    if (!visible({ x: pad.x - A, y: pad.y - A, w: pad.w + 2 * A, h: pad.h + 2 * A })) continue;
     const alpha = padAlpha(pad, warnTime);
     const buff = G.buffs[pad.ability];
     const def = buff || abilities[pad.ability];
+    if (pad.permanent) drawPermanentZone(pad, def);
     const cx = pad.x + pad.w / 2, cy = pad.y + pad.h / 2;
     if (!buff) {
       drawJobPad(pad, def, alpha, wave);

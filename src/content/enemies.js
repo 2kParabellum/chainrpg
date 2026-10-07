@@ -21,6 +21,8 @@
 //   noRegen      — не отлечивается сам (портал)
 //   alwaysActive — живёт и действует на любом расстоянии от игрока (портал)
 //   deathFlash   — радиус вспышки при гибели (только вид)
+//   drawReach    — рисовать, даже если тело дальше стольких px за краем экрана (у спрута тени и мины далеко от тела)
+// В stats может быть keepClear — радиус вокруг громадины, где не появляются подиумы и дружочки.
 // Ближние атаки (укус, таран) передают в game.damageUnit третий параметр { by: e, melee: true } —
 // на них отвечают улучшения копейщика (см. game/combat.js).
 // Всё, что нужно от игры, запись получает параметром game, а от рисования — параметром g
@@ -29,8 +31,8 @@
 'use strict';
 
 const { COLORS } = G;
-const { dist, pickOne } = G.math;
-const { moveAndCollide, circleRectOverlap } = G.collision;
+const { clamp, dist, pickOne } = G.math;
+const { moveAndCollide, circleRectOverlap, distToSegment } = G.collision;
 
 // общий шаблон стрелка, катапульты и скорпиона: блуждать, целиться, стрелять по перезарядке;
 // порождённый порталом вместо блуждания идёт к игроку и держит дистанцию 0.6 дальности
@@ -994,6 +996,358 @@ const boss = {
   },
 };
 
-const TYPES = { shooter, bull, tower, scorpion, zombie, hunter, chariot, mine, portal, boss, doorTarget, turret };
+// Спрут: босс «Логова», прикопан посреди зала — не ходит, но лечится очень быстро (cfg.regen HP в секунду, всегда),
+// так что сбить его можно только всей цепочкой разом. Четыре атаки идут независимо друг от друга:
+//  - тентакля: на полу появляется тень полосы от спрута к союзнику, через tentacleAim — удар по ней. Задетых
+//    ранит, а если задето звено цепочки — всё от него до хвоста отрезано от Героя и вылетает из цепи (game.cutChain);
+//  - всасывание: дружочков не в цепи (лежачих и ждущих вербовки) ближе suckRadius медленно тянет к телу;
+//    дотянуло — гибнут;
+//  - пулемёт: стреляет всегда и очень часто; ствол поворачивается к ближайшему союзнику не быстрее gunTurn;
+//  - мины: раз в mineEvery недалеко от Героя (кольцо mineRing) появляется злая пульсирующая область; въехало
+//    в неё звено цепочки — через случайные mineFuse секунд взрыв: большой урон по площади, задетых дружочков
+//    выбивает из цепочки, Героя отшвыривает.
+// Тени, тентакли и мины лежат в самом спруте (e.tentacles, e.mines) и рисуются с ним, поэтому drawReach.
+const rand = ([a, b]) => a + Math.random() * (b - a);
+const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+
+function tentacleEnd(e, t) {
+  return { x: e.x + Math.cos(t.a) * e.cfg.tentacleRange, y: e.y + Math.sin(t.a) * e.cfg.tentacleRange };
+}
+
+// удар тентакли по своей полосе: всех задетых ранит, а цепочку перерубает перед первым задетым звеном (не Героем)
+function tentacleSlam(e, t, game) {
+  const cfg = e.cfg, end = tentacleEnd(e, t), party = game.state.party;
+  const hit = (u) => distToSegment(u.x, u.y, e.x, e.y, end.x, end.y) < cfg.tentacleWidth / 2 + u.r;
+  let cut = 0;
+  party.forEach((u, i) => { if (i > 0 && !cut && hit(u)) cut = i; });
+  for (const u of party.concat(game.state.downed)) {
+    if (!hit(u)) continue;
+    game.damageUnit(u, cfg.tentacleDmg, { by: e, melee: true });
+    game.state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 8, life: 0.3, color: COLORS.tentacle });
+  }
+  if (cut) game.cutChain(cut);
+}
+
+function krakenTentacles(e, dt, chain, game) {
+  const cfg = e.cfg;
+  for (const t of e.tentacles.slice()) {
+    t.t += dt;
+    if (t.phase === 'aim' && t.t >= cfg.tentacleAim) { tentacleSlam(e, t, game); t.phase = 'slam'; t.t = 0; }
+    else if (t.phase === 'slam' && t.t >= cfg.tentacleShow) game.removeFrom(e.tentacles, t);
+  }
+  e.tentacleCd -= dt;
+  if (e.tentacleCd > 0) return;
+  // бьёт по случайному союзнику в досягаемости — звену цепочки, Герою или лежачему
+  const reach = chain.filter((u) => u.kind !== 'base' && dist(e, u) <= cfg.tentacleRange);
+  if (!reach.length) { e.tentacleCd = 0.3; return; }
+  const foe = pickOne(reach);
+  e.tentacles.push({ a: Math.atan2(foe.y - e.y, foe.x - e.x), t: 0, phase: 'aim' });
+  e.tentacleCd = rand(cfg.tentacleCooldown);
+}
+
+// всасывание: лежачих и ждущих вербовки рядом медленно тянет к телу; дотянуло — гибнут
+function krakenSuck(e, dt, game) {
+  const cfg = e.cfg, st = game.state;
+  e.sucking = [];
+  for (const u of st.downed.concat(st.neutrals)) {
+    const d = dist(e, u), touch = e.r + u.r + 2;
+    if (d > cfg.suckRadius) continue;
+    if (d <= touch) {
+      game.damageUnit(u, u.hp + 1);
+      st.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 10, life: 0.4, color: COLORS.krakenSuck });
+      continue;
+    }
+    e.sucking.push(u);
+    const step = Math.min(cfg.suckSpeed * dt, d - touch);
+    moveAndCollide(u, ((e.x - u.x) / d) * step, ((e.y - u.y) / d) * step, game.world.moveBlockers);
+  }
+}
+
+// пулемёт: ствол доворачивается к цели не быстрее gunTurn и стреляет всегда, даже без цели
+function krakenGun(e, dt, chain, game) {
+  const cfg = e.cfg;
+  e.gunRetarget -= dt;
+  if (e.gunRetarget <= 0 || !chain.includes(e.gunTarget)) {
+    e.gunTarget = game.nearestTarget(e, chain, cfg.gunRange);
+    e.gunRetarget = cfg.gunRetarget;
+  }
+  const foe = e.gunTarget;
+  const turn = cfg.gunTurn * dt;
+  if (foe) e.gunAngle += clamp(wrapAngle(Math.atan2(foe.y - e.y, foe.x - e.x) - e.gunAngle), -turn, turn);
+  else e.gunAngle += cfg.gunIdleSpin * dt;
+  e.gunCd -= dt;
+  while (e.gunCd <= 0) {
+    e.gunCd += 1 / cfg.gunRate;
+    const a = e.gunAngle + (Math.random() * 2 - 1) * cfg.gunSpread;
+    const muzzle = { x: e.x + Math.cos(a) * (e.r + 14), y: e.y + Math.sin(a) * (e.r + 14) };
+    game.spawnProjectile(muzzle, muzzle.x + Math.cos(a) * 100, muzzle.y + Math.sin(a) * 100, cfg.gunSpeed,
+      cfg.gunDmg, 'enemy', cfg.gunRadius, { life: cfg.gunRange / cfg.gunSpeed });
+  }
+}
+
+// свободное место под мину около Героя: не в стене и не в пропасти, не на звеньях цепочки и не на другой мине
+function mineSpot(e, game) {
+  const cfg = e.cfg, st = game.state, lead = st.party[0], w = game.world;
+  for (let tries = 0; tries < 12; tries++) {
+    const a = Math.random() * Math.PI * 2, d = rand(cfg.mineRing);
+    const p = { x: lead.x + Math.cos(a) * d, y: lead.y + Math.sin(a) * d };
+    if (p.x < cfg.mineRadius || p.y < cfg.mineRadius || p.x > w.width - cfg.mineRadius || p.y > w.height - cfg.mineRadius) continue;
+    if (w.moveBlockers.some((rect) => circleRectOverlap(p.x, p.y, cfg.mineRadius * 0.6, rect))) continue;
+    if (st.party.some((u) => dist(p, u) < cfg.mineRadius + u.r + 20)) continue;
+    if (e.mines.some((m) => dist(p, m) < cfg.mineRadius * 2)) continue;
+    return p;
+  }
+  return null;
+}
+
+// взрыв мины: урон по площади (от mineDmg в центре до mineEdgeDmg на краю), задетых дружочков выбивает из цепочки
+// (лежачих отбрасывает), Героя отшвыривает
+function mineBlast(e, m, game) {
+  const cfg = e.cfg, st = game.state;
+  st.effects.push({ type: 'blast', x: m.x, y: m.y, r: cfg.mineBlast, life: 0.5 });
+  for (const u of st.party.concat(st.downed)) {
+    const d = dist(m, u);
+    if (d >= cfg.mineBlast + u.r) continue;
+    game.damageUnit(u, cfg.mineDmg + (cfg.mineEdgeDmg - cfg.mineDmg) * Math.min(1, d / cfg.mineBlast));
+    if (u.hp <= 0) continue;
+    const a = d > 1 ? Math.atan2(u.y - m.y, u.x - m.x) : Math.random() * Math.PI * 2;
+    if (!game.displaceAlly(u, a, cfg.mineKnockback)) { u.vx = Math.cos(a) * cfg.mineShove; u.vy = Math.sin(a) * cfg.mineShove; }
+  }
+}
+
+function krakenMines(e, dt, game) {
+  const cfg = e.cfg, party = game.state.party;
+  for (const m of e.mines.slice()) {
+    m.age += dt;
+    if (m.fuse === null) {
+      // въехали — запал случайной длины; не тронутая до конца жизни мина гаснет сама
+      if (m.age >= cfg.mineArm && party.some((u) => dist(m, u) < m.r + u.r * 0.5)) m.fuse = rand(cfg.mineFuse);
+      else if (m.age >= cfg.mineLife) game.removeFrom(e.mines, m);
+      continue;
+    }
+    m.fuse -= dt;
+    if (m.fuse > 0) continue;
+    game.removeFrom(e.mines, m);
+    mineBlast(e, m, game);
+  }
+  e.mineCd -= dt;
+  if (e.mineCd > 0) return;
+  e.mineCd = rand(cfg.mineEvery);
+  if (e.mines.length >= cfg.mineMax) return;
+  const p = mineSpot(e, game);
+  if (p) e.mines.push({ x: p.x, y: p.y, r: cfg.mineRadius, age: 0, fuse: null });
+}
+
+// тень будущего удара: полоса от тела до конца досягаемости, темнеет и заполняется к удару; сам удар — толстая
+// сужающаяся к концу тентакля с присосками, которая гаснет за tentacleShow
+function drawTentacle(e, t, g) {
+  const { ctx } = g, cfg = e.cfg, end = tentacleEnd(e, t);
+  const hw = cfg.tentacleWidth / 2, nx = -Math.sin(t.a), ny = Math.cos(t.a);
+  const sx = e.x + Math.cos(t.a) * e.r * 0.8, sy = e.y + Math.sin(t.a) * e.r * 0.8;
+  const strip = (len, w0, w1) => {
+    const ex = sx + (end.x - sx) * len, ey = sy + (end.y - sy) * len;
+    ctx.beginPath();
+    ctx.moveTo(sx + nx * w0, sy + ny * w0); ctx.lineTo(ex + nx * w1, ey + ny * w1);
+    ctx.lineTo(ex - nx * w1, ey - ny * w1); ctx.lineTo(sx - nx * w0, sy - ny * w0);
+    ctx.closePath();
+  };
+  if (t.phase === 'aim') {
+    const k = clamp(t.t / cfg.tentacleAim, 0, 1);
+    ctx.fillStyle = '#000';
+    ctx.globalAlpha = 0.12 + 0.13 * k;
+    strip(1, hw, hw);
+    ctx.fill();
+    ctx.fillStyle = COLORS.tentacle;
+    ctx.globalAlpha = 0.12 + 0.18 * k;
+    strip(k, hw, hw);
+    ctx.fill();
+    ctx.strokeStyle = COLORS.krakenEdge;
+    ctx.globalAlpha = 0.35 + 0.5 * k;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 7]);
+    ctx.lineDashOffset = -t.t * 40;
+    strip(1, hw, hw);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
+    ctx.globalAlpha = 1;
+    return;
+  }
+  const fade = 1 - clamp(t.t / cfg.tentacleShow, 0, 1);
+  ctx.globalAlpha = fade;
+  ctx.fillStyle = COLORS.tentacle;
+  strip(1, hw * 0.9, hw * 0.35);
+  ctx.fill();
+  ctx.strokeStyle = '#0e0e10';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#d8b0f0';
+  for (let k = 1; k < 9; k++) {
+    const f = k / 9, x = sx + (end.x - sx) * f, y = sy + (end.y - sy) * f;
+    ctx.beginPath();
+    ctx.arc(x, y, hw * (0.32 - 0.2 * f), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// мина: злая пульсирующая область с рваной зубчатой кромкой; появляется, разгораясь; въехали — часто и ярко мигает
+function drawKrakenMine(e, m, g) {
+  const { ctx } = g, cfg = e.cfg;
+  const lit = m.fuse !== null;
+  const appear = clamp(m.age / cfg.mineArm, 0, 1);
+  const fade = lit ? 1 : clamp((cfg.mineLife - m.age) / 1.5, 0, 1);
+  const pulse = 0.5 + 0.5 * Math.sin(m.age * (lit ? 30 : 5));
+  const a = appear * fade;
+  ctx.fillStyle = COLORS.krakenMine;
+  ctx.globalAlpha = a * (lit ? 0.25 + 0.3 * pulse : 0.1 + 0.08 * pulse);
+  ctx.beginPath();
+  ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = COLORS.krakenMine;
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = a * (lit ? 0.9 : 0.55 + 0.25 * pulse);
+  ctx.beginPath();
+  const teeth = 14, spin = m.age * (lit ? 4 : 0.6);
+  for (let i = 0; i <= teeth * 2; i++) {
+    const ang = spin + (i / (teeth * 2)) * Math.PI * 2, rr = m.r * (i % 2 ? 0.86 : 1.06);
+    ctx.lineTo(m.x + Math.cos(ang) * rr, m.y + Math.sin(ang) * rr);
+  }
+  ctx.stroke();
+  ctx.fillStyle = lit ? '#fff0f4' : COLORS.krakenMine;
+  ctx.globalAlpha = a * (0.6 + 0.4 * pulse);
+  ctx.beginPath();
+  ctx.arc(m.x, m.y, m.r * (0.16 + 0.08 * pulse + (lit ? 0.1 : 0)), 0, Math.PI * 2);
+  ctx.fill();
+  if (lit) {
+    // зона взрыва больше самой мины: её кромка видна, пока горит запал
+    ctx.globalAlpha = 0.5 * pulse;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, cfg.mineBlast, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.globalAlpha = 1;
+}
+
+const kraken = {
+  stats: { name: 'Спрут', hp: 1800, radius: 58, mass: Infinity,
+           regen: 200,              // HP в секунду, всегда, даже под огнём
+           keepClear: 340,          // подиумы и дружочки не появляются ближе этого к спруту
+           // тентакля: тень полосы длиной tentacleRange от центра (около 2/3 экрана), через tentacleAim — удар
+           tentacleRange: 640, tentacleWidth: 46, tentacleAim: 1.5, tentacleDmg: 24,
+           tentacleCooldown: [2.2, 3.4], // пауза между новыми ударами, сек
+           tentacleShow: 0.6,       // сколько видна ударившая тентакля
+           // всасывание: дружочков не в цепи ближе suckRadius тянет к телу со скоростью suckSpeed
+           suckRadius: 320, suckSpeed: 32,
+           // пулемёт: стреляет всегда, gunRate выстрелов в секунду, ствол доворачивается не быстрее gunTurn рад/с;
+           // цель — ближайший союзник на прямой видимости, пересматривается раз в gunRetarget; без цели ствол крутится
+           gunRange: 1150, gunRate: 5, gunDmg: 4, gunSpeed: 440, gunRadius: 4, gunSpread: 0.06,
+           gunTurn: 1.3, gunRetarget: 0.8, gunIdleSpin: 0.5,
+           // мины: раз в mineEvery в кольце mineRing вокруг Героя, не больше mineMax разом; mineArm — сколько
+           // разгорается (пока не сработает), mineLife — сколько живёт не тронутая; въехали — взрыв через mineFuse
+           mineEvery: [3, 5], mineMax: 6, mineRing: [170, 420], mineRadius: 60, mineArm: 0.8, mineLife: 24,
+           mineFuse: [0, 1], mineBlast: 170, mineDmg: 34, mineEdgeDmg: 12, mineKnockback: 400, mineShove: 320 },
+  noRegen: true,           // общая регенерация врагов не нужна: у спрута своя, постоянная
+  alwaysActive: true,
+  deathFlash: 260,
+  drawReach: 2600,         // тени тентаклей и мины далеко от тела рисуются вместе с ним
+  init(e) {
+    e.age = 0;
+    e.tentacles = []; e.tentacleCd = 2;
+    e.sucking = [];
+    e.gunAngle = Math.random() * Math.PI * 2; e.gunCd = 0; e.gunTarget = null; e.gunRetarget = 0;
+    e.mines = []; e.mineCd = 4;
+  },
+  update(e, dt, chain, game) {
+    e.age += dt;
+    e.hp = Math.min(e.maxHp, e.hp + e.cfg.regen * dt);
+    krakenTentacles(e, dt, chain, game);
+    krakenSuck(e, dt, game);
+    krakenGun(e, dt, chain, game);
+    krakenMines(e, dt, game);
+  },
+  draw(e, g) {
+    const { ctx } = g, cfg = e.cfg;
+    for (const m of e.mines) drawKrakenMine(e, m, g);
+    // зона всасывания: пунктир всегда, пока кого-то тянет — ярче, пунктир бежит внутрь, к жертвам — струи
+    const sucking = e.sucking.length > 0;
+    ctx.strokeStyle = COLORS.krakenSuck;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = sucking ? 0.6 : 0.2;
+    ctx.setLineDash([6, 10]);
+    ctx.lineDashOffset = sucking ? e.age * 40 : 0;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, cfg.suckRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    for (const u of e.sucking) {
+      ctx.globalAlpha = 0.55;
+      ctx.beginPath();
+      ctx.moveTo(u.x, u.y);
+      ctx.lineTo(e.x, e.y);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
+    ctx.globalAlpha = 1;
+    for (const t of e.tentacles) if (t.phase === 'aim') drawTentacle(e, t, g);
+    // щупальца-обрубки вокруг тела шевелятся
+    ctx.strokeStyle = COLORS.tentacle;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + 0.2, wob = Math.sin(e.age * 2.2 + i * 1.7) * 0.5;
+      const x0 = e.x + Math.cos(a) * e.r * 0.8, y0 = e.y + Math.sin(a) * e.r * 0.8;
+      const x1 = e.x + Math.cos(a + wob * 0.4) * e.r * 1.45, y1 = e.y + Math.sin(a + wob * 0.4) * e.r * 1.45;
+      const x2 = e.x + Math.cos(a + wob) * e.r * 1.75, y2 = e.y + Math.sin(a + wob) * e.r * 1.75;
+      ctx.lineWidth = 12;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(x1, y1, x2, y2); ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+    g.drawUnitBody(e, COLORS.kraken, true);
+    ctx.strokeStyle = COLORS.krakenEdge;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+    ctx.stroke();
+    // пасть: при всасывании раскрыта шире, по кругу зубы
+    const mouth = e.r * (sucking ? 0.48 + 0.06 * Math.sin(e.age * 10) : 0.36);
+    ctx.fillStyle = '#0e0e10';
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, mouth, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#e8e0f0';
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 + e.age * (sucking ? 2 : 0.3);
+      ctx.beginPath();
+      ctx.moveTo(e.x + Math.cos(a - 0.15) * mouth, e.y + Math.sin(a - 0.15) * mouth);
+      ctx.lineTo(e.x + Math.cos(a + 0.15) * mouth, e.y + Math.sin(a + 0.15) * mouth);
+      ctx.lineTo(e.x + Math.cos(a) * mouth * 0.6, e.y + Math.sin(a) * mouth * 0.6);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // пулемёт: ствол по краю тела, куда он сейчас смотрит, со вспышкой у дула
+    const ga = e.gunAngle, bx = e.x + Math.cos(ga) * e.r * 0.7, by = e.y + Math.sin(ga) * e.r * 0.7;
+    ctx.strokeStyle = '#0e0e10';
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.lineTo(e.x + Math.cos(ga) * (e.r + 16), e.y + Math.sin(ga) * (e.r + 16));
+    ctx.stroke();
+    ctx.fillStyle = COLORS.krakenEdge;
+    ctx.beginPath();
+    ctx.arc(bx, by, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = COLORS.speed;
+    ctx.globalAlpha = 0.5 + 0.5 * Math.sin(e.age * 60);
+    ctx.beginPath();
+    ctx.arc(e.x + Math.cos(ga) * (e.r + 18), e.y + Math.sin(ga) * (e.r + 18), 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    for (const t of e.tentacles) if (t.phase === 'slam') drawTentacle(e, t, g);
+  },
+};
+
+const TYPES = { shooter, bull, tower, scorpion, zombie, hunter, chariot, mine, portal, boss, doorTarget, turret, kraken };
 G.enemyTypes = TYPES;
 })(window.Game = window.Game || {});
