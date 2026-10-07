@@ -112,55 +112,33 @@ const scorpion = {
            pinchReach: 10 },       // .. если просвет между телами не больше этого
   wanderSpeed: 48,
   chaseSpeed: 75,
-  // тело, две клешни-руки вперёд (раскрытые; при уколе смыкаются) и сегментированный хвост, загнутый вбок, с жалом
+  // тело, две простые клешни вперёд (раскрытые «галочки»; при уколе смыкаются) и короткий хвост-крючок вбок с жалом
   draw(e, g) {
     const { ctx } = g;
     const f = e.facing || 0, r = e.r;
     const at = (a, d) => [e.x + Math.cos(f + a) * r * d, e.y + Math.sin(f + a) * r * d];
-    const outline = (fill) => { ctx.fillStyle = fill; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#0e0e10'; ctx.stroke(); };
-    // хвост: сегменты от спины назад, загибаются вбок, на конце — жало
-    let tip = null, tipA = 0;
-    for (let i = 1; i <= 5; i++) {
-      const t = i / 5, a = Math.PI + t * 1.35;
-      const [x, y] = at(a, 0.95 + t * 1.15);
-      ctx.beginPath();
-      ctx.arc(x, y, r * (0.36 - t * 0.08), 0, Math.PI * 2);
-      outline(COLORS.scorpion);
-      tip = [x, y]; tipA = f + a + 1.45;
-    }
-    ctx.beginPath();
-    ctx.moveTo(tip[0] + Math.cos(tipA) * r * 0.7, tip[1] + Math.sin(tipA) * r * 0.7);
-    ctx.lineTo(tip[0] + Math.cos(tipA + 1.7) * r * 0.24, tip[1] + Math.sin(tipA + 1.7) * r * 0.24);
-    ctx.lineTo(tip[0] + Math.cos(tipA - 1.7) * r * 0.24, tip[1] + Math.sin(tipA - 1.7) * r * 0.24);
-    ctx.closePath();
-    outline('#5a2a1a');
-    // клешни: рука от плеча к локтю, на конце «ладонь» и две крупные челюсти — раскрытые или сомкнутые (укол — e.pinchFx)
-    const open = e.pinchFx > 0 ? 0.06 : 0.45;
+    ctx.strokeStyle = COLORS.scorpion;
+    ctx.lineCap = 'round';
+    // хвост: дуга из-за спины вбок, на конце тёмная точка-жало
+    const [t0x, t0y] = at(Math.PI, 0.8), [t1x, t1y] = at(Math.PI + 0.45, 1.45), [t2x, t2y] = at(Math.PI + 1.05, 1.4);
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(t0x, t0y); ctx.quadraticCurveTo(t1x, t1y, t2x, t2y); ctx.stroke();
+    ctx.fillStyle = '#5a2a1a';
+    ctx.beginPath(); ctx.arc(t2x, t2y, 3, 0, Math.PI * 2); ctx.fill();
+    // клешни: короткая рука и две чёрточки-щипцы
+    const open = e.pinchFx > 0 ? 0.12 : 0.55;
+    ctx.lineWidth = 3;
     for (const s of [1, -1]) {
-      const sh = at(s * 0.8, 0.8), el = at(s * 0.62, 1.4), hand = at(s * 0.4, 1.8);
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = '#0e0e10';
-      ctx.lineWidth = r * 0.36;
-      ctx.beginPath(); ctx.moveTo(...sh); ctx.lineTo(...el); ctx.lineTo(...hand); ctx.stroke();
-      ctx.strokeStyle = COLORS.scorpion;
-      ctx.lineWidth = r * 0.24;
-      ctx.stroke();
-      ctx.lineCap = 'butt';
-      for (const jaw of [1, -1]) {
-        const ja = f + s * 0.12 + jaw * open;
-        const bx = hand[0] + Math.cos(ja) * r * 0.15, by = hand[1] + Math.sin(ja) * r * 0.15;
-        const px = Math.cos(ja + Math.PI / 2) * r * 0.15, py = Math.sin(ja + Math.PI / 2) * r * 0.15;
-        ctx.beginPath();
-        ctx.moveTo(bx + px, by + py);
-        ctx.lineTo(hand[0] + Math.cos(ja) * r * 0.85, hand[1] + Math.sin(ja) * r * 0.85);
-        ctx.lineTo(bx - px, by - py);
-        ctx.closePath();
-        outline(COLORS.scorpion);
-      }
+      const [sx, sy] = at(s * 0.6, 0.85), [hx, hy] = at(s * 0.38, 1.3);
       ctx.beginPath();
-      ctx.arc(hand[0], hand[1], r * 0.3, 0, Math.PI * 2);
-      outline(COLORS.scorpion);
+      ctx.moveTo(sx, sy); ctx.lineTo(hx, hy);
+      for (const jaw of [1, -1]) {
+        const ja = f + jaw * open;
+        ctx.moveTo(hx, hy); ctx.lineTo(hx + Math.cos(ja) * r * 0.4, hy + Math.sin(ja) * r * 0.4);
+      }
+      ctx.stroke();
     }
+    ctx.lineCap = 'butt';
     g.drawUnitBody(e, COLORS.scorpion, true);
     ctx.fillStyle = '#0e0e10';
     for (const s of [0.35, -0.35]) {
@@ -1003,8 +981,8 @@ const boss = {
 //  - всасывание: дружочков не в цепи (лежачих и ждущих вербовки) ближе suckRadius медленно тянет к телу;
 //    дотянуло — гибнут;
 //  - пулемёт: стреляет всегда и очень часто; ствол поворачивается к ближайшему союзнику не быстрее gunTurn;
-//  - мины: раз в mineEvery недалеко от Героя (кольцо mineRing) появляется злая пульсирующая область; въехало
-//    в неё звено цепочки — через случайные mineFuse секунд взрыв: большой урон по площади, задетых дружочков
+//  - мины: раз в mineEvery недалеко от Героя (кольцо mineRing) появляется лужа фиолетовой слизи; въехало
+//    в неё звено цепочки — через случайные mineFuse секунд взрыв: урон по площади, двух-трёх ближайших дружочков
 //    выбивает из цепочки, Героя отшвыривает.
 // Тени, тентакли и мины лежат в самом спруте (e.tentacles, e.mines) и рисуются с ним, поэтому drawReach.
 const rand = ([a, b]) => a + Math.random() * (b - a);
@@ -1100,18 +1078,21 @@ function mineSpot(e, game) {
   return null;
 }
 
-// взрыв мины: урон по площади (от mineDmg в центре до mineEdgeDmg на краю), задетых дружочков выбивает из цепочки
-// (лежачих отбрасывает), Героя отшвыривает
+// взрыв мины: урон по площади (от mineDmg в центре до mineEdgeDmg на краю); из задетых дружочков ближайших к центру
+// (не больше mineMaxKnock) выбивает из цепочки, лежачих отбрасывает, Героя отшвыривает
 function mineBlast(e, m, game) {
   const cfg = e.cfg, st = game.state;
   st.effects.push({ type: 'blast', x: m.x, y: m.y, r: cfg.mineBlast, life: 0.5 });
-  for (const u of st.party.concat(st.downed)) {
+  const hit = st.party.concat(st.downed).filter((u) => dist(m, u) < cfg.mineBlast + u.r)
+    .sort((a, b) => dist(m, a) - dist(m, b));
+  let knocked = 0;
+  for (const u of hit) {
     const d = dist(m, u);
-    if (d >= cfg.mineBlast + u.r) continue;
     game.damageUnit(u, cfg.mineDmg + (cfg.mineEdgeDmg - cfg.mineDmg) * Math.min(1, d / cfg.mineBlast));
     if (u.hp <= 0) continue;
     const a = d > 1 ? Math.atan2(u.y - m.y, u.x - m.x) : Math.random() * Math.PI * 2;
-    if (!game.displaceAlly(u, a, cfg.mineKnockback)) { u.vx = Math.cos(a) * cfg.mineShove; u.vy = Math.sin(a) * cfg.mineShove; }
+    if (knocked < cfg.mineMaxKnock && game.displaceAlly(u, a, cfg.mineKnockback)) knocked += 1;
+    else if (u === st.party[0]) { u.vx = Math.cos(a) * cfg.mineShove; u.vy = Math.sin(a) * cfg.mineShove; }
   }
 }
 
@@ -1135,7 +1116,7 @@ function krakenMines(e, dt, game) {
   e.mineCd = rand(cfg.mineEvery);
   if (e.mines.length >= cfg.mineMax) return;
   const p = mineSpot(e, game);
-  if (p) e.mines.push({ x: p.x, y: p.y, r: cfg.mineRadius, age: 0, fuse: null });
+  if (p) e.mines.push({ x: p.x, y: p.y, r: cfg.mineRadius, age: 0, fuse: null, seed: Math.random() * 10 });
 }
 
 // тень будущего удара: полоса от тела до конца досягаемости, темнеет и заполняется к удару; сам удар — толстая
@@ -1191,37 +1172,44 @@ function drawTentacle(e, t, g) {
   ctx.globalAlpha = 1;
 }
 
-// мина: злая пульсирующая область с рваной зубчатой кромкой; появляется, разгораясь; въехали — часто и ярко мигает
+// мина: лужа фиолетовой слизи — того же цвета, что и сам спрут: неровная кромка колышется, внутри медленно всплывают
+// пузыри. Появляется, растекаясь; въехали — слизь вспухает, мигает красным, пузыри кипят, видна кромка взрыва
 function drawKrakenMine(e, m, g) {
   const { ctx } = g, cfg = e.cfg;
   const lit = m.fuse !== null;
-  const appear = clamp(m.age / cfg.mineArm, 0, 1);
+  const t = m.age * (lit ? 6 : 1);
+  const grow = clamp(m.age / cfg.mineArm, 0, 1) * (lit ? 1.08 + 0.06 * Math.sin(m.age * 30) : 1);
   const fade = lit ? 1 : clamp((cfg.mineLife - m.age) / 1.5, 0, 1);
-  const pulse = 0.5 + 0.5 * Math.sin(m.age * (lit ? 30 : 5));
-  const a = appear * fade;
-  ctx.fillStyle = COLORS.krakenMine;
-  ctx.globalAlpha = a * (lit ? 0.25 + 0.3 * pulse : 0.1 + 0.08 * pulse);
+  const R = m.r * grow;
+  if (R < 1) return;
+  // неровная кромка лужи: радиус гуляет суммой синусов со своим для каждой мины сдвигом
+  const edge = (a) => R * (0.88 + 0.07 * Math.sin(a * 3 + m.seed + t * 0.8) + 0.05 * Math.sin(a * 5 - m.seed * 2 + t * 1.3));
+  ctx.globalAlpha = 0.9 * fade;
   ctx.beginPath();
-  ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = COLORS.krakenMine;
-  ctx.lineWidth = 2;
-  ctx.globalAlpha = a * (lit ? 0.9 : 0.55 + 0.25 * pulse);
-  ctx.beginPath();
-  const teeth = 14, spin = m.age * (lit ? 4 : 0.6);
-  for (let i = 0; i <= teeth * 2; i++) {
-    const ang = spin + (i / (teeth * 2)) * Math.PI * 2, rr = m.r * (i % 2 ? 0.86 : 1.06);
-    ctx.lineTo(m.x + Math.cos(ang) * rr, m.y + Math.sin(ang) * rr);
+  for (let i = 0; i <= 36; i++) {
+    const a = (i / 36) * Math.PI * 2, rr = edge(a);
+    ctx.lineTo(m.x + Math.cos(a) * rr, m.y + Math.sin(a) * rr);
   }
-  ctx.stroke();
-  ctx.fillStyle = lit ? '#fff0f4' : COLORS.krakenMine;
-  ctx.globalAlpha = a * (0.6 + 0.4 * pulse);
-  ctx.beginPath();
-  ctx.arc(m.x, m.y, m.r * (0.16 + 0.08 * pulse + (lit ? 0.1 : 0)), 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fillStyle = lit && Math.sin(m.age * 30) > 0 ? '#6a1a40' : COLORS.kraken;
   ctx.fill();
+  ctx.strokeStyle = lit ? COLORS.krakenMine : COLORS.krakenEdge;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  // пузыри: всплывают, растут и лопаются, каждый со своим ритмом
+  ctx.fillStyle = COLORS.krakenEdge;
+  for (let k = 0; k < 5; k++) {
+    const ph = (t * 0.5 + k * 0.37 + m.seed) % 1;
+    const a = m.seed * 3 + k * 2.4, d = R * (0.15 + 0.13 * k);
+    ctx.globalAlpha = 0.55 * fade * Math.sin(ph * Math.PI);
+    ctx.beginPath();
+    ctx.arc(m.x + Math.cos(a) * d, m.y + Math.sin(a) * d, R * (0.05 + 0.1 * ph), 0, Math.PI * 2);
+    ctx.fill();
+  }
   if (lit) {
-    // зона взрыва больше самой мины: её кромка видна, пока горит запал
-    ctx.globalAlpha = 0.5 * pulse;
+    ctx.strokeStyle = COLORS.krakenMine;
+    ctx.globalAlpha = 0.6;
+    ctx.lineWidth = 2;
     ctx.setLineDash([8, 6]);
     ctx.beginPath();
     ctx.arc(m.x, m.y, cfg.mineBlast, 0, Math.PI * 2);
@@ -1242,17 +1230,20 @@ const kraken = {
            // всасывание: дружочков не в цепи ближе suckRadius тянет к телу со скоростью suckSpeed
            suckRadius: 320, suckSpeed: 32,
            // пулемёт: стреляет всегда, gunRate выстрелов в секунду, ствол доворачивается не быстрее gunTurn рад/с;
-           // цель — ближайший союзник на прямой видимости, пересматривается раз в gunRetarget; без цели ствол крутится
-           gunRange: 1150, gunRate: 5, gunDmg: 4, gunSpeed: 440, gunRadius: 4, gunSpread: 0.06,
+           // цель — ближайший союзник на прямой видимости, пересматривается раз в gunRetarget; без цели ствол крутится.
+           // Достаёт до любой точки зала — спастись можно только за колоннами укрытий
+           gunRange: 1500, gunRate: 5, gunDmg: 4, gunSpeed: 440, gunRadius: 4, gunSpread: 0.06,
            gunTurn: 1.3, gunRetarget: 0.8, gunIdleSpin: 0.5,
            // мины: раз в mineEvery в кольце mineRing вокруг Героя, не больше mineMax разом; mineArm — сколько
            // разгорается (пока не сработает), mineLife — сколько живёт не тронутая; въехали — взрыв через mineFuse
-           mineEvery: [3, 5], mineMax: 6, mineRing: [170, 420], mineRadius: 60, mineArm: 0.8, mineLife: 24,
-           mineFuse: [0, 1], mineBlast: 170, mineDmg: 34, mineEdgeDmg: 12, mineKnockback: 400, mineShove: 320 },
+           // взрыв радиусом mineBlast; выбивает из цепочки не больше mineMaxKnock ближайших к центру
+           mineEvery: [3, 5], mineMax: 6, mineRing: [170, 420], mineRadius: 62, mineArm: 0.8, mineLife: 24,
+           mineFuse: [0, 1], mineBlast: 85, mineDmg: 30, mineEdgeDmg: 12, mineMaxKnock: 3,
+           mineKnockback: 360, mineShove: 300 },
   noRegen: true,           // общая регенерация врагов не нужна: у спрута своя, постоянная
   alwaysActive: true,
   deathFlash: 260,
-  drawReach: 2600,         // тени тентаклей и мины далеко от тела рисуются вместе с ним
+  drawReach: 2000,         // тени тентаклей и мины далеко от тела рисуются вместе с ним
   init(e) {
     e.age = 0;
     e.tentacles = []; e.tentacleCd = 2;
