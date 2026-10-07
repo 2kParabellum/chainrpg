@@ -179,9 +179,10 @@ function drawHud() {
   ctx.fillStyle = '#c8c8d2';
   ctx.fillText(`${where}   ВРАГОВ ЗДЕСЬ: ${inRoom}${goal}   ЦЕПОЧКА: ${state.party.length}   СКОРОСТЬ: ${Math.round(leaderSpeedMul() * 100)}%`, 12, 22);
 
-  // общее напоминание (подсказки комнат обучения всплывают посреди экрана, см. drawBanners)
-  ctx.fillStyle = '#8a8a95';
-  ctx.fillText('Подиумы подбираются сами: проедь по нему цепочкой', 12, 38);
+  // задача комнаты (обучение: что сделать, чтобы пройти её), иначе — общее напоминание
+  const task = level.rooms[here] && level.rooms[here].task;
+  ctx.fillStyle = task ? '#e8d48a' : '#8a8a95';
+  ctx.fillText(task || 'Подиумы подбираются сами: проедь по нему цепочкой', 12, 38);
   let y = 58;
   for (const a of state.party) {
     ctx.fillStyle = allyColor(a);
