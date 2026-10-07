@@ -1020,6 +1020,8 @@ function krakenTentacles(e, dt, chain, game) {
   // бьёт по случайному союзнику ближе tentacleTrigger — звену цепочки, Герою или лежачему; сам удар длиннее
   const reach = chain.filter((u) => u.kind !== 'base' && dist(e, u) <= cfg.tentacleTrigger);
   if (!reach.length) { e.tentacleCd = 0.3; return; }
+  // замахивается лишь с шансом tentacleChance; не вышло — следующая попытка через обычную паузу
+  if (Math.random() >= cfg.tentacleChance) { e.tentacleCd = rand(cfg.tentacleCooldown); return; }
   const foe = pickOne(reach);
   e.tentacles.push({ a: Math.atan2(foe.y - e.y, foe.x - e.x), t: 0, phase: 'aim' });
   e.tentacleCd = rand(cfg.tentacleCooldown);
@@ -1306,12 +1308,13 @@ function drawSuck(e, g) {
 
 const kraken = {
   stats: { name: 'Спрут', hp: 1800, radius: 58, mass: Infinity,
-           regen: 250,              // HP в секунду, всегда, даже под огнём
+           regen: 200,              // HP в секунду, всегда, даже под огнём
            keepClear: 340,          // подиумы и дружочки не появляются ближе этого к спруту
            // тентакля: тень полосы длиной tentacleRange от центра (около 2/3 экрана), через tentacleAim — удар.
            // Замахивается, только если союзник ближе tentacleTrigger (72% длины удара)
            tentacleRange: 640, tentacleTrigger: 461, tentacleWidth: 46, tentacleAim: 1.5, tentacleDmg: 24,
-           tentacleCooldown: [5, 8], // пауза между новыми ударами, сек — атака редкая
+           tentacleCooldown: [5, 8], // пауза между попытками удара, сек — атака редкая
+           tentacleChance: 0.5,     // шанс, что попытка обернётся замахом
            tentacleShow: 0.6,       // сколько видна ударившая тентакля
            // всасывание: дружочков не в цепи ближе suckRadius тянет к телу — у края со скоростью suckSpeed, у тела
            // в suckAccel раз быстрее (с края зоны до пасти — около 1.5 с); проглоченный уходит в пасть за eatTime
