@@ -4,7 +4,7 @@
 'use strict';
 
 const { CONFIG, COLORS, state } = G;
-const { clamp, dist, removeFrom, pickWeighted } = G.math;
+const { clamp, dist, removeFrom, pickWeighted, angleDiff } = G.math;
 const { moveAndCollide, slideAlongWall, circleRectOverlap } = G.collision;
 const { world, setDoorsOpen } = G.world;
 const { leader, leaderSpeedMul, currentRoom, chainUnits, enemyTargets, isSpotted, spawnEnemy, upgrade, cameraTarget } = G.session;
@@ -39,15 +39,33 @@ const game = {
   spawnEnemy, freeSpotNear, pickChaser,
 };
 
+// джойстик в режиме «Направление»: куда тянут (aim), туда Герой разворачивается с обычной скоростью поворота
+// и едет вперёд; сильно в сторону — сперва разворот без газа; почти строго назад — задний ход (как S), при этом
+// поворачивает хвостом к aim. Задний ход держится, пока угол не станет заметно меньше порога, чтобы не дёргался
+function aimSteer(lead, aim, maxTurn) {
+  const T = CONFIG.TOUCH, deg = Math.PI / 180;
+  let diff = angleDiff(aim, lead.heading);
+  lead.aimReverse = Math.abs(diff) > (lead.aimReverse ? T.aimReverseKeep : T.aimReverseAngle) * deg;
+  if (lead.aimReverse) diff = angleDiff(diff + Math.PI, 0);
+  return {
+    turn: maxTurn > 0 ? clamp(diff / maxTurn, -1, 1) : 0, // у самой цели — ровно до неё, без перелёта
+    throttle: lead.aimReverse ? -1 : Math.abs(diff) > T.aimStopAngle * deg ? 0 : 1,
+  };
+}
+
 // «танковое» движение Героя с инерцией: A/D поворачивают направление (heading), W/S дают газ
 // вперёд/назад вдоль него. Скорость тянется к желаемой с разгоном, без газа — накат и торможение.
-// heading отдельно от facing: оружие поворачивает facing к цели, но не должно разворачивать Героя
+// heading отдельно от facing: оружие поворачивает facing к цели, но не должно разворачивать Героя.
+// Джойстик в режиме «Направление» задаёт угол aim, из которого получаются те же газ и поворот (aimSteer)
 function updateLeader(dt) {
   const lead = leader();
   const mv = lead.moveMul || 1;   // усиление подиума скорости: быстрее ход и разворот
   const speedMul = leaderSpeedMul(); // длинная цепочка едет медленнее (разворот не замедляется), но под «скоростью» — не ниже базовой
   const cfg = CONFIG.LEADER;
-  const { throttle, turn } = state.moveInput;
+  let { throttle, turn } = state.moveInput;
+  const aim = state.moveInput.aim;
+  if (aim !== null && aim !== undefined) ({ throttle, turn } = aimSteer(lead, aim, cfg.turnSpeed * mv * dt));
+  else lead.aimReverse = false;
 
   // в экранных координатах (y вниз) уменьшение угла — поворот налево
   lead.heading += turn * cfg.turnSpeed * mv * dt;

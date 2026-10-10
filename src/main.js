@@ -16,7 +16,10 @@ const { initInput, moveAxes, keyLabel } = G.input;
 const { resetGame, startRun } = G.session;
 const { shuffled } = G.math;
 const { drawCard, whoOf } = G.cards;
-const { tryRecruit, dropLastAlly } = G.chain;
+const { tryRecruit, dropLastAlly, nearestPickup } = G.chain;
+const { buttonUnder } = G.world;
+const { leader } = G.session;
+const touchUI = G.touch;
 const { update } = G.update;
 const { canvas } = G.shapes;
 const { drawScene, drawCannonShots } = G.renderer;
@@ -241,7 +244,28 @@ onClick('winMenuBtn', toMenu);
 onClick('startBtn', () => { startRun(); startLevel(LEVELS[0]); });
 onClick('levelsBtn', () => showPanel('levels'));
 onClick('levelsBackBtn', () => showPanel('main'));
-onClick('controlsBtn', () => showPanel('controls'));
+onClick('controlsBtn', () => { syncControlOpts(); showPanel('controls'); });
+
+// настройки сенсорного управления в панели «Управление»: режим джойстика и его сторона
+const MODE_HINTS = {
+  aim: 'Направление: куда тянешь, туда Герой разворачивается и едет. Тянешь почти назад — задний ход.',
+  tank: 'Танк: вверх / вниз — вперёд / назад, влево / вправо — поворот (как W / S / A / D).',
+};
+const optButtons = document.querySelectorAll('.opts button');
+function syncControlOpts() {
+  const { mode, mirror } = touchUI.getSettings();
+  for (const b of optButtons) {
+    b.classList.toggle('sel', b.dataset.mode ? b.dataset.mode === mode : (b.dataset.mirror === '1') === mirror);
+  }
+  document.getElementById('modeHint').textContent = MODE_HINTS[mode];
+}
+for (const b of optButtons) {
+  b.addEventListener('click', () => {
+    if (b.dataset.mode) touchUI.setSetting('mode', b.dataset.mode);
+    else touchUI.setSetting('mirror', b.dataset.mirror === '1');
+    syncControlOpts();
+  });
+}
 onClick('backBtn', () => showPanel('main'));
 
 // свернули вкладку, заблокировали телефон или повернули его вертикально — пауза
@@ -249,6 +273,17 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) pause
 screenInfo.onChange(() => { if (screenInfo.isPortrait()) pause(); });
 
 // --- цикл ---
+
+// сенсорные кнопки: видны только во время партии; «ВЗЯТЬ» горит, когда рядом есть кого взять,
+// «БРОСИТЬ» — когда Герой на кнопке и можно оставить на ней дружочка (те же условия, что у подсказок внизу экрана)
+function syncTouch() {
+  const playing = state.status === 'play';
+  touchUI.setVisible(playing);
+  if (!playing) return;
+  const btn = buttonUnder(leader());
+  touchUI.setGlow('recruit', !state.leaving && nearestPickup());
+  touchUI.setGlow('drop', !state.leaving && btn && !btn.pressed && state.party.length > 1);
+}
 
 function draw() {
   drawScene();
@@ -269,6 +304,7 @@ function loop(now) {
   if (state.status === 'dead' && lastStatus !== 'dead') showDead();
   lastStatus = state.status;
   syncOverlay();
+  syncTouch();
   draw();
   requestAnimationFrame(loop);
 }

@@ -13,7 +13,7 @@ const { allyTypes, enemyTypes, weapons, abilities } = G;
 const state = {
   level: null,       // данные текущего уровня
   party: [],         // вся цепочка по порядку: [0] — Герой (им управляет игрок), остальные бегут по его следу
-  moveInput: { throttle: 0, turn: 0 }, // зажатые клавиши движения: газ (+1/-1) и поворот (-1/+1)
+  moveInput: { throttle: 0, turn: 0, aim: null }, // ввод движения: газ (+1/-1), поворот (-1..+1), угол джойстика «Направление» или null
   neutrals: [],      // ждут вербовки
   downed: [],        // выбитые из цепочки, лежат до подбора
   enemies: [],
@@ -147,7 +147,7 @@ function spawnEnemy(type, x, y, room, extra) {
 function resetGame(level) {
   state.level = level;
   buildWorld(level);
-  state.party = []; state.moveInput = { throttle: 0, turn: 0 }; state.neutrals = []; state.downed = []; state.enemies = [];
+  state.party = []; state.moveInput = { throttle: 0, turn: 0, aim: null }; state.neutrals = []; state.downed = []; state.enemies = [];
   state.projectiles = []; state.effects = []; state.trail = [];
   state.clouds = []; state.firewalls = [];
   state.pads = []; state.padMarks = []; state.jobSpawnIn = null; state.buffSpawnIn = null; state.allySpawnIn = null;

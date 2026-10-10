@@ -10,6 +10,11 @@ const { world, roomCount, roomIndexAt, buttonUnder } = G.world;
 const { clamp } = G.math;
 const { nearestPickup } = G.chain;
 const { ctx, screenTransform, allyColor } = G.shapes;
+const { withKeys } = G.input;
+const { isTouch } = G.screen;
+
+// где по высоте подсказки у низа экрана: на телефоне выше — внизу лежат пальцы, кнопки и джойстик
+function bottomHintY() { return CONFIG.VIEW.h - (isTouch() ? 100 : 30); }
 
 // метка у края экрана, указывающая на точку (x, y) за его пределами: треугольник цвета color и подпись
 function drawEdgeMarker(x, y, color, text) {
@@ -85,7 +90,7 @@ function drawBanners() {
   // подсказка комнаты (обучение): всплывает ниже середины экрана, когда Герой входит в комнату
   const plan = state.level.rooms[state.room];
   if (plan && plan.hint) {
-    drawBanner(`КОМНАТА ${state.room + 1}`, plan.hint, state.time - state.roomAt, 5, '#e8d48a', CONFIG.VIEW.h - 150);
+    drawBanner(`КОМНАТА ${state.room + 1}`, withKeys(plan.hint), state.time - state.roomAt, 5, '#e8d48a', CONFIG.VIEW.h - (isTouch() ? 220 : 150));
   }
   // «Оборона»: начался натиск — последние минуты волны больше
   const w = state.level.waves;
@@ -184,14 +189,18 @@ function drawHud() {
   const task = level.rooms[here] && level.rooms[here].task;
   ctx.fillStyle = task ? '#e8d48a' : '#8a8a95';
   ctx.fillText(task || 'Подиумы подбираются сами: проедь по нему цепочкой', 12, 38);
-  let y = 58;
-  for (const a of state.party) {
+  // список цепочки; на телефоне он не спускается ниже середины экрана (внизу слева кнопки) — дальше в соседнюю колонку
+  const top = 58, step = 16, colW = 370;
+  const rows = isTouch() ? Math.max(3, Math.floor((CONFIG.VIEW.h * 0.45 - top) / step) + 1) : Infinity;
+  let y = top;
+  state.party.forEach((a, i) => {
     ctx.fillStyle = allyColor(a);
     const bf = Object.entries(a.buffs || {}).filter(([, t]) => t > 0).map(([k, t]) => ` ${G.buffs[k].name} ${Math.ceil(t)}с`).join('');
     const label = a.cfg.name + (a.ability ? ` (${abilities[a.ability].name}${a.abilityLevel > 1 ? ' ' + a.abilityLevel : ''})` : '') + bf;
-    ctx.fillText(`${label.padEnd(34, ' ')} ${Math.max(0, Math.ceil(a.hp))}/${a.maxHp}`, 12, y);
-    y += 16;
-  }
+    y = top + (i % rows) * step;
+    ctx.fillText(`${label.padEnd(34, ' ')} ${Math.max(0, Math.ceil(a.hp))}/${a.maxHp}`, 12 + Math.floor(i / rows) * colW, y);
+  });
+  y += step;
   // улучшения прохождения: названия цветом того, чьё улучшение
   if (state.upgrades.length) {
     y += 4;
@@ -218,12 +227,12 @@ function drawHud() {
   } else if (btn && !btn.pressed && state.party.length > 1 && state.status === 'play') {
     ctx.fillStyle = '#8ce27a';
     ctx.textAlign = 'center';
-    ctx.fillText('X — ОСТАВИТЬ ДРУЖОЧКА НА КНОПКЕ', CONFIG.VIEW.w / 2, CONFIG.VIEW.h - 30);
+    ctx.fillText(withKeys('{drop} — ОСТАВИТЬ ДРУЖОЧКА НА КНОПКЕ'), CONFIG.VIEW.w / 2, bottomHintY());
   } else if (pickup && state.status === 'play') {
     ctx.fillStyle = '#f0f0f5';
     ctx.textAlign = 'center';
-    const msg = pickup.kind === 'downed' ? 'ПРОБЕЛ — ПОДНЯТЬ' : 'ПРОБЕЛ — ПРИСОЕДИНИТЬ';
-    ctx.fillText(msg, CONFIG.VIEW.w / 2, CONFIG.VIEW.h - 30);
+    const msg = pickup.kind === 'downed' ? '{recruit} — ПОДНЯТЬ' : '{recruit} — ПРИСОЕДИНИТЬ';
+    ctx.fillText(withKeys(msg), CONFIG.VIEW.w / 2, bottomHintY());
   }
 
   // шторка поверх всего, включая интерфейс; экран «уровень пройден» — в HTML поверх канваса (см. main.js)

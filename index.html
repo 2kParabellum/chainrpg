@@ -51,6 +51,7 @@
   #levelList { display: flex; flex-direction: column; align-items: center; gap: 14px; }
   .panel button.level { width: 420px; text-align: left; }
   .panel button.level small { display: block; margin-top: 4px; font-size: 12px; color: #8a8a95; }
+  #overlay { z-index: 10; }
   #overlay.win { background: #000; }
   #overlay.pause { background: rgba(10,10,12,0.8); }
   #overlay.dead { background: rgba(10,10,12,0.6); }
@@ -74,6 +75,29 @@
   body.touch .card h3 { font-size: 14px; }
   body.touch .card .desc { font-size: 11px; min-height: 0; }
   body.touch #panelControls { max-width: 760px; padding: 10px 16px; }
+  /* сенсорное управление: джойстик и кнопки поверх канваса, только во время партии */
+  #touch { display: none; position: absolute; inset: 0; z-index: 5; touch-action: none; }
+  #touch.on { display: block; }
+  #tStick { display: none; position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.05); pointer-events: none; }
+  #tStick .knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px;
+                  border-radius: 50%; background: rgba(255,255,255,0.28); border: 2px solid rgba(255,255,255,0.45); }
+  .tPad { position: absolute; left: 0; bottom: 0; width: 200px; height: 150px; }
+  body.mirror .tPad { left: auto; right: 0; transform: scaleX(-1); }
+  body.mirror .tPad .tBtn { transform: scaleX(-1); }
+  .tBtn { position: absolute; border-radius: 50%; padding: 0; background: rgba(255,255,255,0.07); border: 2px solid rgba(255,255,255,0.28);
+          color: rgba(255,255,255,0.75); font: bold 12px monospace; letter-spacing: 1px; touch-action: none; }
+  #tGrab { left: 100px; bottom: 18px; width: 86px; height: 86px; }
+  #tDrop { left: 16px; bottom: 70px; width: 72px; height: 72px; }
+  .tBtn.glow { border-color: #f0f0f5; color: #fff; background: rgba(240,240,245,0.18); box-shadow: 0 0 14px rgba(240,240,245,0.35); }
+  #tDrop.glow { border-color: #8ce27a; color: #d8f8c8; background: rgba(140,226,122,0.18); box-shadow: 0 0 14px rgba(140,226,122,0.4); }
+  .tBtn.pressed { background: rgba(255,255,255,0.3); }
+  .tTop { position: absolute; top: 6px; right: 8px; display: flex; gap: 8px; }
+  .tIcon { width: 44px; height: 40px; padding: 0; font-size: 18px; background: rgba(35,35,42,0.75); border: 1px solid rgba(255,255,255,0.2);
+           color: #ddd; touch-action: none; }
+  .tIcon.pressed { background: rgba(80,80,95,0.9); }
+  #tRestart.armed { width: auto; padding: 0 10px; font-size: 13px; background: rgba(150,50,50,0.85); }
+  #tRestart.armed::after { content: ' ещё раз — заново'; }
   #panelWin h1 { color: #fff2b8; }
   #panelWin p { margin: 0 0 10px; font-size: 16px; color: #c8c8d2; }
   #panelWin p.pickHint { margin: 4px 0 0; font-size: 13px; color: #8a8a95; }
@@ -89,9 +113,16 @@
   .card h3 { margin: 0; font: bold 15px monospace; color: #f0f0f5; }
   .card .desc { margin: 0; font-size: 12px; color: #9a9aa5; min-height: 30px; }
   button:disabled { opacity: 0.35; cursor: default; }
-  #controlsList { margin: 0 0 8px; border-collapse: collapse; font-size: 14px; }
-  #controlsList td { padding: 5px 10px; }
-  #controlsList td:first-child { color: #f0f0f5; text-align: right; white-space: nowrap; }
+  .controls { margin: 0 0 8px; border-collapse: collapse; font-size: 14px; }
+  .controls td { padding: 5px 10px; }
+  .controls td:first-child { color: #f0f0f5; text-align: right; white-space: nowrap; }
+  body.touch .controls { margin: 0; font-size: 13px; }
+  body.touch .controls td { padding: 3px 8px; }
+  .opts { display: grid; grid-template-columns: auto auto auto; gap: 8px 10px; align-items: center; justify-content: center; font-size: 13px; }
+  .opts span { color: #f0f0f5; text-align: right; }
+  body.touch .panel .opts button { width: 200px; min-height: 42px; font-size: 14px; }
+  .opts button.sel { border-color: #fff2b8; color: #fff2b8; background: #2e2e37; }
+  #modeHint { margin: 0; max-width: 640px; font-size: 12px; color: #8a8a95; text-align: center; }
 </style>
 </head>
 <body>
@@ -104,6 +135,17 @@
   </div>
   <div id="stage">
     <canvas id="c" width="960" height="640"></canvas>
+    <div id="touch">
+      <div id="tStick"><div class="knob"></div></div>
+      <div class="tPad">
+        <button id="tGrab" class="tBtn">ВЗЯТЬ</button>
+        <button id="tDrop" class="tBtn">БРОСИТЬ</button>
+      </div>
+      <div class="tTop">
+        <button id="tRestart" class="tIcon">↻</button>
+        <button id="tPause" class="tIcon">❚❚</button>
+      </div>
+    </div>
     <div id="overlay">
       <div id="panelMain" class="panel active">
         <h1>CHAIN</h1>
@@ -141,7 +183,7 @@
       </div>
       <div id="panelControls" class="panel">
         <h2>Управление</h2>
-        <table id="controlsList">
+        <table class="controls kbd-only">
           <tr><td>W / S</td><td>ехать вперёд / назад (можно и стрелками)</td></tr>
           <tr><td>A / D</td><td>поворот налево / направо</td></tr>
           <tr><td>ПРОБЕЛ</td><td>присоединить дружочка, поднять выбитого (подиумы подбираются сами, без пробела)</td></tr>
@@ -149,9 +191,20 @@
           <tr><td>R</td><td>начать заново</td></tr>
           <tr><td>ESC</td><td>пауза</td></tr>
         </table>
+        <table class="controls touch-only">
+          <tr><td>ДЖОЙСТИК</td><td>коснись своей половины экрана и веди пальцем — джойстик появится там, где коснулся</td></tr>
+          <tr><td>ВЗЯТЬ</td><td>присоединить дружочка, поднять выбитого (подиумы подбираются сами)</td></tr>
+          <tr><td>БРОСИТЬ</td><td>бросить последнего дружочка; если Герой на кнопке — дружочек остаётся держать её</td></tr>
+          <tr><td>❚❚ &nbsp; ↻</td><td>пауза; начать заново (нажать два раза)</td></tr>
+        </table>
+        <div class="opts touch-only">
+          <span>Джойстик</span><button data-mode="aim">Направление</button><button data-mode="tank">Танк</button>
+          <span>Джойстик</span><button data-mirror="0">справа</button><button data-mirror="1">слева</button>
+        </div>
+        <p id="modeHint" class="touch-only"></p>
         <button id="backBtn">Назад</button>
       </div>
-      <div id="build">сборка 2</div>
+      <div id="build">сборка 3</div>
     </div>
   </div>
   <script src="src/core/debug.js"></script>
@@ -161,6 +214,7 @@
   <script src="src/core/collision.js"></script>
   <script src="src/core/screen.js"></script>
   <script src="src/core/input.js"></script>
+  <script src="src/core/touch.js"></script>
   <script src="src/content/weapons.js"></script>
   <script src="src/content/abilities.js"></script>
   <script src="src/content/allies.js"></script>

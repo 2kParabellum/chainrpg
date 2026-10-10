@@ -4,6 +4,13 @@
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+// разница углов a − b, приведённая к (−π, π]: на сколько и в какую сторону повернуть от b к a
+function angleDiff(a, b) {
+  let d = (a - b) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d <= -Math.PI) d += Math.PI * 2;
+  return d;
+}
 const pickOne = (list) => list[Math.floor(Math.random() * list.length)];
 
 function shuffled(list) {
@@ -47,5 +54,5 @@ function removeFrom(list, u) {
   if (i >= 0) list.splice(i, 1);
 }
 
-G.math = { clamp, dist, pickOne, pickWeighted, sampleWeighted, shuffled, spreadAngle, removeFrom };
+G.math = { clamp, dist, pickOne, pickWeighted, sampleWeighted, shuffled, spreadAngle, removeFrom, angleDiff };
 })(window.Game = window.Game || {});
