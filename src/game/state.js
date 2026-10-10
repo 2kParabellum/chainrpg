@@ -230,8 +230,16 @@ function resetGame(level) {
     state.neutrals.push(makeAlly('neutral', type, p.x, p.y));
   }
 
-  state.camera.x = clamp(state.party[0].x - CONFIG.VIEW.w / 2, 0, world.width - CONFIG.VIEW.w);
-  state.camera.y = clamp(state.party[0].y - CONFIG.VIEW.h / 2, 0, world.height - CONFIG.VIEW.h);
+  const cam = cameraTarget();
+  state.camera.x = cam.x;
+  state.camera.y = cam.y;
+}
+
+// куда смотрит камера: Герой в центре, но не дальше края мира; мир уже вида по оси — по этой оси он посередине
+function cameraTarget() {
+  const V = CONFIG.VIEW, lead = state.party[0];
+  const axis = (pos, size, view) => (size <= view ? (size - view) / 2 : clamp(pos - view / 2, 0, size - view));
+  return { x: axis(lead.x, world.width, V.w), y: axis(lead.y, world.height, V.h) };
 }
 
 // новое прохождение: без улучшений
@@ -274,5 +282,5 @@ function leaderSpeedMul() {
 function currentRoom() { return roomIndexAt(leader().x, leader().y); }
 
 G.state = state;
-G.session = { makeUnit, makeAlly, setAbility, recalcStats, spawnEnemy, resetGame, startRun, upgrade, leader, chainUnits, enemyTargets, isSpotted, currentRoom, chainSpeedMul, leaderSpeedMul };
+G.session = { makeUnit, makeAlly, setAbility, recalcStats, spawnEnemy, resetGame, startRun, upgrade, leader, chainUnits, enemyTargets, isSpotted, currentRoom, chainSpeedMul, leaderSpeedMul, cameraTarget };
 })(window.Game = window.Game || {});

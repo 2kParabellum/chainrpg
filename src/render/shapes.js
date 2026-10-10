@@ -9,6 +9,12 @@ const { allyTypes, abilities } = G;
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
+// рисование в единицах вида (CONFIG.VIEW) без камеры: канвас крупнее в pixelScale раз (чёткость на телефоне)
+function screenTransform() {
+  const s = G.screen.pixelScale();
+  ctx.setTransform(s, 0, 0, s, 0, 0);
+}
+
 function visible(rect) {
   return rect.x + rect.w > state.camera.x - 40 && rect.x < state.camera.x + CONFIG.VIEW.w + 40
       && rect.y + rect.h > state.camera.y - 40 && rect.y < state.camera.y + CONFIG.VIEW.h + 40;
@@ -50,5 +56,5 @@ function allyColor(u) {
   return u.ability && !t.anchor ? abilities[u.ability].color : t.color;
 }
 
-G.shapes = { canvas, ctx, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor };
+G.shapes = { canvas, ctx, screenTransform, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor };
 })(window.Game = window.Game || {});

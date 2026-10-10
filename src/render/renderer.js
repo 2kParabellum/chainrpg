@@ -10,7 +10,7 @@ const { padUnder } = G.pads;
 const { isSpotted } = G.session;
 const { allyTypes, enemyTypes, weapons, abilities } = G;
 const shapes = G.shapes;
-const { canvas, ctx, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor } = shapes;
+const { canvas, ctx, screenTransform, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor } = shapes;
 
 // точка (с запасом pad) попадает в кадр: рисовать то, что за экраном, незачем
 function onScreen(p, pad = 0) {
@@ -973,6 +973,7 @@ function drawScene() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#0a0a0c';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+  screenTransform();
   ctx.translate(-state.camera.x, -state.camera.y);
 
   drawTerrain();

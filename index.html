@@ -2,16 +2,35 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0e0e10">
 <title>Chain Prototype</title>
 <style>
+  html, body { height: 100%; }
   body { margin: 0; background: #0e0e10; color: #b9b9c0; font: 13px/1.4 monospace;
-         display: flex; flex-direction: column; align-items: center; }
+         display: flex; flex-direction: column; align-items: center;
+         -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
+         -webkit-touch-callout: none; overscroll-behavior: none; }
   #bar { padding: 8px; display: flex; gap: 14px; align-items: center; }
   button { font: 13px monospace; padding: 5px 12px; background: #23232a; color: #ddd;
            border: 1px solid #45454f; cursor: pointer; }
   button:hover { background: #2e2e37; }
-  canvas { background: #0a0a0c; display: block; }
+  canvas { background: #0a0a0c; display: block; touch-action: none; }
   #stage { position: relative; }
+  /* телефон (режим касаний): игра на весь экран, без полоски сверху, в обход выреза экрана */
+  body.touch { position: fixed; inset: 0; overflow: hidden; }
+  body.touch #bar { display: none; }
+  body.touch #stage { position: fixed; top: env(safe-area-inset-top); bottom: env(safe-area-inset-bottom);
+                      left: env(safe-area-inset-left); right: env(safe-area-inset-right); touch-action: none; }
+  #rotate { display: none; position: fixed; inset: 0; z-index: 50; background: #0e0e10; color: #c8c8d2;
+            flex-direction: column; align-items: center; justify-content: center; gap: 16px; font-size: 18px; text-align: center; }
+  #rotate .phone { width: 34px; height: 60px; border: 3px solid #c8c8d2; border-radius: 6px; animation: turn 2s ease-in-out infinite; }
+  @keyframes turn { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+  body.portrait #rotate { display: flex; }
+  #debug { display: none; position: fixed; top: 2px; left: 50%; transform: translateX(-50%); z-index: 60;
+           pointer-events: none; padding: 2px 8px; font-size: 11px; color: #8ce27a; background: rgba(0,0,0,0.6); white-space: nowrap; }
+  #build { position: absolute; right: 10px; bottom: 6px; font-size: 11px; color: #55555f; pointer-events: none; }
+  #overlay:not(.menu) #build { display: none; }
   #overlay { position: absolute; inset: 0; background: rgba(10,10,12,0.97);
              display: flex; align-items: center; justify-content: center; }
   #overlay.hidden { display: none; }
@@ -24,6 +43,7 @@
   .panel button.level { width: 420px; text-align: left; }
   .panel button.level small { display: block; margin-top: 4px; font-size: 12px; color: #8a8a95; }
   #overlay.win { background: #000; }
+  #overlay.pause { background: rgba(10,10,12,0.8); }
   #panelWin h1 { color: #fff2b8; }
   #panelWin p { margin: 0 0 10px; font-size: 16px; color: #c8c8d2; }
   #panelWin p.pickHint { margin: 4px 0 0; font-size: 13px; color: #8a8a95; }
@@ -45,9 +65,11 @@
 </style>
 </head>
 <body>
+  <div id="debug"></div>
+  <div id="rotate"><div class="phone"></div>Поверни телефон горизонтально</div>
   <div id="bar">
     <button id="restart">RESTART (R)</button>
-    <button id="menuBtn">МЕНЮ</button>
+    <button id="menuBtn">ПАУЗА (ESC)</button>
     <span>W/S — вперёд/назад, A/D — поворот &nbsp;|&nbsp; ПРОБЕЛ — присоединить дружочка &nbsp;|&nbsp; X — бросить последнего</span>
   </div>
   <div id="stage">
@@ -72,6 +94,12 @@
         <button id="nextBtn"></button>
         <button id="winMenuBtn">В меню</button>
       </div>
+      <div id="panelPause" class="panel">
+        <h1>ПАУЗА</h1>
+        <button id="resumeBtn">Продолжить</button>
+        <button id="pauseRestartBtn">Заново</button>
+        <button id="pauseMenuBtn">В меню</button>
+      </div>
       <div id="panelControls" class="panel">
         <h2>Управление</h2>
         <table id="controlsList">
@@ -80,15 +108,19 @@
           <tr><td>ПРОБЕЛ</td><td>присоединить дружочка, поднять выбитого (подиумы подбираются сами, без пробела)</td></tr>
           <tr><td>X</td><td>бросить последнего дружочка цепочки (Героя бросить нельзя); если Герой стоит на кнопке — дружочек остаётся на кнопке и держит её</td></tr>
           <tr><td>R</td><td>начать заново</td></tr>
+          <tr><td>ESC</td><td>пауза</td></tr>
         </table>
         <button id="backBtn">Назад</button>
       </div>
+      <div id="build">сборка 1</div>
     </div>
   </div>
+  <script src="src/core/debug.js"></script>
   <script src="src/config/tuning.js"></script>
   <script src="src/config/palette.js"></script>
   <script src="src/core/math.js"></script>
   <script src="src/core/collision.js"></script>
+  <script src="src/core/screen.js"></script>
   <script src="src/core/input.js"></script>
   <script src="src/content/weapons.js"></script>
   <script src="src/content/abilities.js"></script>

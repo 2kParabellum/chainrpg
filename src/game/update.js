@@ -7,7 +7,7 @@ const { CONFIG, COLORS, state } = G;
 const { clamp, dist, removeFrom, pickWeighted } = G.math;
 const { moveAndCollide, slideAlongWall, circleRectOverlap } = G.collision;
 const { world, setDoorsOpen } = G.world;
-const { leader, leaderSpeedMul, currentRoom, chainUnits, enemyTargets, isSpotted, spawnEnemy, upgrade } = G.session;
+const { leader, leaderSpeedMul, currentRoom, chainUnits, enemyTargets, isSpotted, spawnEnemy, upgrade, cameraTarget } = G.session;
 const { freeSpotNear } = G.world;
 const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly, displaceAlly, cutChain, canBeDisplaced } = G.chain;
 const { updatePads, updateAllySpawns } = G.pads;
@@ -233,11 +233,10 @@ function update(dt) {
   updateExit(dt);
 
   // камера
-  const targetX = clamp(leader().x - CONFIG.VIEW.w / 2, 0, world.width - CONFIG.VIEW.w);
-  const targetY = clamp(leader().y - CONFIG.VIEW.h / 2, 0, world.height - CONFIG.VIEW.h);
+  const target = cameraTarget();
   const k = Math.min(1, CONFIG.CAMERA_LERP * dt);
-  state.camera.x += (targetX - state.camera.x) * k;
-  state.camera.y += (targetY - state.camera.y) * k;
+  state.camera.x += (target.x - state.camera.x) * k;
+  state.camera.y += (target.y - state.camera.y) * k;
 }
 
 G.update = { update };

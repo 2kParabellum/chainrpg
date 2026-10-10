@@ -1,12 +1,13 @@
 // Точка входа: связывает ввод, экраны и игровой цикл.
 // Устройство кода и правила зависимостей — в architecture.md.
 //
-// Экран определяет state.status (menu | play | dead | win) — это единственный источник правды.
+// Экран определяет state.status (menu | play | pause | dead | win) — это единственный источник правды.
 // Оверлей главного меню в HTML только отражает его и сам ничего не решает: при menu — меню, при win —
 // экран «уровень пройден» с тремя карточками улучшений и переходом к следующему уровню (после последнего —
 // «вы прошли игру»). Прохождение — это цепочка уровней подряд через этот экран; уровень, выбранный из меню,
 // начинает новое прохождение: с первого — без улучшений, с N-го — сперва N−1 раз выбор карточки (как будто
-// предыдущие уровни пройдены), потом сам уровень.
+// предыдущие уровни пройдены), потом сам уровень. Пауза (ESC, кнопка паузы, свернули вкладку, телефон повернули
+// вертикально) — тот же оверлей с панелью «Продолжить / Заново / В меню»; пока пауза, игра стоит.
 (function (G) {
 'use strict';
 
@@ -20,6 +21,7 @@ const { update } = G.update;
 const { canvas } = G.shapes;
 const { drawScene, drawCannonShots } = G.renderer;
 const { drawHud } = G.hud;
+const screenInfo = G.screen;
 
 // уровни в порядке их показа в меню; за фоном меню при запуске стоит первый
 const LEVELS = [G.level1, G.level2, G.level3, G.level4, G.level5];
@@ -35,7 +37,8 @@ initInput(canvas, {
       else if (name.startsWith('pick')) pickCard(Number(name.slice(4)) - 1);
       return;
     }
-    if (state.status === 'menu' || name.startsWith('pick')) return;
+    if (name === 'pause') { if (state.status === 'pause') resume(); else pause(); return; }
+    if (state.status === 'menu' || state.status === 'pause' || name.startsWith('pick')) return;
     if (name === 'restart') resetGame(state.level);
     else if (name === 'recruit') tryRecruit();
     else if (name === 'drop') dropLastAlly();
@@ -50,14 +53,35 @@ const panels = {
   levels: document.getElementById('panelLevels'),
   controls: document.getElementById('panelControls'),
   win: document.getElementById('panelWin'),
+  pause: document.getElementById('panelPause'),
 };
 
 function showPanel(name) {
   for (const [key, el] of Object.entries(panels)) el.classList.toggle('active', key === name);
 }
 function syncOverlay() {
-  overlay.classList.toggle('hidden', state.status !== 'menu' && state.status !== 'win');
+  overlay.classList.toggle('hidden', !['menu', 'win', 'pause'].includes(state.status));
+  overlay.classList.toggle('menu', state.status === 'menu');
   overlay.classList.toggle('win', state.status === 'win');
+  overlay.classList.toggle('pause', state.status === 'pause');
+}
+
+// пауза только посреди партии; после поражения ставить на паузу нечего
+function pause() {
+  if (state.status !== 'play') return;
+  state.status = 'pause';
+  showPanel('pause');
+  syncOverlay();
+}
+function resume() {
+  if (state.status !== 'pause' || screenInfo.isPortrait()) return;
+  state.status = 'play';
+  syncOverlay();
+}
+function restart() {
+  if (state.status === 'menu' || state.status === 'win') return;
+  resetGame(state.level);
+  syncOverlay();
 }
 
 // следующий уровень после текущего; null — текущий последний
@@ -167,6 +191,7 @@ function onClick(id, handler) {
 }
 
 function startLevel(level) {
+  screenInfo.enterFullscreen();
   resetGame(level);
   syncOverlay();
 }
@@ -185,9 +210,12 @@ LEVELS.forEach((level, i) => {
   levelList.append(btn);
 });
 
-onClick('restart', () => { if (state.status !== 'menu') resetGame(state.level); });
-// возврат в меню посреди партии: пока меню открыто, игра стоит на паузе
-onClick('menuBtn', toMenu);
+onClick('restart', restart);
+// пауза посреди партии; после поражения — сразу в меню
+onClick('menuBtn', () => { if (state.status === 'dead') toMenu(); else pause(); });
+onClick('resumeBtn', () => { screenInfo.enterFullscreen(); resume(); });
+onClick('pauseRestartBtn', restart);
+onClick('pauseMenuBtn', toMenu);
 onClick('nextBtn', goNext);
 onClick('winMenuBtn', toMenu);
 // «Играть» — новое прохождение с первого уровня; «Выбор уровня» — список уровней
@@ -196,6 +224,10 @@ onClick('levelsBtn', () => showPanel('levels'));
 onClick('levelsBackBtn', () => showPanel('main'));
 onClick('controlsBtn', () => showPanel('controls'));
 onClick('backBtn', () => showPanel('main'));
+
+// свернули вкладку, заблокировали телефон или повернули его вертикально — пауза
+document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+screenInfo.onChange(() => { if (screenInfo.isPortrait()) pause(); });
 
 // --- цикл ---
 
@@ -210,6 +242,7 @@ let lastStatus = null;
 function loop(now) {
   const dt = Math.min(0.05, (now - lastTime) / 1000);
   lastTime = now;
+  G.debug.frame(now);
   state.moveInput = moveAxes();
   update(dt);
   // партия только что выиграна (цепочка ушла в портал) — экран «уровень пройден»

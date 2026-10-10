@@ -8,7 +8,7 @@ const { currentRoom, isSpotted, leaderSpeedMul, leader } = G.session;
 const { world, roomCount, roomIndexAt, buttonUnder } = G.world;
 const { clamp } = G.math;
 const { nearestPickup } = G.chain;
-const { ctx, allyColor } = G.shapes;
+const { ctx, screenTransform, allyColor } = G.shapes;
 
 // метка у края экрана, указывающая на точку (x, y) за его пределами: треугольник цвета color и подпись
 function drawEdgeMarker(x, y, color, text) {
@@ -152,7 +152,7 @@ function drawNotice() {
 
 function drawHud() {
   ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  screenTransform();
   ctx.font = '13px monospace';
   ctx.textAlign = 'left';
 
