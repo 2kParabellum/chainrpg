@@ -12,7 +12,7 @@
 'use strict';
 
 const { state } = G;
-const { initInput, moveAxes } = G.input;
+const { initInput, moveAxes, keyLabel } = G.input;
 const { resetGame, startRun } = G.session;
 const { shuffled } = G.math;
 const { drawCard, whoOf } = G.cards;
@@ -54,16 +54,28 @@ const panels = {
   controls: document.getElementById('panelControls'),
   win: document.getElementById('panelWin'),
   pause: document.getElementById('panelPause'),
+  dead: document.getElementById('panelDead'),
 };
 
 function showPanel(name) {
   for (const [key, el] of Object.entries(panels)) el.classList.toggle('active', key === name);
 }
 function syncOverlay() {
-  overlay.classList.toggle('hidden', !['menu', 'win', 'pause'].includes(state.status));
+  overlay.classList.toggle('hidden', !['menu', 'win', 'pause', 'dead'].includes(state.status));
   overlay.classList.toggle('menu', state.status === 'menu');
   overlay.classList.toggle('win', state.status === 'win');
   overlay.classList.toggle('pause', state.status === 'pause');
+  overlay.classList.toggle('dead', state.status === 'dead');
+}
+
+// подпись клавиши в скобках на кнопке экрана: « (ПРОБЕЛ)»; на телефоне клавиш нет — без неё
+function keyHint(name) { return screenInfo.isTouch() ? '' : ` (${keyLabel(name)})`; }
+
+// поражение: Герой выбит или база разрушена — кнопки «Заново» и «В меню» поверх замершей партии
+function showDead() {
+  const lostBase = state.base && state.base.hp <= 0;
+  document.getElementById('deadTitle').textContent = lostBase ? 'БАЗА РАЗРУШЕНА' : 'ПОРАЖЕНИЕ';
+  showPanel('dead');
 }
 
 // пауза только посреди партии; после поражения ставить на паузу нечего
@@ -143,7 +155,7 @@ function showWin() {
     : 'Все уровни позади. Спасибо за игру!';
   const btn = document.getElementById('nextBtn');
   btn.style.display = next ? '' : 'none';
-  btn.textContent = next ? 'Играть дальше (ПРОБЕЛ)' : '';
+  btn.textContent = next ? 'Играть дальше' + keyHint('recruit') : '';
   offers = next ? rollOffers() : [];
   picked = null;
   afterPick = next ? () => startLevel(next) : null;
@@ -160,7 +172,7 @@ function prepareLevel(level, picksLeft, total) {
   document.getElementById('winText').textContent = `Улучшение ${n} из ${total} — за пропущенные уровни`;
   const btn = document.getElementById('nextBtn');
   btn.style.display = '';
-  btn.textContent = picksLeft > 1 ? 'Дальше (ПРОБЕЛ)' : 'Начать (ПРОБЕЛ)';
+  btn.textContent = (picksLeft > 1 ? 'Дальше' : 'Начать') + keyHint('recruit');
   offers = rollOffers();
   picked = null;
   afterPick = () => prepareLevel(level, picksLeft - 1, total);
@@ -206,7 +218,12 @@ LEVELS.forEach((level, i) => {
   blurb.textContent = level.blurb;
   btn.append(blurb);
   // уровень из меню — новое прохождение; с N-го уровня сперва N−1 карточка улучшений
-  btn.addEventListener('click', (ev) => { ev.currentTarget.blur(); startRun(); prepareLevel(level, i, i); });
+  btn.addEventListener('click', (ev) => {
+    ev.currentTarget.blur();
+    screenInfo.enterFullscreen();
+    startRun();
+    prepareLevel(level, i, i);
+  });
   levelList.append(btn);
 });
 
@@ -216,6 +233,8 @@ onClick('menuBtn', () => { if (state.status === 'dead') toMenu(); else pause(); 
 onClick('resumeBtn', () => { screenInfo.enterFullscreen(); resume(); });
 onClick('pauseRestartBtn', restart);
 onClick('pauseMenuBtn', toMenu);
+onClick('deadRestartBtn', restart);
+onClick('deadMenuBtn', toMenu);
 onClick('nextBtn', goNext);
 onClick('winMenuBtn', toMenu);
 // «Играть» — новое прохождение с первого уровня; «Выбор уровня» — список уровней
@@ -247,6 +266,7 @@ function loop(now) {
   update(dt);
   // партия только что выиграна (цепочка ушла в портал) — экран «уровень пройден»
   if (state.status === 'win' && lastStatus !== 'win') showWin();
+  if (state.status === 'dead' && lastStatus !== 'dead') showDead();
   lastStatus = state.status;
   syncOverlay();
   draw();

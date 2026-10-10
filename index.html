@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0e0e10">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Chain">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <title>Chain Prototype</title>
 <style>
   html, body { height: 100%; }
@@ -14,7 +21,8 @@
   #bar { padding: 8px; display: flex; gap: 14px; align-items: center; }
   button { font: 13px monospace; padding: 5px 12px; background: #23232a; color: #ddd;
            border: 1px solid #45454f; cursor: pointer; }
-  button:hover { background: #2e2e37; }
+  @media (hover: hover) { button:hover { background: #2e2e37; } }
+  button:active { background: #3a3a46; }
   canvas { background: #0a0a0c; display: block; touch-action: none; }
   #stage { position: relative; }
   /* телефон (режим касаний): игра на весь экран, без полоски сверху, в обход выреза экрана */
@@ -31,10 +39,11 @@
            pointer-events: none; padding: 2px 8px; font-size: 11px; color: #8ce27a; background: rgba(0,0,0,0.6); white-space: nowrap; }
   #build { position: absolute; right: 10px; bottom: 6px; font-size: 11px; color: #55555f; pointer-events: none; }
   #overlay:not(.menu) #build { display: none; }
-  #overlay { position: absolute; inset: 0; background: rgba(10,10,12,0.97);
+  #overlay { position: absolute; inset: 0; background: rgba(10,10,12,0.97); overflow-y: auto; touch-action: pan-y;
              display: flex; align-items: center; justify-content: center; }
   #overlay.hidden { display: none; }
-  .panel { display: none; flex-direction: column; align-items: center; gap: 14px; }
+  .panel { display: none; flex-direction: column; align-items: center; gap: 14px; margin: auto; padding: 10px 0; }
+  .btnRow { display: flex; flex-direction: column; align-items: center; gap: 14px; }
   .panel.active { display: flex; }
   .panel h1 { margin: 0 0 14px; font: 28px monospace; color: #c8c8d2; letter-spacing: 4px; }
   .panel h2 { margin: 0 0 6px; font: 20px monospace; color: #c8c8d2; }
@@ -44,6 +53,27 @@
   .panel button.level small { display: block; margin-top: 4px; font-size: 12px; color: #8a8a95; }
   #overlay.win { background: #000; }
   #overlay.pause { background: rgba(10,10,12,0.8); }
+  #overlay.dead { background: rgba(10,10,12,0.6); }
+  #panelDead h1 { color: #e06060; }
+  /* подписи только для клавиатуры или только для касаний */
+  body.touch .kbd-only, body:not(.touch) .touch-only { display: none !important; }
+  /* телефон: крупные кнопки под палец, всё влезает в низкий горизонтальный экран */
+  body.touch .panel { gap: 10px; }
+  body.touch .panel h1 { margin: 0 0 4px; font-size: 24px; }
+  body.touch .panel h2 { margin: 0; }
+  body.touch .panel button { min-height: 48px; width: 260px; font-size: 17px; }
+  body.touch .btnRow { flex-direction: row; gap: 12px; }
+  body.touch #levelList { display: grid; grid-template-columns: repeat(2, minmax(0, 330px)); gap: 10px; }
+  body.touch .panel button.level { width: auto; height: 100%; min-height: 64px; padding: 8px 12px; }
+  body.touch #panelWin h1 { margin: 0; font-size: 22px; }
+  body.touch #panelWin p { margin: 0; font-size: 14px; }
+  body.touch #panelWin p.pickHint { margin: 0; font-size: 12px; }
+  body.touch #cards { gap: 10px; }
+  body.touch .card { width: 190px; padding: 6px 6px 8px; gap: 3px; }
+  body.touch .card canvas { width: 150px; height: 90px; }
+  body.touch .card h3 { font-size: 14px; }
+  body.touch .card .desc { font-size: 11px; min-height: 0; }
+  body.touch #panelControls { max-width: 760px; padding: 10px 16px; }
   #panelWin h1 { color: #fff2b8; }
   #panelWin p { margin: 0 0 10px; font-size: 16px; color: #c8c8d2; }
   #panelWin p.pickHint { margin: 4px 0 0; font-size: 13px; color: #8a8a95; }
@@ -51,7 +81,7 @@
   #cards:empty, #cards:empty + .pickHint { display: none; }
   .card { position: relative; width: 220px; padding: 10px 10px 12px; background: #1b1b21; border: 2px solid #3a3a44;
           display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; text-align: center; }
-  .card:hover { border-color: #6b6b78; background: #212128; }
+  @media (hover: hover) { .card:hover { border-color: #6b6b78; background: #212128; } }
   .card.selected { border-color: #fff2b8; background: #26262e; box-shadow: 0 0 18px rgba(255,230,150,0.25); }
   .card canvas { width: 200px; height: 120px; display: block; }
   .card .who { font-size: 11px; letter-spacing: 2px; }
@@ -90,9 +120,18 @@
         <h1 id="winTitle"></h1>
         <p id="winText"></p>
         <div id="cards"></div>
-        <p class="pickHint">Выбери улучшение (мышью или 1 / 2 / 3) — оно останется до конца игры</p>
-        <button id="nextBtn"></button>
-        <button id="winMenuBtn">В меню</button>
+        <p class="pickHint">Выбери улучшение<span class="kbd-only"> (мышью или 1 / 2 / 3)</span> — оно останется до конца игры</p>
+        <div class="btnRow">
+          <button id="nextBtn"></button>
+          <button id="winMenuBtn">В меню</button>
+        </div>
+      </div>
+      <div id="panelDead" class="panel">
+        <h1 id="deadTitle">ПОРАЖЕНИЕ</h1>
+        <div class="btnRow">
+          <button id="deadRestartBtn">Заново<span class="kbd-only"> (R)</span></button>
+          <button id="deadMenuBtn">В меню</button>
+        </div>
       </div>
       <div id="panelPause" class="panel">
         <h1>ПАУЗА</h1>
@@ -112,7 +151,7 @@
         </table>
         <button id="backBtn">Назад</button>
       </div>
-      <div id="build">сборка 1</div>
+      <div id="build">сборка 2</div>
     </div>
   </div>
   <script src="src/core/debug.js"></script>

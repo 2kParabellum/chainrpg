@@ -1,4 +1,5 @@
-// Интерфейс поверх сцены: HUD, экраны победы и поражения. Состояние только читается.
+// Интерфейс поверх сцены: HUD, шторка ухода в портал. Экраны победы и поражения — HTML-панели (main.js).
+// Состояние только читается.
 (function (G) {
 'use strict';
 
@@ -228,18 +229,6 @@ function drawHud() {
   // шторка поверх всего, включая интерфейс; экран «уровень пройден» — в HTML поверх канваса (см. main.js)
   drawIris();
 
-  if (state.status === 'dead') {
-    ctx.fillStyle = 'rgba(10,10,12,0.75)';
-    ctx.fillRect(0, CONFIG.VIEW.h / 2 - 50, CONFIG.VIEW.w, 100);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#e06060';
-    ctx.font = '28px monospace';
-    const lostBase = state.base && state.base.hp <= 0;
-    ctx.fillText(lostBase ? 'БАЗА РАЗРУШЕНА' : 'ПОРАЖЕНИЕ', CONFIG.VIEW.w / 2, CONFIG.VIEW.h / 2);
-    ctx.font = '14px monospace';
-    ctx.fillStyle = '#c8c8d2';
-    ctx.fillText('R — начать заново', CONFIG.VIEW.w / 2, CONFIG.VIEW.h / 2 + 28);
-  }
   ctx.restore();
 }
 
