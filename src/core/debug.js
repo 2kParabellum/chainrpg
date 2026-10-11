@@ -36,5 +36,5 @@ function note(text) { info = text; show(); }
 
 if (enabled) el.style.display = 'block';
 
-G.debug = { frame, note };
+G.debug = { enabled, frame, note };
 })(window.Game = window.Game || {});

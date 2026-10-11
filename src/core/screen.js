@@ -25,6 +25,7 @@ let scale = 1;
 const listeners = [];
 
 const probe = document.getElementById('safeProbe');
+const viewportMeta = document.querySelector('meta[name=viewport]');
 
 function isTouch() { return touch; }
 function pixelScale() { return scale; }
@@ -48,6 +49,39 @@ function safeInsets() {
 function isPortrait() {
   const v = viewport();
   return touch && v.h > v.w;
+}
+
+// iPhone мог отдалить страницу (масштаб меньше 1) — тогда всё мельче и игра занимает не всю область.
+// Сбрасываем: любое изменение meta viewport заставляет браузер заново применить initial-scale=1. Не больше пары раз
+let zoomResets = 0;
+function resetZoom() {
+  const vv = window.visualViewport;
+  if (!touch || !vv || Math.abs(vv.scale - 1) < 0.01 || zoomResets >= 3) return;
+  zoomResets++;
+  const content = viewportMeta.getAttribute('content');
+  viewportMeta.setAttribute('content', content.includes('initial-scale=1.0')
+    ? content.replace('initial-scale=1.0', 'initial-scale=1') : content.replace('initial-scale=1', 'initial-scale=1.0'));
+}
+
+// ?debug=1: что браузер сообщает о размерах — по этому видно, сколько места он оставил игре
+function sizeReport(cssW, cssH, dpr) {
+  const vv = window.visualViewport, de = document.documentElement, ins = safeInsets();
+  const vh = (unit) => {
+    const el = document.createElement('div');
+    el.style.cssText = `position:fixed;left:0;top:0;width:1px;height:100${unit};visibility:hidden;pointer-events:none`;
+    document.body.append(el);
+    const h = Math.round(el.getBoundingClientRect().height);
+    el.remove();
+    return h;
+  };
+  const r = Math.round;
+  return [
+    vv ? `vv ${r(vv.width)}×${r(vv.height)} x${vv.scale.toFixed(2)} @${r(vv.offsetLeft)},${r(vv.offsetTop)}` : 'vv нет',
+    `inner ${window.innerWidth}×${window.innerHeight}`, `client ${de.clientWidth}×${de.clientHeight}`,
+    `screen ${screen.width}×${screen.height}`, `svh ${vh('svh')} lvh ${vh('lvh')}`,
+    `safe ${r(ins.t)},${r(ins.r)},${r(ins.b)},${r(ins.l)}`,
+    `сцена ${cssW}×${cssH} вид ${CONFIG.VIEW.w}×${CONFIG.VIEW.h} dpr ${dpr}${standalone ? ' домой' : ''}`,
+  ].join(' | ');
 }
 
 let lastKey = '';
@@ -87,8 +121,9 @@ function fit() {
   canvas.height = Math.round(cssH * dpr);
   scale = canvas.height / CONFIG.VIEW.h;
   lastKey = sizeKey();
-  if (G.debug) G.debug.note(`экран ${Math.round(viewport().w)}×${Math.round(viewport().h)} сцена ${cssW}×${cssH} вид ${CONFIG.VIEW.w}×${CONFIG.VIEW.h} dpr ${dpr}`);
+  if (G.debug && G.debug.enabled) G.debug.note(sizeReport(cssW, cssH, dpr));
   for (const fn of listeners) fn();
+  resetZoom();
 }
 
 // всё, от чего зависит раскладка: если поменялось, а события браузер не прислал — пересчитать
