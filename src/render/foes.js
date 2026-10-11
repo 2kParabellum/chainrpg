@@ -203,9 +203,21 @@ function draw(e) {
     for (const s of [-1, 1]) glowEye(fx + s * r * 0.33, -r * 0.2, r * 0.16, telegraph ? C.gold : L.eye, s * face * 0.5, 0.45);
     ctx.fillStyle = L.sh; ell(fx + face * r * 0.2, r * 0.32, r * 0.42, r * 0.24); ctx.fill(); ctx.stroke();
     ctx.fillStyle = C.dark; for (const s of [-1, 1]) { ell(fx + face * r * 0.2 + s * r * 0.15, r * 0.32, r * 0.06, r * 0.08); ctx.fill(); }
-    const k = (t * (telegraph ? 3 : 0.9)) % 1;
-    ctx.globalAlpha = (1 - k) * 0.5; ctx.fillStyle = C.stone;
-    ell(fx + face * r * (0.6 + k * 0.7), r * (0.3 - k * 0.3), r * (0.1 + k * 0.2), r * (0.1 + k * 0.2)); ctx.fill(); ctx.globalAlpha = 1;
+    // сигара в углу рта: коричневая, с пепельным кончиком и тлеющим огоньком, дым идёт от кончика
+    const cx0 = fx + face * r * 0.45, cy0 = r * 0.42, len = r * 0.75, ang = face > 0 ? 0.25 : Math.PI - 0.25;
+    const tx = cx0 + Math.cos(ang) * len, ty = cy0 + Math.sin(ang) * len;
+    ctx.save(); ctx.translate(cx0, cy0); ctx.rotate(ang);
+    ctx.fillStyle = C.brown; ctx.beginPath(); ctx.roundRect(0, -r * 0.1, len, r * 0.2, r * 0.08); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.gold; ctx.fillRect(len * 0.18, -r * 0.1, len * 0.12, r * 0.2);
+    ctx.fillStyle = C.stone; ctx.fillRect(len * 0.84, -r * 0.09, len * 0.12, r * 0.18);
+    ctx.fillStyle = telegraph ? C.gold : C.orange; ell(len, 0, r * 0.07, r * 0.09); ctx.fill();
+    ctx.restore();
+    for (let i = 0; i < 3; i++) {
+      const k = (t * (telegraph ? 1.6 : 0.6) + i / 3) % 1;
+      ctx.globalAlpha = (1 - k) * 0.5; ctx.fillStyle = C.stone;
+      ell(tx + face * k * r * 0.3 + Math.sin(k * 6 + i) * r * 0.12, ty - k * r * 1.3, r * (0.08 + k * 0.18), r * (0.08 + k * 0.18)); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
     ctx.fillStyle = C.cream;
     for (const s of [-1, 1]) {
       ctx.beginPath(); ctx.moveTo(s * r * 0.45, -r * 0.62); ctx.quadraticCurveTo(s * r * 1.35, -r * 0.75, s * r * 1.2, -r * 1.45);

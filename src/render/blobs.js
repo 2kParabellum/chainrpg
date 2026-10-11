@@ -23,7 +23,11 @@ const PROF = {
   spear: { hat: 'band', weapon: 'spear' },
   spark: { hat: 'wizard', weapon: 'orb' },
 };
-const BUFF_COL = { speed: C.gold, power: C.red, regen: C.teal, sturdy: C.stone, spiky: C.blood, will: C.cream };
+const VIS = 1.25;      // блоб рисуется крупнее тела-хитбокса
+const HAT = 1.35;      // шапки крупнее, чтобы профессию было видно издалека
+// цвета значков усилений и шапок профессий — из палитры игры (G.COLORS), чтобы подиумы и интерфейс совпадали
+const BUFF_COL = {};
+for (const k of Object.keys(G.buffs)) BUFF_COL[k] = G.buffs[k].color;
 
 const anim = new WeakMap();
 const bits = [];       // кусочки от ударов и лопнувших тел: { x, y, vx, vy, life, max, r, col }
@@ -121,7 +125,7 @@ function drawAlly(u, mode, alpha = 1) {
   const lvl = clamp(u.abilityLevel || 1, 1, 3);
   const isLead = mode === 'chain' && u === state.party[0];
   const buffs = isLead ? Object.keys(u.buffs || {}).filter((k) => u.buffs[k] > 0) : [];
-  const r = u.r, face = a.face;
+  const r = u.r * VIS, face = a.face;
 
   let hop = 0, sx = 1, sy = 1, lean = 0, dx = 0, swing = 0, eyes = 'normal', flash = 0, handFx = 0;
   if (mode !== 'downed' && a.speed > 15) {
@@ -260,7 +264,7 @@ function drawAlly(u, mode, alpha = 1) {
   }
 
   // над головой: полоска HP (только у раненых), выше — значки усилений Героя
-  let top = by - ry - (hat === 'wizard' ? r * 0.95 : hat ? r * 0.55 : 0) - (buffs.includes('will') ? r * 0.5 : 0) - 4;
+  let top = by - ry - (hat === 'wizard' ? r * 1.3 : hat && hat !== 'band' ? r * 0.75 : 0) - (buffs.includes('will') ? r * 0.5 : 0) - 4;
   if (mode !== 'neutral' && u.hp < u.maxHp) { hpBar(x, top - 5, r, u.hp / u.maxHp); top -= 9; }
   if (buffs.length) {
     const gap = 17, y0 = top - 8;
@@ -285,35 +289,36 @@ function drawHand(hx, hy, r, weapon) {
 }
 
 function drawEyes(mode, r, face, lx, ly, t, seed) {
-  const cx = face * r * 0.16, cy = -r * 0.12, sp = r * 0.34;
+  const cx = face * r * 0.14, cy = -r * 0.1, sp = r * 0.36;
   const blink = mode === 'normal' && ((t + seed * 1.7) % 3.3) < 0.12;
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   for (const s of [-1, 1]) {
     const x = cx + s * sp, y = cy;
     ctx.strokeStyle = C.ink; ctx.lineWidth = 1.6;
     if (mode === 'hurt') {
-      ctx.beginPath(); ctx.moveTo(x - s * r * 0.13, y - r * 0.13); ctx.lineTo(x + s * r * 0.06, y);
-      ctx.lineTo(x - s * r * 0.13, y + r * 0.13); ctx.stroke(); continue;
+      ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - s * r * 0.17, y - r * 0.17); ctx.lineTo(x + s * r * 0.08, y);
+      ctx.lineTo(x - s * r * 0.17, y + r * 0.17); ctx.stroke(); continue;
     }
-    if (mode === 'happy') { ctx.beginPath(); ctx.arc(x, y + r * 0.06, r * 0.13, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); continue; }
+    if (mode === 'happy') { ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y + r * 0.08, r * 0.17, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); continue; }
     if (mode === 'ko') {
       ctx.lineWidth = 1.2; ctx.beginPath();
-      for (let k = 0; k < 12; k += 0.4) { const q = r * 0.016 * k; ctx.lineTo(x + Math.cos(k + t * 6 * s) * q, y + Math.sin(k + t * 6 * s) * q); }
+      for (let k = 0; k < 12; k += 0.4) { const q = r * 0.02 * k; ctx.lineTo(x + Math.cos(k + t * 6 * s) * q, y + Math.sin(k + t * 6 * s) * q); }
       ctx.stroke(); continue;
     }
     const h = (blink ? 0.12 : 1) * (mode === 'focus' ? 0.7 : 1);
-    ctx.fillStyle = C.eye; ell(x, y, r * 0.19, r * 0.24 * h); ctx.fill(); ctx.lineWidth = 1.3; ctx.stroke();
+    ctx.fillStyle = C.eye; ell(x, y, r * 0.24, r * 0.3 * h); ctx.fill(); ctx.lineWidth = 1.4; ctx.stroke();
     if (!blink) {
-      const pr = r * (mode === 'focus' ? 0.08 : 0.1);
-      ctx.fillStyle = C.ink; ell(x + lx * r * 0.07, y + ly * r * 0.08 * h, pr, pr); ctx.fill();
+      const pr = r * (mode === 'focus' ? 0.1 : 0.13);
+      ctx.fillStyle = C.ink; ell(x + lx * r * 0.09, y + ly * r * 0.1 * h, pr, pr); ctx.fill();
+      ctx.fillStyle = C.eye; ell(x + lx * r * 0.09 - pr * 0.35, y + ly * r * 0.1 * h - pr * 0.4, pr * 0.32, pr * 0.32); ctx.fill();
     }
     if (mode === 'tired') {
-      ctx.fillStyle = C.shade; ctx.beginPath(); ctx.ellipse(x, y, r * 0.19 + 1, r * 0.24 + 1, 0, Math.PI, 0); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(x - r * 0.19, y); ctx.lineTo(x + r * 0.19, y); ctx.stroke();
+      ctx.fillStyle = C.shade; ctx.beginPath(); ctx.ellipse(x, y, r * 0.24 + 1, r * 0.3 + 1, 0, Math.PI, 0); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x - r * 0.24, y); ctx.lineTo(x + r * 0.24, y); ctx.stroke();
     }
     if (mode === 'focus') {
       ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(x + s * r * 0.2, y - r * 0.34); ctx.lineTo(x - s * r * 0.18, y - r * 0.27); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + s * r * 0.26, y - r * 0.4); ctx.lineTo(x - s * r * 0.22, y - r * 0.32); ctx.stroke();
     }
   }
 }
@@ -321,6 +326,16 @@ function drawEyes(mode, r, face, lx, ly, t, seed) {
 // шапки профессий: цвет шапки = цвет профессии (graphics.md)
 function drawHat(hat, rx, ry, r, face, t) {
   if (!hat) return;
+  if (hat !== 'band') {
+    ctx.save(); ctx.translate(0, -ry * 0.75); ctx.scale(HAT, HAT); ctx.translate(0, ry * 0.75);
+    drawHatShape(hat, rx, ry, r, face, t);
+    ctx.restore();
+    return;
+  }
+  drawHatShape(hat, rx, ry, r, face, t);
+}
+
+function drawHatShape(hat, rx, ry, r, face, t) {
   ctx.strokeStyle = C.ink; ctx.lineWidth = 1.6; ctx.lineJoin = 'round';
   if (hat === 'crown') {
     ctx.fillStyle = C.gold;
@@ -329,15 +344,15 @@ function drawHat(hat, rx, ry, r, face, t) {
     ctx.lineTo(w * 0.45, b - h * 0.5); ctx.lineTo(w, b - h); ctx.lineTo(w, b); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.fillStyle = C.red; ell(0, b - h * 0.35, r * 0.09, r * 0.09); ctx.fill();
   } else if (hat === 'cap') {
-    ctx.fillStyle = C.green; ctx.beginPath(); ctx.ellipse(0, -ry * 0.5, rx * 0.8, ry * 0.58, 0, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = C.olive; ell(face * rx * 0.62, -ry * 0.52, rx * 0.42, ry * 0.12); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.olive; ctx.beginPath(); ctx.ellipse(0, -ry * 0.5, rx * 0.8, ry * 0.58, 0, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.green; ell(face * rx * 0.62, -ry * 0.52, rx * 0.42, ry * 0.12); ctx.fill(); ctx.stroke();
   } else if (hat === 'band') {
-    const sw = Math.sin(t * 7) * r * 0.12;
+    const sw = Math.sin(t * 7) * r * 0.16;
     ctx.fillStyle = C.orange;
-    ctx.beginPath(); ctx.moveTo(-face * rx * 0.85, -ry * 0.5); ctx.quadraticCurveTo(-face * rx * 1.4, -ry * 0.55 + sw, -face * rx * 1.6, -ry * 0.2 + sw);
-    ctx.lineTo(-face * rx * 1.3, -ry * 0.25); ctx.lineTo(-face * rx * 0.85, -ry * 0.35); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-face * rx * 0.85, -ry * 0.62); ctx.quadraticCurveTo(-face * rx * 1.6, -ry * 0.7 + sw, -face * rx * 1.85, -ry * 0.2 + sw);
+    ctx.lineTo(-face * rx * 1.45, -ry * 0.2 + sw * 0.5); ctx.lineTo(-face * rx * 0.85, -ry * 0.38); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.save(); ell(0, 0, rx, ry); ctx.clip();
-    ctx.fillRect(-rx, -ry * 0.68, rx * 2, ry * 0.26); ctx.strokeRect(-rx * 1.2, -ry * 0.68, rx * 2.4, ry * 0.26);
+    ctx.fillRect(-rx, -ry * 0.78, rx * 2, ry * 0.36); ctx.strokeRect(-rx * 1.2, -ry * 0.78, rx * 2.4, ry * 0.36);
     ctx.restore();
     ell(0, 0, rx, ry); ctx.lineWidth = 2; ctx.stroke();
   } else if (hat === 'nurse') {
@@ -353,6 +368,15 @@ function drawHat(hat, rx, ry, r, face, t) {
     ctx.fillStyle = C.tealD; ell(0, -ry * 0.64, rx * 0.85, ry * 0.12); ctx.fill(); ctx.stroke();
     star(rx * 0.05, -ry * 1.05, r * 0.18, C.gold);
   }
+}
+
+// шапка профессии отдельно, без тела (подиум профессии): x, y — где была бы середина тела радиуса r
+function hatIcon(ability, x, y, r, face = 1) {
+  const p = PROF[ability];
+  if (!p) return;
+  ctx.save(); ctx.translate(x, y);
+  drawHat(p.hat, r, r * 0.95, r, face, state.time);
+  ctx.restore();
 }
 
 // оружие в передней руке, растёт с уровнем профессии; рисуется в системе руки, смотрит по face
@@ -499,5 +523,5 @@ function drawLinks(pts) {
   }
 }
 
-G.blobs = { drawAlly, drawLinks, drawBits, sweep, pop, BUFF_COL };
+G.blobs = { drawAlly, drawLinks, drawBits, sweep, pop, hatIcon, glyph, BUFF_COL };
 })(window.Game = window.Game || {});

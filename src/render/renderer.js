@@ -238,8 +238,56 @@ function drawFinish() {
   ctx.globalAlpha = 1;
 }
 
+// пол из каменных плит: тёмные швы и редкие плиты потемнее (рисунок привязан к миру, не к экрану)
+function drawFloor(f) {
+  const v = clipToView(f);
+  if (!v) return;
+  ctx.fillStyle = COLORS.floor;
+  ctx.fillRect(v.x, v.y, v.w, v.h);
+  const s = 64;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip();
+  ctx.fillStyle = COLORS.floorStone;
+  ctx.strokeStyle = COLORS.floorLine;
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.55;
+  for (let ty = Math.floor(v.y / s); ty * s < v.y + v.h; ty++) {
+    const off = (ty & 1) * s / 2;
+    for (let tx = Math.floor((v.x - off) / s); tx * s + off < v.x + v.w; tx++) {
+      const x = tx * s + off, y = ty * s;
+      const n = Math.sin(tx * 12.9898 + ty * 78.233) * 43758.5453;
+      if (n - Math.floor(n) > 0.82) ctx.fillRect(x + 6, y + 6, s - 12, s - 12);
+      ctx.strokeRect(x, y, s, s);
+    }
+  }
+  ctx.restore();
+}
+
+// часть прямоугольника, которая видна на экране (или null)
+function clipToView(r) {
+  const x0 = Math.max(r.x, state.camera.x - 40), y0 = Math.max(r.y, state.camera.y - 40);
+  const x1 = Math.min(r.x + r.w, state.camera.x + CONFIG.VIEW.w + 40), y1 = Math.min(r.y + r.h, state.camera.y + CONFIG.VIEW.h + 40);
+  return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+}
+
+// стена и колонна объёмные: светлый верх и тёмная передняя грань внизу, тёмная обводка
+function drawBlocks(list, top, side) {
+  ctx.strokeStyle = COLORS.floorLine;
+  ctx.lineWidth = 2;
+  for (const r of list) {
+    if (!visible(r)) continue;
+    const face = Math.min(12, r.h * 0.4);
+    ctx.fillStyle = side;
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.fillStyle = top;
+    ctx.fillRect(r.x, r.y, r.w, r.h - face);
+    ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+    ctx.beginPath(); ctx.moveTo(r.x, r.y + r.h - face); ctx.lineTo(r.x + r.w, r.y + r.h - face); ctx.stroke();
+  }
+}
+
 function drawTerrain() {
-  drawRects(world.floors, COLORS.floor);
+  for (const f of world.floors) drawFloor(f);
   // зоны поля подсвечены по степени опасности
   for (const f of world.floors) {
     if (!f.tint || !visible(f)) continue;
@@ -277,8 +325,8 @@ function drawTerrain() {
     }
   }
 
-  drawRects(world.walls, COLORS.wall);
-  drawRects(world.pillars, COLORS.pillar);
+  drawBlocks(world.walls, COLORS.wall, COLORS.wallSide);
+  drawBlocks(world.pillars, COLORS.pillar, COLORS.pillarSide);
 }
 
 // база уровня «Оборона»: здание с толстой рамкой и знаком-короной, над ним длинная полоска HP;
@@ -508,27 +556,49 @@ function drawPadMarks() {
   }
 }
 
-// подиум профессии — круглый дружочек (диаметр — сторона подиума) цвета профессии с её знаком на теле: сразу
-// видно, каким станет звено, которое его получит. Стоит неподвижно, смотрит вверх, снизу — подпись. Пока отдать его некому
+// подиум профессии — круглый каменный постамент с ободком цвета профессии, над ним парит её шапка (graphics.md):
+// сразу видно, каким станет звено, которое его получит. Снизу — подпись. Пока отдать его некому
 // (в цепочке нет дружочка без профессии и нет звена этой профессии ниже 3-го уровня) — он серый и тусклый
 function drawJobPad(pad, def, alpha, wave) {
-  const r = pad.w / 2;
-  const body = { x: pad.x + r, y: pad.y + r, r: r - 1, facing: -Math.PI / 2 };
+  const r = pad.w / 2, cx = pad.x + r, cy = pad.y + r;
   const active = !!G.chain.jobTarget(pad.ability);
   const color = active ? def.color : COLORS.neutral;
-  ctx.globalAlpha = (active ? 0.85 + 0.1 * wave : 0.45) * alpha;
-  if (!active) ctx.setLineDash([5, 4]);
-  drawUnitBody(body, color, true);
-  ctx.setLineDash([]);
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = '#0e0e10';
-  allyTypes.buddy.mark(body, body.facing, ctx);
-  def.mark(body, body.facing, ctx);
+  const rx = r * 0.9, ry = r * 0.45, top = cy + r * 0.15, h = r * 0.28;
+  if (active) {
+    const g = ctx.createRadialGradient(cx, top, r * 0.3, cx, top, r * 1.4);
+    g.addColorStop(0, color);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.globalAlpha = (0.3 + 0.08 * wave) * alpha;
+    ctx.beginPath(); ctx.arc(cx, top, r * 1.4, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = (active ? 1 : 0.55) * alpha;
+  ctx.strokeStyle = COLORS.floorLine;
+  ctx.lineWidth = 2;
+  // боковина постамента
+  ctx.fillStyle = COLORS.wallSide;
+  ctx.beginPath();
+  ctx.ellipse(cx, top + h, rx, ry, 0, 0, Math.PI);
+  ctx.lineTo(cx - rx, top);
+  ctx.ellipse(cx, top, rx, ry, 0, Math.PI, 0, true);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  // верх и ободок цвета профессии
+  ctx.fillStyle = COLORS.wall;
+  ctx.beginPath(); ctx.ellipse(cx, top, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = color; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.ellipse(cx, top, rx - 3, ry - 2, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = COLORS.floorLine; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(cx, top, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+  // парящая шапка и её тень на постаменте
+  const float = active ? Math.sin(state.time * 2.5) * 3 : 0;
+  ctx.fillStyle = 'rgba(20,10,5,0.35)';
+  ctx.beginPath(); ctx.ellipse(cx, top, rx * 0.45, ry * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+  G.blobs.hatIcon(pad.ability, cx, top - r * 0.2 + float, r * 0.55);
   ctx.fillStyle = color;
-  ctx.globalAlpha = (active ? 0.9 : 0.75) * alpha;
-  ctx.font = '12px monospace';
+  ctx.globalAlpha = (active ? 0.95 : 0.7) * alpha;
+  ctx.font = 'bold 12px monospace';
   ctx.textAlign = 'center';
-  ctx.fillText(def.name, body.x, body.y + r + 14);
+  ctx.fillText(def.name, cx, pad.y + pad.h + 16);
   ctx.globalAlpha = 1;
 }
 
@@ -614,8 +684,7 @@ function drawPads() {
     ctx.globalAlpha = 0.9 * alpha;
     ctx.lineWidth = 2;
     ctx.strokeRect(pad.x + 1, pad.y + 1, pad.w - 2, pad.h - 2);
-    ctx.lineWidth = 2;
-    def.icon(ctx, cx, cy, pad.w * 0.36);
+    G.blobs.glyph(pad.ability, cx, cy, pad.w * 0.26);
     ctx.globalAlpha = 1;
     if (pad.life <= warnTime && pad.usedLeft === undefined) drawHourglass(pad.x + pad.w, pad.y - 4, 7);
   }
@@ -890,7 +959,7 @@ function drawEffects() {
 // сцена целиком, слой за слоем; камера остаётся применённой до конца кадра
 function drawScene() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = '#0a0a0c';
+  ctx.fillStyle = '#1d140a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   screenTransform();
   ctx.translate(-state.camera.x, -state.camera.y);
