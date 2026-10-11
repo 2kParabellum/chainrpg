@@ -126,10 +126,13 @@ function drawMortar(p) {
   ctx.beginPath();
   ctx.ellipse(p.x, p.y, p.r * 1.2, p.r * 0.6, 0, 0, Math.PI * 2);
   ctx.fill();
+  const r = p.r + 3;
+  ctx.fillStyle = COLORS.boss;
+  ctx.strokeStyle = COLORS.floorLine;
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(p.x, p.y - height, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(p.x, p.y - height, p.r + 2, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(p.x - r * 0.25, p.y - height - r * 0.25, r * 0.45, 0, Math.PI * 2); ctx.fill();
 }
 
 // стенка огня: толстая тускнеющая полоса вдоль отрезка, горит, пока не истечёт срок
@@ -865,11 +868,45 @@ function drawProjectiles() {
     if (p.kind === 'hook') { drawHook(p); continue; }
     if (p.kind === 'cannon') continue; // ядра рисуются отдельным слоем, см. drawCannonShots
     if (!onScreen(p)) continue;
-    ctx.fillStyle = p.team === 'ally' ? COLORS.allyShot : COLORS.enemyShot;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-    ctx.fill();
+    if (p.team === 'ally') drawBullet(p); else drawSpit(p);
   }
+}
+
+// пуля своих: кремовая капсула вдоль полёта с тёмной обводкой и золотым следом; огненная — оранжевая
+function drawBullet(p) {
+  const a = Math.atan2(p.vy, p.vx), r = p.r;
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(a);
+  ctx.strokeStyle = p.burn ? COLORS.fire : COLORS.speed;
+  ctx.globalAlpha = 0.45;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = r * 1.2;
+  ctx.beginPath(); ctx.moveTo(-r * 1.5, 0); ctx.lineTo(-r * 5, 0); ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = p.burn ? COLORS.fire : COLORS.allyShot;
+  ctx.strokeStyle = COLORS.floorLine;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.roundRect(-r * 1.8, -r * 0.8, r * 3.2, r * 1.6, r * 0.8); ctx.fill(); ctx.stroke();
+  ctx.restore();
+  ctx.lineCap = 'butt';
+}
+
+// плевок врага: ком тёмно-красной слизи, вытянутый по полёту, со светящейся серединкой и каплями позади
+function drawSpit(p) {
+  const a = Math.atan2(p.vy, p.vx), r = p.r * 1.3;
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(a);
+  ctx.fillStyle = COLORS.portal;
+  for (const [d, k] of [[-r * 1.9, 0.45], [-r * 3.1, 0.3]]) { ctx.beginPath(); ctx.arc(d, 0, r * k, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = COLORS.boss;
+  ctx.strokeStyle = COLORS.floorLine;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.ellipse(0, 0, r * 1.35, r, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = COLORS.enemyShot;
+  ctx.beginPath(); ctx.ellipse(r * 0.2, -r * 0.15, r * 0.55, r * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
 }
 
 // удар копейщика: яркая вспышка зоны удара и расходящееся толстое кольцо; на ходу — ещё и выпад копья
@@ -891,6 +928,10 @@ function drawSpearHit(fx) {
   ctx.lineCap = 'round';
   const thrust = (x0, y0, a, len) => {
     const x1 = x0 + Math.cos(a) * len, y1 = y0 + Math.sin(a) * len;
+    const col = ctx.strokeStyle, lw = ctx.lineWidth;
+    ctx.strokeStyle = COLORS.floorLine; ctx.lineWidth = lw + 3;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.strokeStyle = col; ctx.lineWidth = lw;
     ctx.beginPath();
     ctx.moveTo(x0, y0);
     ctx.lineTo(x1, y1);
@@ -919,21 +960,59 @@ function drawSpearHit(fx) {
   ctx.globalAlpha = 1;
 }
 
+// вспышка удара: короткие лучи-звёздочка цвета удара с тёмной обводкой, быстро гаснет
+function drawImpact(x, y, color, k, size) {
+  ctx.lineCap = 'round';
+  for (const [w, c] of [[5, COLORS.floorLine], [2.5, color]]) {
+    ctx.strokeStyle = c; ctx.lineWidth = w;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * Math.PI * 2 + 0.3, r0 = size * (0.3 + 0.4 * (1 - k)), r1 = size * (0.7 + 0.5 * (1 - k));
+      ctx.moveTo(x + Math.cos(a) * r0, y + Math.sin(a) * r0); ctx.lineTo(x + Math.cos(a) * r1, y + Math.sin(a) * r1);
+    }
+    ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+}
+
+// плюсик лечения
+function plusMark(x, y, s, color) {
+  const w = s * 0.38;
+  ctx.fillStyle = color; ctx.strokeStyle = COLORS.floorLine; ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(x - w, y - s); ctx.lineTo(x + w, y - s); ctx.lineTo(x + w, y - w); ctx.lineTo(x + s, y - w); ctx.lineTo(x + s, y + w);
+  ctx.lineTo(x + w, y + w); ctx.lineTo(x + w, y + s); ctx.lineTo(x - w, y + s); ctx.lineTo(x - w, y + w); ctx.lineTo(x - s, y + w);
+  ctx.lineTo(x - s, y - w); ctx.lineTo(x - w, y - w); ctx.closePath(); ctx.fill(); ctx.stroke();
+}
+
 function drawEffects() {
   for (const fx of state.effects) {
     if (fx.type === 'beam') {
-      ctx.strokeStyle = fx.color;
-      ctx.globalAlpha = clamp(fx.life * 4, 0, 1);
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(fx.x1, fx.y1);
-      ctx.lineTo(fx.x2, fx.y2);
-      ctx.stroke();
+      const k = clamp(fx.life * 4, 0, 1);
+      if (fx.color === COLORS.medic) {
+        // лечение: мягкий светлый луч, по нему к цели бегут плюсики, у цели — плюсик крупнее
+        ctx.strokeStyle = COLORS.medic;
+        ctx.globalAlpha = 0.5 * k;
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(fx.x1, fx.y1); ctx.lineTo(fx.x2, fx.y2); ctx.stroke();
+        ctx.lineCap = 'butt';
+        ctx.globalAlpha = k;
+        for (let i = 0; i < 3; i++) {
+          const q = ((1 - k) + i / 3) % 1;
+          plusMark(fx.x1 + (fx.x2 - fx.x1) * q, fx.y1 + (fx.y2 - fx.y1) * q, 4, COLORS.regen);
+        }
+        plusMark(fx.x2, fx.y2 - 14 - (1 - k) * 8, 6, COLORS.regen);
+      } else {
+        // укус, удар, щипок: вспышка на том, кого ударили
+        ctx.globalAlpha = k;
+        drawImpact(fx.x2, fx.y2, fx.color, k, 14);
+      }
       ctx.globalAlpha = 1;
     } else if (fx.type === 'ring') {
       ctx.globalAlpha = clamp(fx.life * 5, 0, 0.8);
       ctx.strokeStyle = fx.color;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(fx.x, fx.y, fx.r, 0, Math.PI * 2);
       ctx.stroke();
@@ -941,21 +1020,33 @@ function drawEffects() {
     } else if (fx.type === 'spearHit') {
       drawSpearHit(fx);
     } else if (fx.type === 'blast') {
-      const grow = fx.r * (1.15 - fx.life * 0.45);
-      ctx.globalAlpha = clamp(fx.life * 1.6, 0, 0.22);
-      ctx.fillStyle = COLORS.blast;
-      ctx.beginPath();
-      ctx.arc(fx.x, fx.y, grow, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = clamp(fx.life * 2.6, 0, 0.9);
-      ctx.strokeStyle = COLORS.blast;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(fx.x, fx.y, grow, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
+      drawBlast(fx);
     }
   }
+}
+
+// взрыв: светлая вспышка в центре, оранжевые клубы и тёмный дым, расходятся и гаснут (life 0.35 → 0)
+function drawBlast(fx) {
+  const t = 1 - clamp(fx.life / 0.35, 0, 1), r = fx.r;
+  ctx.globalAlpha = 0.25 * (1 - t);
+  ctx.fillStyle = COLORS.blast;
+  ctx.beginPath(); ctx.arc(fx.x, fx.y, r * (0.8 + 0.35 * t), 0, Math.PI * 2); ctx.fill();
+  for (let i = 0; i < 7; i++) {
+    const a = i / 7 * Math.PI * 2 + fx.x * 0.01, d = r * (0.25 + 0.55 * t);
+    const pr = r * (0.28 - 0.12 * t);
+    const x = fx.x + Math.cos(a) * d, y = fx.y + Math.sin(a) * d - t * 10;
+    ctx.globalAlpha = 0.7 * (1 - t);
+    ctx.fillStyle = i % 2 ? COLORS.floorStone : COLORS.blast;
+    ctx.beginPath(); ctx.arc(x, y, Math.max(1, pr), 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = Math.max(0, 1 - t * 2.5);
+  ctx.fillStyle = COLORS.allyShot;
+  ctx.beginPath(); ctx.arc(fx.x, fx.y, r * 0.35 * (1 - t * 0.5), 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = 0.9 * (1 - t);
+  ctx.strokeStyle = COLORS.blast;
+  ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.arc(fx.x, fx.y, r * (0.85 + 0.3 * t), 0, Math.PI * 2); ctx.stroke();
+  ctx.globalAlpha = 1;
 }
 
 // сцена целиком, слой за слоем; камера остаётся применённой до конца кадра

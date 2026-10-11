@@ -172,7 +172,8 @@ const spark = {
     pts.push([foe.x, foe.y]);
     // чем дольше держится молния (чем сильнее разогналась), тем она толще
     const thick = Math.min(2.2, 1 + 0.25 * Math.floor(b.held || 0));
-    for (const [width, color, alpha] of [[5 * thick, w.color, 0.35], [1.6 * thick, '#fff4dc', 0.95]]) {
+    // тёмная обводка, цветной ореол, светлая середина — молния видна на любом полу
+    for (const [width, color, alpha] of [[6 * thick, '#2a1d0d', 0.6], [4 * thick, w.color, 0.75], [1.6 * thick, '#fff4dc', 1]]) {
       ctx.globalAlpha = alpha;
       ctx.strokeStyle = color;
       ctx.lineWidth = width;
@@ -181,7 +182,13 @@ const spark = {
       for (const [x, y] of pts.slice(1)) ctx.lineTo(x, y);
       ctx.stroke();
     }
+    // на цели — искры
     ctx.globalAlpha = 1;
+    ctx.fillStyle = '#fff4dc';
+    for (let i = 0; i < 3; i++) {
+      const ang = Math.random() * Math.PI * 2, rr = foe.r * (0.4 + Math.random() * 0.6);
+      ctx.fillRect(foe.x + Math.cos(ang) * rr - 1.5, foe.y + Math.sin(ang) * rr - 1.5, 3, 3);
+    }
   },
 };
 
