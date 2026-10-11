@@ -395,79 +395,20 @@ function fadeAlpha(life, maxLife, warnTime) {
   return a;
 }
 
-// дружочек, которого можно подобрать в цепочку, «дышит»: тело плавно увеличивается до +15% и обратно,
-// по краю — еле заметный белый ореол, как от света. Возвращает копию юнита с текущим радиусом тела
-function drawPickupPulse(u) {
-  const k = 0.5 - 0.5 * Math.cos(state.time * 3); // 0..1
-  const r = u.r * (1 + 0.15 * k);
-  const g = ctx.createRadialGradient(u.x, u.y, r * 0.9, u.x, u.y, r * 1.7);
-  g.addColorStop(0, 'rgba(255,255,255,0.14)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(u.x, u.y, r * 1.7, 0, Math.PI * 2);
-  ctx.fill();
-  return { ...u, r };
-}
-
 // ждущие вербовки дружочки появляются и уходят так же, как подиумы: перед уходом — часы и мигание
 function drawNeutrals() {
   const warnTime = G.pads.allySettings().warnTime;
   for (const n of state.neutrals) {
     if (!onScreen(n)) continue;
     const timed = n.life !== undefined;
-    if (timed) ctx.globalAlpha = fadeAlpha(n.life, n.maxLife, warnTime);
-    const body = drawPickupPulse(n);
-    ctx.setLineDash([4, 4]);
-    drawUnitBody(body, COLORS.neutral, false);
-    ctx.setLineDash([]);
-    drawMark(body, allyTypes[n.type].mark);
-    ctx.fillStyle = COLORS.neutral;
-    ctx.font = '11px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(n.cfg.name, n.x, n.y + n.r + 14);
-    ctx.globalAlpha = 1;
+    G.blobs.drawAlly(n, 'neutral', timed ? fadeAlpha(n.life, n.maxLife, warnTime) : 1);
     if (timed && n.life <= warnTime) drawHourglass(n.x + n.r + 6, n.y - n.r - 6, 6);
   }
 }
 
-
-// уровень прокачки — точки над полоской HP (со второго уровня)
-function drawLevelPips(u) {
-  if (!(u.abilityLevel > 1)) return;
-  ctx.fillStyle = abilities[u.ability].color;
-  for (let k = 0; k < u.abilityLevel; k++) {
-    ctx.beginPath();
-    ctx.arc(u.x + (k - (u.abilityLevel - 1) / 2) * 6, u.y - u.r - 14, 2, 0, Math.PI * 2);
-    ctx.fill();
-  }
-}
-
-// выбитые из цепочки лежат и ждут, пока их подберут
+// выбитые из цепочки лежат и ждут, пока их подберут (и дерутся лёжа)
 function drawDowned() {
-  for (const d of state.downed) {
-    if (!onScreen(d)) continue;
-    const color = allyColor(d);
-    const body = drawPickupPulse(d), r = body.r;
-    ctx.globalAlpha = 0.55;
-    drawUnitBody(body, color, true);
-    ctx.globalAlpha = 1;
-    ctx.setLineDash([3, 3]);
-    drawUnitBody(body, color, false);
-    ctx.setLineDash([]);
-    ctx.strokeStyle = '#0e0e10';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(d.x - r * 0.5, d.y - r * 0.5); ctx.lineTo(d.x + r * 0.5, d.y + r * 0.5);
-    ctx.moveTo(d.x + r * 0.5, d.y - r * 0.5); ctx.lineTo(d.x - r * 0.5, d.y + r * 0.5);
-    ctx.stroke();
-    drawHpBar(d);
-    ctx.fillStyle = color;
-    ctx.font = '11px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(shapes.unitName(d), d.x, d.y + d.r + 14);
-    drawLevelPips(d);
-  }
+  for (const d of state.downed) if (onScreen(d)) G.blobs.drawAlly(d, 'downed');
 }
 
 function drawWarnings() {
@@ -742,25 +683,6 @@ function drawPadLinks() {
   }
 }
 
-// кольца временных усилений вокруг тела: по одному на каждое действующее
-function drawBuffRings(u) {
-  if (!u.buffs) return;
-  let k = 0;
-  for (const [key, left] of Object.entries(u.buffs)) {
-    if (!(left > 0)) continue;
-    // за 5 секунд до конца кольцо мигает
-    if (left < 5 && Math.floor(left * 4) % 2 === 0) continue;
-    ctx.strokeStyle = G.buffs[key].color;
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.85;
-    ctx.beginPath();
-    ctx.arc(u.x, u.y, u.r + 3 + k * 3, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    k++;
-  }
-}
-
 // светлый портал выхода: мягкое тёплое свечение, светлый диск, два пунктирных кольца крутятся навстречу,
 // в середине пульсирует ядро; появляется, разрастаясь, над ним подпись. Пока в него уходит цепочка — крутится быстрее
 function drawExit() {
@@ -828,30 +750,28 @@ function drawShockwave() {
 }
 
 // цепочка: с хвоста, чтобы Герой оказался сверху. Ушедшие в портал выхода не рисуются.
-// Знаки на теле: сначала знак типа, затем знак способности
+// Под «крепкостью» звенья связаны стальной цепью (усиления держит Герой, см. graphics.md)
 function drawChain() {
-  for (let i = state.party.length - 1; i >= 0; i--) {
-    const a = state.party[i];
-    if (a.absorbed) continue;
-    drawUnitBody(a, allyColor(a), true);
-    drawMark(a, allyTypes[a.type].mark);
-    if (a.ability) drawMark(a, abilities[a.ability].mark);
-    drawBuffRings(a);
-    drawHpBar(a);
-    drawLevelPips(a);
-  }
+  const lead = state.party[0];
+  const shown = state.party.filter((a) => !a.absorbed);
+  if (lead.buffs && lead.buffs.sturdy > 0) G.blobs.drawLinks(shown.map((a) => ({ x: a.x, y: a.y + 3 })));
+  for (let i = shown.length - 1; i >= 0; i--) G.blobs.drawAlly(shown[i], 'chain');
+  G.blobs.sweep(state.party.concat(state.downed));
+  G.blobs.drawBits();
   // шеврон перед Героем: куда он поедет по W
-  const lead = state.party[0], h = lead.heading || 0;
+  const h = lead.heading || 0;
   if (lead.absorbed) return;
-  const tip = lead.r + 13, back = lead.r + 6;
-  ctx.strokeStyle = allyColor(lead);
+  const tip = lead.r + 15, back = lead.r + 8;
+  ctx.strokeStyle = G.blobs.BUFF_COL.speed;
   ctx.globalAlpha = 0.85;
   ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(lead.x + Math.cos(h - 0.45) * back, lead.y + Math.sin(h - 0.45) * back);
   ctx.lineTo(lead.x + Math.cos(h) * tip, lead.y + Math.sin(h) * tip);
   ctx.lineTo(lead.x + Math.cos(h + 0.45) * back, lead.y + Math.sin(h + 0.45) * back);
   ctx.stroke();
+  ctx.lineCap = 'butt';
   ctx.globalAlpha = 1;
 }
 
