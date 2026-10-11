@@ -45,11 +45,13 @@ function safeInsets() {
   return { t: px(cs.paddingTop), r: px(cs.paddingRight), b: px(cs.paddingBottom), l: px(cs.paddingLeft) };
 }
 
-// телефон держат вертикально: игра не помещается, просим повернуть
+// телефон держат вертикально (экран выше, чем шире)
 function isPortrait() {
   const v = viewport();
   return touch && v.h > v.w;
 }
+// вертикально, а вертикаль выключена (CONFIG.SCREEN.allowPortrait) — плашка «Поверни телефон» и пауза
+function needsRotate() { return isPortrait() && !CONFIG.SCREEN.allowPortrait; }
 
 // iPhone мог отдалить страницу (масштаб меньше 1) — тогда всё мельче и игра занимает не всю область.
 // Сбрасываем: любое изменение meta viewport заставляет браузер заново применить initial-scale=1. Не больше пары раз
@@ -94,6 +96,7 @@ function fit() {
   document.body.classList.toggle('touch', touch);
   document.body.classList.toggle('ios-browser', ios && !standalone);
   document.body.classList.toggle('portrait', isPortrait());
+  document.body.classList.toggle('rotate', needsRotate());
   const S = CONFIG.SCREEN;
   let cssW, cssH;
   if (touch) {
@@ -106,9 +109,12 @@ function fit() {
     });
     // страница не должна уезжать прокруткой (iPhone прокручивает её при повороте и показе панелей)
     if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
-    // объекты одного размера на любом телефоне; если места мало, обзор меньше, но не до тесноты; планшет — как компьютер
-    CONFIG.VIEW.h = Math.round(clamp(cssH / S.touchScale, S.touchViewMin, S.desktop.h));
-    CONFIG.VIEW.w = Math.round(CONFIG.VIEW.h * cssW / cssH);
+    // объекты одного размера на любом телефоне и при любом положении: масштаб считаем по короткой стороне;
+    // если места мало, обзор меньше, но не до тесноты; планшет — как компьютер
+    const short = Math.min(cssW, cssH);
+    const k = short / clamp(short / S.touchScale, S.touchViewMin, S.desktop.h); // точек экрана на единицу мира
+    CONFIG.VIEW.w = Math.round(cssW / k);
+    CONFIG.VIEW.h = Math.round(cssH / k);
   } else {
     Object.assign(stage.style, { left: '', top: '', width: '', height: '' });
     cssW = S.desktop.w; cssH = S.desktop.h;
@@ -141,7 +147,7 @@ function enterFullscreen() {
   const el = document.documentElement;
   if (!el.requestFullscreen) return;
   el.requestFullscreen({ navigationUI: 'hide' })
-    .then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape'))
+    .then(() => !CONFIG.SCREEN.allowPortrait && screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape'))
     .catch(() => {});
 }
 
@@ -161,5 +167,5 @@ window.addEventListener('pointerdown', (ev) => {
 
 fit();
 
-G.screen = { isTouch, isPortrait, pixelScale, onChange, enterFullscreen, fit };
+G.screen = { isTouch, isPortrait, needsRotate, pixelScale, onChange, enterFullscreen, fit };
 })(window.Game = window.Game || {});

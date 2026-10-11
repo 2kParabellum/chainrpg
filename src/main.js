@@ -89,7 +89,7 @@ function pause() {
   syncOverlay();
 }
 function resume() {
-  if (state.status !== 'pause' || screenInfo.isPortrait()) return;
+  if (state.status !== 'pause' || screenInfo.needsRotate()) return;
   state.status = 'play';
   syncOverlay();
 }
@@ -270,7 +270,7 @@ onClick('backBtn', () => showPanel('main'));
 
 // свернули вкладку, заблокировали телефон или повернули его вертикально — пауза
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
-screenInfo.onChange(() => { if (screenInfo.isPortrait()) pause(); });
+screenInfo.onChange(() => { if (screenInfo.needsRotate()) pause(); });
 
 // --- цикл ---
 

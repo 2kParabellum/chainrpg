@@ -11,10 +11,23 @@ const { clamp } = G.math;
 const { nearestPickup } = G.chain;
 const { ctx, screenTransform, allyColor } = G.shapes;
 const { withKeys } = G.input;
-const { isTouch } = G.screen;
+const { isTouch, isPortrait } = G.screen;
 
 // где по высоте подсказки у низа экрана: на телефоне выше — внизу лежат пальцы, кнопки и джойстик
-function bottomHintY() { return CONFIG.VIEW.h - (isTouch() ? 100 : 30); }
+// (вертикально кнопки занимают больше высоты вида — ещё выше)
+function bottomHintY() { return CONFIG.VIEW.h - (isTouch() ? (isPortrait() ? 210 : 100) : 30); }
+
+// разбить текст на строки не шире maxW текущим шрифтом: по словам, а если parts — список кусков, по кускам
+function wrapLines(parts, maxW, sep = ' ') {
+  const lines = [];
+  let line = '';
+  for (const p of parts) {
+    const next = line ? line + sep + p : p;
+    if (line && ctx.measureText(next).width > maxW) { lines.push(line); line = p; } else line = next;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
 
 // метка у края экрана, указывающая на точку (x, y) за его пределами: треугольник цвета color и подпись
 function drawEdgeMarker(x, y, color, text) {
@@ -69,16 +82,19 @@ function drawBanner(title, text, age, duration, color = '#f0f0f5', y = 130) {
   const a = bannerAlpha(age, duration);
   if (a <= 0 || state.status !== 'play') return;
   const V = CONFIG.VIEW;
+  // длинный текст на узком экране (телефон вертикально) — в несколько строк, плашка растёт вниз
+  ctx.font = 'bold 22px monospace';
+  const lines = wrapLines(text.split(' '), V.w - 24);
   ctx.globalAlpha = a;
   ctx.fillStyle = 'rgba(10,10,12,0.75)';
-  ctx.fillRect(0, y - 42, V.w, 74);
+  ctx.fillRect(0, y - 42, V.w, 74 + (lines.length - 1) * 26);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#8a8a95';
   ctx.font = '14px monospace';
   ctx.fillText(title, V.w / 2, y - 18);
   ctx.fillStyle = color;
   ctx.font = 'bold 22px monospace';
-  ctx.fillText(text, V.w / 2, y + 14);
+  lines.forEach((line, i) => ctx.fillText(line, V.w / 2, y + 14 + i * 26));
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }
@@ -90,7 +106,8 @@ function drawBanners() {
   // подсказка комнаты (обучение): всплывает ниже середины экрана, когда Герой входит в комнату
   const plan = state.level.rooms[state.room];
   if (plan && plan.hint) {
-    drawBanner(`КОМНАТА ${state.room + 1}`, withKeys(plan.hint), state.time - state.roomAt, 5, '#e8d48a', CONFIG.VIEW.h - (isTouch() ? 220 : 150));
+    const hintY = CONFIG.VIEW.h - (isTouch() ? (isPortrait() ? 330 : 220) : 150);
+    drawBanner(`КОМНАТА ${state.room + 1}`, withKeys(plan.hint), state.time - state.roomAt, 5, '#e8d48a', hintY);
   }
   // «Оборона»: начался натиск — последние минуты волны больше
   const w = state.level.waves;
@@ -169,28 +186,34 @@ function drawHud() {
   const where = level.zoneNames ? `ЗОНА: ${level.zoneNames[here]}` : `КОМНАТА ${here + 1}/${roomCount()}`;
   // цель уровня «разрушить всё заданного типа» показываем счётчиком
   const rule = level.victory;
-  let goal = '';
+  const parts = [where, `ВРАГОВ ЗДЕСЬ: ${inRoom}`];
   // showHp — цель одна (босс): вместо счётчика её HP
   if (rule.kind === 'destroyType') {
     const left = state.enemies.filter((e) => e.type === rule.type);
-    goal = rule.showHp && left.length === 1
-      ? `   ${rule.label}: ${Math.ceil(left[0].hp)}/${left[0].maxHp}` : `   ${rule.label}: ${left.length}`;
+    parts.push(rule.showHp && left.length === 1
+      ? `${rule.label}: ${Math.ceil(left[0].hp)}/${left[0].maxHp}` : `${rule.label}: ${left.length}`);
   }
   // продержаться: сколько осталось и сколько HP у базы
   if (rule.kind === 'survive') {
     const left = Math.max(0, Math.ceil(rule.time - state.time));
-    goal = `   ${rule.label}: ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
-    if (state.base) goal += `   БАЗА: ${Math.max(0, Math.ceil(state.base.hp))}/${state.base.maxHp}`;
+    parts.push(`${rule.label}: ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`);
+    if (state.base) parts.push(`БАЗА: ${Math.max(0, Math.ceil(state.base.hp))}/${state.base.maxHp}`);
   }
+  parts.push(`ЦЕПОЧКА: ${state.party.length}`, `СКОРОСТЬ: ${Math.round(leaderSpeedMul() * 100)}%`);
+  // строка состояния; на узком экране — в несколько строк, и справа не заходит под значки паузы и «заново»
+  const maxW = CONFIG.VIEW.w - 24 - (isTouch() ? 140 : 0);
+  let ty = 22;
   ctx.fillStyle = '#c8c8d2';
-  ctx.fillText(`${where}   ВРАГОВ ЗДЕСЬ: ${inRoom}${goal}   ЦЕПОЧКА: ${state.party.length}   СКОРОСТЬ: ${Math.round(leaderSpeedMul() * 100)}%`, 12, 22);
+  for (const line of wrapLines(parts, maxW, '   ')) { ctx.fillText(line, 12, ty); ty += 16; }
 
   // задача комнаты (обучение: что сделать, чтобы пройти её), иначе — общее напоминание
   const task = level.rooms[here] && level.rooms[here].task;
   ctx.fillStyle = task ? '#e8d48a' : '#8a8a95';
-  ctx.fillText(task || 'Подиумы подбираются сами: проедь по нему цепочкой', 12, 38);
+  for (const line of wrapLines((task || 'Подиумы подбираются сами: проедь по нему цепочкой').split(' '), maxW)) {
+    ctx.fillText(line, 12, ty); ty += 16;
+  }
   // список цепочки; на телефоне он не спускается ниже середины экрана (внизу слева кнопки) — дальше в соседнюю колонку
-  const top = 58, step = 16, colW = 370;
+  const top = ty + 4, step = 16, colW = 370;
   const rows = isTouch() ? Math.max(3, Math.floor((CONFIG.VIEW.h * 0.45 - top) / step) + 1) : Infinity;
   let y = top;
   state.party.forEach((a, i) => {
