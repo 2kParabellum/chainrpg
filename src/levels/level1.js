@@ -20,8 +20,8 @@
 const ROOMS = [
   { // 1 — кнопка: дружочка можно бросить (X) на кнопку, и он держит дверь открытой
     units: 'px', size: [900, 640],
-    hint: '{recruit} — взять дружочка, {drop} — оставить его на кнопке',
-    task: 'ЗАДАЧА: оставь дружочка на кнопке — откроется дверь',
+    hint: '{recruit} — grab a mate, {drop} — leave it on the button',
+    task: 'TASK: leave a mate on the button to open the door',
     allies: { spots: [[300, 140]] },
     // кнопка открывает выход из этой комнаты (дверь 'exit0'); открывшись, дверь больше не закрывается
     exitByButton: true,
@@ -29,16 +29,16 @@ const ROOMS = [
   },
   { // 2 — дверь-мишень: ближний бой её не берёт, нужен стрелок
     units: 'px', size: [900, 640],
-    hint: 'Возьми дружочка и сделай его стрелком, чтобы открыть дверь',
-    task: 'ЗАДАЧА: сделай дружочка стрелком и разбей дверь-мишень',
+    hint: 'Grab a mate and turn it into a Gun Mate to open the door',
+    task: 'TASK: make a Gun Mate and break the target door',
     allies: { spots: [[330, 170]] },
     pads: [[330, 400, 'shooter']],
     enemies: { spots: [[817, 280]], kinds: 1, pool: ['doorTarget'] },
   },
   { // 3 — стрелки, медик
     units: 'px', size: [1200, 800],
-    hint: 'Возьми ещё дружочка и сделай его медиком',
-    task: 'ЗАДАЧА: перебей всех стрелков',
+    hint: 'Grab another mate and make it a Doc',
+    task: 'TASK: take out all the Shooters',
     pillars: [[540, 230, 40, 150], [540, 490, 40, 150]],
     allies: { spots: [[170, 560]] },
     pads: [[300, 170, 'medic']],
@@ -46,24 +46,24 @@ const ROOMS = [
   },
   { // 4 — турель под щитом и «сила», которая его пробивает
     units: 'px', size: [1100, 800],
-    hint: 'Возьми «силу» — с ней выстрелы пробивают щит',
-    task: 'ЗАДАЧА: возьми «силу» и разбей турель',
+    hint: 'Grab “power” — it lets shots break through the shield',
+    task: 'TASK: grab “power” and destroy the turret',
     pillars: [[470, 190, 40, 130], [470, 530, 40, 130]],
     pads: [[170, 150, 'power']],
     enemies: { spots: [[770, 360]], kinds: 1, pool: ['turret'] },
   },
   { // 5 — катапульты и «скорость»
     units: 'px', size: [1400, 900],
-    hint: 'Не стой на месте — катапульты бьют туда, где ты был',
-    task: 'ЗАДАЧА: разбей все катапульты',
+    hint: 'Keep moving — catapults fire where you were',
+    task: 'TASK: destroy all the catapults',
     pillars: [[720, 410, 40, 170], [980, 190, 150, 40], [980, 630, 150, 40]],
     pads: [[720, 240, 'speed']], // в глубине комнаты, между катапультами: за ним надо съездить под обстрелом
     enemies: { spots: [[520, 140], [520, 680], [920, 410], [1180, 150], [1180, 670]], kinds: 1, pool: ['tower'] },
   },
   { // 6 — большая финальная комната: свой отряд, профессии, случайные подиумы и дружочки, 13 врагов
     units: 'px', size: [2000, 1400],
-    hint: 'Собери отряд и перебей всех врагов',
-    task: 'ЗАДАЧА: перебей всех врагов — откроется портал выхода',
+    hint: 'Build a squad and take out every enemy',
+    task: 'TASK: take out every enemy to open the exit portal',
     pillars: [[800, 350, 40, 200], [800, 970, 40, 200], [1300, 660, 160, 40]],
     pits: [[1500, 660, 120, 160]],
     spikes: [[1000, 660, 120, 80]],
@@ -80,9 +80,9 @@ const ROOMS = [
 ];
 
 G.level1 = {
-  name: 'Обучение',
-  blurb: 'Шесть комнат: кнопка, стрелок, медик, турель под щитом, катапульты и финальный бой',
-  goal: 'Пройди шесть комнат и победи всех в последней',
+  name: 'Tutorial',
+  blurb: 'Six rooms: a button, Gun Mate, Doc, a shielded turret, catapults and a final fight',
+  goal: 'Get through six rooms and beat everyone in the last one',
   // комнаты в линию; gates — выход из каждой комнаты закрыт, пока в ней есть враги
   geometry: { kind: 'line', wall: 40, corridorLen: 80, corridorH: 120, gates: true },
   spawn: { room: 0, at: [110, 280], heading: 0 }, // слева в первой комнате, лицом к двери

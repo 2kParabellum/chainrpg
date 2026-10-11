@@ -23,14 +23,14 @@ const ROOM_PLAN = {
 
 G.level3 = {
   name: 'Boss Fight',
-  blurb: 'Круглая арена: демон с четырьмя атаками',
-  goal: 'Победи демона',
+  blurb: 'A round arena: a demon with four attacks',
+  goal: 'Defeat the demon',
   geometry: { kind: 'arena', radius: 820, margin: 40 },
   spawn: { room: 0, at: [0.5, 0.90] }, // игрок стартует внизу арены
   enemyPool: ['boss'],
-  zoneNames: ['АРЕНА БОССА'],
+  zoneNames: ['BOSS ARENA'],
   // победа: демон уничтожен
-  victory: { kind: 'destroyType', type: 'boss', label: 'БОСС' },
+  victory: { kind: 'destroyType', type: 'boss', label: 'BOSS' },
   // светлый портал выхода: открывается после победы, в него надо заехать
   exit: { room: 0, at: [0.5, 0.5] },   // в центре арены
   // подиумы появляются случайно и на 20% чаще обычного (паузы между ними — общие, делённые на 1.2);

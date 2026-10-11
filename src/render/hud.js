@@ -9,7 +9,7 @@ const { currentRoom, isSpotted, leaderSpeedMul, leader } = G.session;
 const { world, roomCount, roomIndexAt, buttonUnder } = G.world;
 const { clamp } = G.math;
 const { nearestPickup } = G.chain;
-const { ctx, screenTransform, allyColor } = G.shapes;
+const { ctx, screenTransform, allyColor, unitName } = G.shapes;
 const { withKeys } = G.input;
 const { isTouch, isPortrait } = G.screen;
 
@@ -58,10 +58,10 @@ function drawEdgeMarker(x, y, color, text) {
 function drawEdgeMarkers() {
   if (state.status !== 'play') return;
   // портал выхода с уровня открыт, а он за экраном
-  if (state.exit && !state.leaving) drawEdgeMarker(state.exit.x, state.exit.y, COLORS.exitGlow, 'ВЫХОД');
+  if (state.exit && !state.leaving) drawEdgeMarker(state.exit.x, state.exit.y, COLORS.exitGlow, 'EXIT');
   // обучение: выход из текущей комнаты открылся, а он за экраном
   for (const d of world.doors) {
-    if (d.open && d.room === currentRoom()) drawEdgeMarker(d.x + d.w / 2, d.y + d.h / 2, COLORS.doorEdge, 'ДАЛЬШЕ');
+    if (d.open && d.room === currentRoom()) drawEdgeMarker(d.x + d.w / 2, d.y + d.h / 2, COLORS.doorEdge, 'NEXT');
   }
   const cfg = state.level.waves;
   if (!cfg) return;
@@ -69,7 +69,7 @@ function drawEdgeMarkers() {
     if (n.nextIn < cfg.telegraph) drawEdgeMarker(n.x, n.y, COLORS.nest, `×${G.waves.waveSize(cfg, n.wave)}`);
     else if (state.time - n.releasedAt < 3) drawEdgeMarker(n.x, n.y, COLORS.nest, '');
   }
-  if (state.base && state.base.regenTimer < 1) drawEdgeMarker(state.base.x, state.base.y, COLORS.baseEdge, 'БАЗА');
+  if (state.base && state.base.regenTimer < 1) drawEdgeMarker(state.base.x, state.base.y, COLORS.baseEdge, 'BASE');
 }
 
 // яркость надписи, которая видна duration секунд с момента age = 0: быстро проявляется, в конце гаснет
@@ -102,21 +102,21 @@ function drawBanner(title, text, age, duration, color = '#f0f0f5', y = 130) {
 // в начале партии — название уровня и его цель; после победы — что база выстояла и что открылся портал выхода
 function drawBanners() {
   const { goal, name } = state.level;
-  if (goal) drawBanner(name.toUpperCase(), `ЦЕЛЬ: ${goal}`, state.time, 4.5);
+  if (goal) drawBanner(name.toUpperCase(), `GOAL: ${goal}`, state.time, 4.5);
   // подсказка комнаты (обучение): всплывает ниже середины экрана, когда Герой входит в комнату
   const plan = state.level.rooms[state.room];
   if (plan && plan.hint) {
     const hintY = CONFIG.VIEW.h - (isTouch() ? (isPortrait() ? 330 : 220) : 150);
-    drawBanner(`КОМНАТА ${state.room + 1}`, withKeys(plan.hint), state.time - state.roomAt, 5, '#e8d48a', hintY);
+    drawBanner(`ROOM ${state.room + 1}`, withKeys(plan.hint), state.time - state.roomAt, 5, '#e8d48a', hintY);
   }
   // «Оборона»: начался натиск — последние минуты волны больше
   const w = state.level.waves;
   if (w && w.surge && !state.cleared) {
     const at = state.level.victory.time - w.surge.lastSeconds;
-    drawBanner('НАТИСК', `Последние ${Math.round(w.surge.lastSeconds / 60)} минуты — волны больше`, state.time - at, 4, COLORS.nest);
+    drawBanner('ONSLAUGHT', `Last ${Math.round(w.surge.lastSeconds / 60)} minutes — bigger waves`, state.time - at, 4, COLORS.nest);
   }
-  if (state.cleared && state.base) drawBanner('БАЗА ВЫСТОЯЛА', 'Волна от базы сносит всех врагов и гнёзда', state.time - state.clearedAt, 3.2, COLORS.baseEdge);
-  if (state.exit && !state.leaving) drawBanner('ПОРТАЛ ОТКРЫТ', 'Заедь в светлый портал — уровень пройден', state.time - state.exit.at, 4, COLORS.exitGlow);
+  if (state.cleared && state.base) drawBanner('THE BASE HELD', 'A blast from the base wipes out every enemy and nest', state.time - state.clearedAt, 3.2, COLORS.baseEdge);
+  if (state.exit && !state.leaving) drawBanner('PORTAL OPEN', 'Drive into the bright portal to finish the level', state.time - state.exit.at, 4, COLORS.exitGlow);
 }
 
 // цепочка уходит в портал выхода: тьма затягивает экран с краёв, оставляя сужающийся круг вокруг портала;
@@ -157,7 +157,7 @@ function drawNotice() {
   const def = G.buffs[n.key], V = CONFIG.VIEW;
   const y = V.h / 2 - 80 - Math.min(age, 1) * 8;
   const name = def.name[0].toUpperCase() + def.name.slice(1) + ': ';
-  const rest = `${def.desc}, ${def.duration} с`;
+  const rest = `${def.desc}, ${def.duration} s`;
   ctx.font = '14px monospace';
   const nw = ctx.measureText(name).width, x = V.w / 2 - (nw + ctx.measureText(rest).width) / 2;
   ctx.globalAlpha = 0.85 * a;
@@ -183,10 +183,10 @@ function drawHud() {
   const here = currentRoom();
   // необнаруженные мины в счётчик не попадают, о них предупреждает только знак на полу
   const inRoom = state.enemies.filter((e) => roomIndexAt(e.x, e.y) === here && isSpotted(e)).length;
-  const where = level.zoneNames ? `ЗОНА: ${level.zoneNames[here]}` : `КОМНАТА ${here + 1}/${roomCount()}`;
+  const where = level.zoneNames ? `ZONE: ${level.zoneNames[here]}` : `ROOM ${here + 1}/${roomCount()}`;
   // цель уровня «разрушить всё заданного типа» показываем счётчиком
   const rule = level.victory;
-  const parts = [where, `ВРАГОВ ЗДЕСЬ: ${inRoom}`];
+  const parts = [where, `ENEMIES HERE: ${inRoom}`];
   // showHp — цель одна (босс): вместо счётчика её HP
   if (rule.kind === 'destroyType') {
     const left = state.enemies.filter((e) => e.type === rule.type);
@@ -197,9 +197,9 @@ function drawHud() {
   if (rule.kind === 'survive') {
     const left = Math.max(0, Math.ceil(rule.time - state.time));
     parts.push(`${rule.label}: ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`);
-    if (state.base) parts.push(`БАЗА: ${Math.max(0, Math.ceil(state.base.hp))}/${state.base.maxHp}`);
+    if (state.base) parts.push(`BASE: ${Math.max(0, Math.ceil(state.base.hp))}/${state.base.maxHp}`);
   }
-  parts.push(`ЦЕПОЧКА: ${state.party.length}`, `СКОРОСТЬ: ${Math.round(leaderSpeedMul() * 100)}%`);
+  parts.push(`CHAIN: ${state.party.length}`, `SPEED: ${Math.round(leaderSpeedMul() * 100)}%`);
   // строка состояния; на узком экране — в несколько строк, и справа не заходит под значки паузы и «заново»
   const maxW = CONFIG.VIEW.w - 24 - 140;
   let ty = 22;
@@ -209,7 +209,7 @@ function drawHud() {
   // задача комнаты (обучение: что сделать, чтобы пройти её), иначе — общее напоминание
   const task = level.rooms[here] && level.rooms[here].task;
   ctx.fillStyle = task ? '#e8d48a' : '#8a8a95';
-  for (const line of wrapLines((task || 'Подиумы подбираются сами: проедь по нему цепочкой').split(' '), maxW)) {
+  for (const line of wrapLines((task || 'Pads are picked up automatically: drive your chain over them').split(' '), maxW)) {
     ctx.fillText(line, 12, ty); ty += 16;
   }
   // список цепочки; на телефоне он не спускается ниже середины экрана (внизу слева кнопки) — дальше в соседнюю колонку
@@ -218,18 +218,18 @@ function drawHud() {
   let y = top;
   state.party.forEach((a, i) => {
     ctx.fillStyle = allyColor(a);
-    const bf = Object.entries(a.buffs || {}).filter(([, t]) => t > 0).map(([k, t]) => ` ${G.buffs[k].name} ${Math.ceil(t)}с`).join('');
-    const label = a.cfg.name + (a.ability ? ` (${abilities[a.ability].name}${a.abilityLevel > 1 ? ' ' + a.abilityLevel : ''})` : '') + bf;
+    const bf = Object.entries(a.buffs || {}).filter(([, t]) => t > 0).map(([k, t]) => ` ${G.buffs[k].name} ${Math.ceil(t)}s`).join('');
+    const label = unitName(a) + bf;
     y = top + (i % rows) * step;
-    ctx.fillText(`${label.padEnd(34, ' ')} ${Math.max(0, Math.ceil(a.hp))}/${a.maxHp}`, 12 + Math.floor(i / rows) * colW, y);
+    ctx.fillText(`${label.padEnd(30, ' ')} ${Math.max(0, Math.ceil(a.hp))}/${a.maxHp}`, 12 + Math.floor(i / rows) * colW, y);
   });
   y += step;
   // улучшения прохождения: названия цветом того, чьё улучшение
   if (state.upgrades.length) {
     y += 4;
     ctx.fillStyle = '#8a8a95';
-    ctx.fillText('УЛУЧШЕНИЯ:', 12, y);
-    let x = 12 + ctx.measureText('УЛУЧШЕНИЯ: ').width;
+    ctx.fillText('UPGRADES:', 12, y);
+    let x = 12 + ctx.measureText('UPGRADES: ').width;
     for (const key of state.upgrades) {
       const def = G.upgrades[key], who = def.who === 'hero' ? COLORS.hero : abilities[def.who].color;
       ctx.fillStyle = who;
@@ -250,11 +250,11 @@ function drawHud() {
   } else if (btn && !btn.pressed && state.party.length > 1 && state.status === 'play') {
     ctx.fillStyle = '#8ce27a';
     ctx.textAlign = 'center';
-    ctx.fillText(withKeys('{drop} — ОСТАВИТЬ ДРУЖОЧКА НА КНОПКЕ'), CONFIG.VIEW.w / 2, bottomHintY());
+    ctx.fillText(withKeys('{drop} — LEAVE A MATE ON THE BUTTON'), CONFIG.VIEW.w / 2, bottomHintY());
   } else if (pickup && state.status === 'play') {
     ctx.fillStyle = '#f0f0f5';
     ctx.textAlign = 'center';
-    const msg = pickup.kind === 'downed' ? '{recruit} — ПОДНЯТЬ' : '{recruit} — ПРИСОЕДИНИТЬ';
+    const msg = pickup.kind === 'downed' ? '{recruit} — PICK UP' : '{recruit} — RECRUIT';
     ctx.fillText(withKeys(msg), CONFIG.VIEW.w / 2, bottomHintY());
   }
 

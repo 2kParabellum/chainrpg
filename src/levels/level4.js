@@ -81,16 +81,16 @@ const ROOM_PLAN = {
 };
 
 G.level4 = {
-  name: 'Оборона',
-  blurb: 'Удержи базу 6 минут: враги идут волнами из пяти гнёзд',
-  goal: 'Удержи базу 6 минут: враги идут волнами из пяти гнёзд',
+  name: 'Defense',
+  blurb: 'Hold the base for 6 minutes: enemies come in waves from five nests',
+  goal: 'Hold the base for 6 minutes: enemies come in waves from five nests',
   geometry: { kind: 'rect', width: 3840, height: 3040, wall: 40 },
   spawn: { room: 0, at: [1880, 520], heading: Math.PI / 2 }, // во дворе под базой, лицом к нижнему проходу
   // волны берут типы из подвижных (катапульта стоять на месте не умеет)
   // колесница (бык с катапультой) встречается только здесь и занимает в волне два места
   enemyPool: ['shooter', 'bull', 'scorpion', 'zombie', 'hunter', 'chariot'],
   enemyWeights: { shooter: 4, zombie: 2, hunter: 2, bull: 1, scorpion: 1, chariot: 1 },
-  zoneNames: ['ОБОРОНА'],
+  zoneNames: ['DEFENSE'],
   // волны: у каждого гнезда свой таймер. Первая волна гнезда k (порядок гнёзд бросается заново) —
   // на firstAt + k·stagger секунде, дальше раз в interval. Размер n-й волны гнезда (с нуля) — first + grow·n,
   // в волне не больше kinds разных типов. Пока живых врагов волн maxAlive, лишние не выходят
@@ -106,7 +106,7 @@ G.level4 = {
     surge: { lastSeconds: 120, sizeMul: 1.3 },
   },
   // победа: продержаться 6 минут; поражение — ещё и разрушенная база
-  victory: { kind: 'survive', time: 360, label: 'ДО ПОБЕДЫ' },
+  victory: { kind: 'survive', time: 360, label: 'TIME LEFT' },
   // светлый портал выхода: открывается после победы, в него надо заехать
   exit: { room: 0, at: [1880, 640] },  // во дворе под базой
   // стартовой порции во дворе нет: подиумы и дружочки появляются только за стенами двора, по таймерам (паузы на 15%

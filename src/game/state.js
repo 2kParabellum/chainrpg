@@ -121,7 +121,7 @@ function setAbility(u, key, level = 1) {
 // круг цели вписан в здание. regenTimer — сколько секунд её не задевали (для вспышки при попадании)
 function makeBase(b) {
   return { kind: 'base', type: 'base', x: b.x + b.w / 2, y: b.y + b.h / 2, r: Math.min(b.w, b.h) / 2,
-           vx: 0, vy: 0, hp: b.hp, maxHp: b.hp, regenTimer: 99, cfg: { name: 'База' } };
+           vx: 0, vy: 0, hp: b.hp, maxHp: b.hp, regenTimer: 99, cfg: { name: 'Base' } };
 }
 
 function makeEnemy(type, x, y, room) {

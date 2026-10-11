@@ -378,9 +378,9 @@ function drawNests() {
 
     ctx.textAlign = 'center';
     ctx.font = 'bold 13px monospace';
-    ctx.fillText('ГНЕЗДО', n.x, n.y - r - 12);
+    ctx.fillText('NEST', n.x, n.y - r - 12);
     ctx.font = '12px monospace';
-    ctx.fillText(`волна ×${G.waves.waveSize(cfg, n.wave)} через ${Math.max(0, Math.ceil(n.nextIn))}с`, n.x, n.y + r + 18);
+    ctx.fillText(`wave ×${G.waves.waveSize(cfg, n.wave)} in ${Math.max(0, Math.ceil(n.nextIn))}s`, n.x, n.y + r + 18);
   }
 }
 
@@ -431,11 +431,6 @@ function drawNeutrals() {
   }
 }
 
-// подпись способности с уровнем прокачки: «(стрелок 2)»
-function abilityLabel(u) {
-  if (!u.ability) return '';
-  return ` (${abilities[u.ability].name}${u.abilityLevel > 1 ? ' ' + u.abilityLevel : ''})`;
-}
 
 // уровень прокачки — точки над полоской HP (со второго уровня)
 function drawLevelPips(u) {
@@ -470,7 +465,7 @@ function drawDowned() {
     ctx.fillStyle = color;
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(d.cfg.name + abilityLabel(d), d.x, d.y + d.r + 14);
+    ctx.fillText(shapes.unitName(d), d.x, d.y + d.r + 14);
     drawLevelPips(d);
   }
 }
@@ -811,7 +806,7 @@ function drawExit() {
   ctx.fillStyle = COLORS.exitGlow;
   ctx.font = 'bold 13px monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('ВЫХОД', ex.x, ex.y - r - 12);
+  ctx.fillText('EXIT', ex.x, ex.y - r - 12);
   ctx.globalAlpha = 1;
 }
 

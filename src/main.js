@@ -77,7 +77,7 @@ function keyHint(name) { return screenInfo.isTouch() ? '' : ` (${keyLabel(name)}
 // поражение: Герой выбит или база разрушена — кнопки «Заново» и «В меню» поверх замершей партии
 function showDead() {
   const lostBase = state.base && state.base.hp <= 0;
-  document.getElementById('deadTitle').textContent = lostBase ? 'БАЗА РАЗРУШЕНА' : 'ПОРАЖЕНИЕ';
+  document.getElementById('deadTitle').textContent = lostBase ? 'BASE DESTROYED' : 'DEFEAT';
   showPanel('dead');
 }
 
@@ -152,13 +152,13 @@ function pickCard(i) {
 // экран «уровень пройден»: какой пройден, карточки улучшений и что дальше; после последнего — «вы прошли игру»
 function showWin() {
   const i = LEVELS.indexOf(state.level), next = nextLevel();
-  document.getElementById('winTitle').textContent = next ? `УРОВЕНЬ ${i + 1} ПРОЙДЕН` : 'ВЫ ПРОШЛИ ИГРУ!';
+  document.getElementById('winTitle').textContent = next ? `LEVEL ${i + 1} COMPLETE` : 'YOU BEAT THE GAME!';
   document.getElementById('winText').textContent = next
-    ? `Дальше — уровень ${i + 2}: ${next.name}`
-    : 'Все уровни позади. Спасибо за игру!';
+    ? `Next up — level ${i + 2}: ${next.name}`
+    : 'All levels done. Thanks for playing!';
   const btn = document.getElementById('nextBtn');
   btn.style.display = next ? '' : 'none';
-  btn.textContent = next ? 'Играть дальше' + keyHint('recruit') : '';
+  btn.textContent = next ? 'Continue' + keyHint('recruit') : '';
   offers = next ? rollOffers() : [];
   picked = null;
   afterPick = next ? () => startLevel(next) : null;
@@ -171,11 +171,11 @@ function showWin() {
 function prepareLevel(level, picksLeft, total) {
   if (picksLeft <= 0) { startLevel(level); return; }
   const n = total - picksLeft + 1;
-  document.getElementById('winTitle').textContent = `ПЕРЕД УРОВНЕМ ${LEVELS.indexOf(level) + 1}`;
-  document.getElementById('winText').textContent = `Улучшение ${n} из ${total} — за пропущенные уровни`;
+  document.getElementById('winTitle').textContent = `BEFORE LEVEL ${LEVELS.indexOf(level) + 1}`;
+  document.getElementById('winText').textContent = `Upgrade ${n} of ${total} — for the levels you skipped`;
   const btn = document.getElementById('nextBtn');
   btn.style.display = '';
-  btn.textContent = (picksLeft > 1 ? 'Дальше' : 'Начать') + keyHint('recruit');
+  btn.textContent = (picksLeft > 1 ? 'Next' : 'Start') + keyHint('recruit');
   offers = rollOffers();
   picked = null;
   afterPick = () => prepareLevel(level, picksLeft - 1, total);
@@ -245,8 +245,8 @@ onClick('controlsBtn', () => { syncControlOpts(); showPanel('controls'); });
 
 // настройки сенсорного управления в панели «Управление»: режим джойстика и его сторона
 const MODE_HINTS = {
-  aim: 'Направление: куда тянешь, туда Герой поворачивает и едет. Назад не ездит — тянешь назад, разворачивается дугой.',
-  tank: 'Танк: вверх — газ, влево / вправо — поворот (как W / A / D). Назад Герой не ездит.',
+  aim: 'Steer: the Hero turns toward where you drag and drives that way. No reverse — drag back and the Hero turns around in an arc.',
+  tank: 'Tank: up — throttle, left / right — turn (like W / A / D). The Hero can’t reverse.',
 };
 const optButtons = document.querySelectorAll('.opts button');
 function syncControlOpts() {

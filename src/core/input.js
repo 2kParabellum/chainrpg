@@ -25,8 +25,8 @@ const KEY_COMMANDS = {
 
 // подписи кнопок команд в подсказках: клавиатура / сенсорные кнопки
 const LABELS = {
-  recruit: { keys: 'ПРОБЕЛ', touch: 'ВЗЯТЬ' },
-  drop: { keys: 'X', touch: 'БРОСИТЬ' },
+  recruit: { keys: 'SPACE', touch: 'GRAB' },
+  drop: { keys: 'X', touch: 'DROP' },
   restart: { keys: 'R', touch: '↻' },
 };
 

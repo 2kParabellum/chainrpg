@@ -55,7 +55,7 @@ function ranged(type, fire) {
 }
 
 const shooter = {
-  stats: { name: 'Стрелок', hp: 22, radius: 14, mass: 1, range: 340, cooldown: 1.7, dmg: 5, projSpeed: 300, projRadius: 4 },
+  stats: { name: 'Shooter', hp: 22, radius: 14, mass: 1, range: 340, cooldown: 1.7, dmg: 5, projSpeed: 300, projRadius: 4 },
   wanderSpeed: 45,
   chaseSpeed: 80,
   draw(e, g) {
@@ -77,7 +77,7 @@ shooter.update = ranged(shooter, (e, foe, game) => {
 });
 
 const tower = {
-  stats: { name: 'Катапульта', hp: 55, radius: 20, mass: Infinity, range: 430, cooldown: 3.2,
+  stats: { name: 'Catapult', hp: 55, radius: 20, mass: Infinity, range: 430, cooldown: 3.2,
            dmg: 17,                 // урон в эпицентре
            edgeDmg: 5,              // урон на краю радиуса (между ними урон падает линейно)
            blastRadius: 95,         // радиус поражения
@@ -103,7 +103,7 @@ const tower = {
 tower.update = ranged(tower, (e, foe, game) => game.spawnMortar(e, foe.x, foe.y));
 
 const scorpion = {
-  stats: { name: 'Скорпион', hp: 60, radius: 20, mass: 1.2, range: 456, cooldown: 3.5, dmg: 12,
+  stats: { name: 'Scorpion', hp: 60, radius: 20, mass: 1.2, range: 456, cooldown: 3.5, dmg: 12,
            projSpeed: 218,         // гарпун летит медленно, его видно заранее
            projRadius: 6,
            pullSpeed: 450,         // с какой скоростью тащит выдернутого союзника
@@ -172,7 +172,7 @@ scorpion.update = function (e, dt, chain, game) {
 
 // зомби норовит встать рядом с цепочкой, но не вплотную, и травит всё вокруг облаком
 const zombie = {
-  stats: { name: 'Зомби', hp: 70, radius: 17, mass: 2, aggro: 520, walkSpeed: 62, cooldown: 4.5,
+  stats: { name: 'Zombie', hp: 70, radius: 17, mass: 2, aggro: 520, walkSpeed: 62, cooldown: 4.5,
            standoff: 24,            // просвет между телами: держится рядом, но не вплотную — облако накрывает
                                     // цепочку; меряется от края цели, чтобы так же стоять и у большой базы
            cloudRadius: 95,         // радиус вонючего облака
@@ -232,7 +232,7 @@ const zombie = {
 // Хантер: мелкий и быстрый (чуть медленнее Героя). Видит далеко: заметив ближайшего союзника,
 // бежит к нему, обходя препятствия, и кусает вплотную
 const hunter = {
-  stats: { name: 'Хантер', hp: 40, radius: 10, mass: 0.6, aggro: 720, runSpeed: 165,
+  stats: { name: 'Hunter', hp: 40, radius: 10, mass: 0.6, aggro: 720, runSpeed: 165,
            dmg: 5, cooldown: 0.8,
            reach: 8 },              // с какого просвета между телами достаёт укусом
   wanderSpeed: 60,
@@ -278,7 +278,7 @@ const hunter = {
 };
 
 const bull = {
-  stats: { name: 'Бычок', hp: 88, radius: 18, mass: 3, dmg: 12, aggro: 430, walkSpeed: 55,
+  stats: { name: 'Bull', hp: 88, radius: 18, mass: 3, dmg: 12, aggro: 430, walkSpeed: 55,
            telegraph: 0.7, chargeSpeed: 540, chargeMaxDist: 720, chargeCooldown: 1.6,
            chargeStartSpeed: 150,   // с какой скорости начинается рывок
            chargeAccel: 780,        // разгон во время рывка
@@ -390,7 +390,7 @@ const bull = {
 // Появляется только в волнах «Обороны» и занимает в волне два места (spawnCost); враг волны (e.chasing) без цели
 // идёт к базе на своей скорости шага. Поля chaseSpeed нет нарочно: порталы Playground её не порождают
 const chariot = {
-  stats: { ...bull.stats, name: 'Колесница', aggro: 600,
+  stats: { ...bull.stats, name: 'Chariot', aggro: 600,
            walkSpeed: 50,           // тянет катапульту — медленнее Бычка
            buttDmg: 9, buttCooldown: 1.1,
            reach: 6,                // с какого просвета между телами достаёт
@@ -450,7 +450,7 @@ const chariot = {
 // мина: не блуждает и сама не действует; цепочка её замечает вблизи, она взрывается под ногами
 // и простреливается союзниками, как любой враг — но только после обнаружения
 const mine = {
-  stats: { name: 'Мина', hp: 12, radius: 13, mass: Infinity,
+  stats: { name: 'Mine', hp: 12, radius: 13, mass: Infinity,
            detectRadius: 110,       // с какого расстояния цепочка её замечает
            triggerRadius: 18,       // с какого расстояния срабатывает под ногами
            dmg: 20,                 // урон в эпицентре взрыва
@@ -496,7 +496,7 @@ const mine = {
 // подвижного врага, и тот идёт прямо к игроку. Сам не блуждает, не лечится и всегда «включён».
 // Темп зависит от числа живых порталов: чем меньше их осталось, тем чаще выпускает каждый.
 const portal = {
-  stats: { name: 'Портал', hp: 540, radius: 46, mass: Infinity,
+  stats: { name: 'Portal', hp: 540, radius: 46, mass: Infinity,
            // пауза между выходами врагов у каждого портала; номер = сколько порталов живо (1, 2, 3, 4);
            // при большем числе порталов берётся последнее значение
            spawnEvery: [2.5, 10, 15, 20],
@@ -594,7 +594,7 @@ function drawShield(e, g, extra) {
 // Дверь-мишень (обучение): стоит в проходе из комнаты и не пускает дальше. Сама не действует, не лечится;
 // ближний бой её не берёт — только выстрелы. Рисуется плитой двери во всю высоту прохода с мишенью
 const doorTarget = {
-  stats: { name: 'Дверь-мишень', hp: 60, radius: 20, mass: Infinity,
+  stats: { name: 'Target Door', hp: 60, radius: 20, mass: Infinity,
            slabW: 26, slabH: 120 },     // плита двери (только вид): ширина и высота прохода
   rangedOnly: true,
   noRegen: true,
@@ -620,7 +620,7 @@ const doorTarget = {
 // Турель: неподвижная башня под щитом, часто стреляет по ближайшему союзнику. Щит гасит выстрелы цепочки
 // (усиление «сила» пробивает), а тот, кто подошёл вплотную, обжигается о него, как о щит демона
 const turret = {
-  stats: { name: 'Турель', hp: 90, radius: 22, mass: Infinity, range: 400, cooldown: 0.45, dmg: 4,
+  stats: { name: 'Turret', hp: 90, radius: 22, mass: Infinity, range: 400, cooldown: 0.45, dmg: 4,
            projSpeed: 380, projRadius: 4,
            shieldAuraExtra: 12, shieldContactDmg: 7, shieldContactInterval: 0.4 },
   noRegen: true,
@@ -766,7 +766,7 @@ function bossRamStep(e, dt, chain, game) {
 }
 
 const boss = {
-  stats: { name: 'Демон', hp: 1800, radius: 50, mass: Infinity, walkSpeed: 40, approachStop: 260,
+  stats: { name: 'Demon', hp: 1800, radius: 50, mass: Infinity, walkSpeed: 40, approachStop: 260,
            attackCooldownMin: 2.6, attackCooldownMax: 4.2,
            // атака 1 — катапультный обстрел: от 1 до 7 снарядов (каждый раз случайно), ложатся
            // кучно рядом с игроком (в пределах barrageSpread), а не по всей арене; долгий подлёт
@@ -1307,7 +1307,7 @@ function drawSuck(e, g) {
 }
 
 const kraken = {
-  stats: { name: 'Спрут', hp: 1800, radius: 58, mass: Infinity,
+  stats: { name: 'Kraken', hp: 1800, radius: 58, mass: Infinity,
            regen: 200,              // HP в секунду, всегда, даже под огнём
            keepClear: 340,          // подиумы и дружочки не появляются ближе этого к спруту
            // тентакля: тень полосы длиной tentacleRange от центра (около 2/3 экрана), через tentacleAim — удар.

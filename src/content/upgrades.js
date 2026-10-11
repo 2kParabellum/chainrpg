@@ -13,9 +13,9 @@
 const { COLORS } = G;
 
 const tripleShot = {
-  name: 'Тройной выстрел',
+  name: 'Triple Shot',
   who: 'shooter',
-  desc: 'Каждый 3-й выстрел — ещё два снаряда веером',
+  desc: 'Every 3rd shot adds two more in a spread',
   every: 3,          // каждый какой выстрел тройной
   spread: 0.22,      // угол боковых снарядов от основного, рад
   art(ctx, k) {
@@ -28,9 +28,9 @@ const tripleShot = {
 };
 
 const fireArrows = {
-  name: 'Огненные стрелы',
+  name: 'Fire Shots',
   who: 'shooter',
-  desc: 'Попадание поджигает цель',
+  desc: 'Hits set the target on fire',
   share: 0.6,        // за всё горение цель теряет такую долю урона стрелы
   time: 3,           // сколько секунд горит
   art(ctx, k) {
@@ -42,9 +42,9 @@ const fireArrows = {
 };
 
 const doubleSpark = {
-  name: 'Двойное напряжение',
+  name: 'Double Voltage',
   who: 'spark',
-  desc: 'Молния бьёт две цели сразу',
+  desc: 'Lightning hits two targets at once',
   targets: 2,        // сколько разных целей держит молния
   art(ctx, k) {
     k.ally(46, 60, 'spark', 0);
@@ -55,9 +55,9 @@ const doubleSpark = {
 };
 
 const arc = {
-  name: 'Электрическая дуга',
+  name: 'Long Arc',
   who: 'spark',
-  desc: 'Молния не рвётся дольше',
+  desc: 'Lightning holds on from farther away',
   breakMul: 1.25,    // расстояние, на котором молния рвётся, больше во столько раз; заметить цель — как прежде
   art(ctx, k) {
     k.ally(36, 60, 'spark', 0);
@@ -69,9 +69,9 @@ const arc = {
 };
 
 const medicRegen = {
-  name: 'Регенерация',
+  name: 'Self-Heal',
   who: 'medic',
-  desc: 'Медик сам понемногу лечится',
+  desc: 'The Doc slowly heals itself',
   share: 0.5,        // в секунду — такая доля его лечения в секунду
   art(ctx, k) {
     k.ally(100, 64, 'medic', -Math.PI / 2);
@@ -81,9 +81,9 @@ const medicRegen = {
 };
 
 const adrenaline = {
-  name: 'Адреналин',
+  name: 'Adrenaline',
   who: 'medic',
-  desc: 'Сильнее лечит тяжело раненых',
+  desc: 'Heals badly wounded mates more',
   below: 0.4,        // цель с долей HP ниже этой ..
   mul: 1.5,          // .. лечится во столько раз сильнее
   art(ctx, k) {
@@ -96,9 +96,9 @@ const adrenaline = {
 };
 
 const spikedArmor = {
-  name: 'Шипастая броня',
+  name: 'Spiked Armor',
   who: 'spear',
-  desc: 'Укусы возвращаются врагу',
+  desc: 'Melee hits hurt the attacker back',
   art(ctx, k) {
     k.ally(70, 64, 'spear', 0);
     k.spikes(70, 64, 22);
@@ -110,9 +110,9 @@ const spikedArmor = {
 };
 
 const cover = {
-  name: 'Прикрытие',
+  name: 'Cover',
   who: 'spear',
-  desc: 'Соседи копейщика получают меньше урона',
+  desc: 'The Brawler’s neighbors take less damage',
   cut: 0.3,          // на такую долю меньше урона от любых атак получают оба соседа копейщика в цепочке (не он сам)
   art(ctx, k) {
     k.ally(56, 64, null, 0);
@@ -126,9 +126,9 @@ const cover = {
 };
 
 const march = {
-  name: 'Марш',
+  name: 'March',
   who: 'hero',
-  desc: 'Длинная цепочка меньше тормозит',
+  desc: 'A long chain slows you down less',
   links: 1,          // замедление начинается на столько звеньев позже
   art(ctx, k) {
     for (let i = 5; i >= 1; i--) k.ally(150 - i * 24, 64, null, 0);
@@ -138,9 +138,9 @@ const march = {
 };
 
 const accumulate = {
-  name: 'Аккумулирование',
+  name: 'Stockpile',
   who: 'hero',
-  desc: 'Три усиления разом вместо двух',
+  desc: 'Three boosts at once instead of two',
   extra: 1,          // сколько усилений сверх CONFIG.BUFFS.maxActive держит звено
   art(ctx, k) {
     k.hero(100, 62, -Math.PI / 2);
@@ -152,9 +152,9 @@ const accumulate = {
 };
 
 const ram = {
-  name: 'Таран',
+  name: 'Ram',
   who: 'hero',
-  desc: 'Герой бьёт врагов, врезаясь в них',
+  desc: 'The Hero damages enemies by ramming them',
   dmg: 30,           // урон на полной скорости хода; медленнее — меньше
   minSpeed: 40,      // медленнее этого (скорость сближения) не бьёт
   cooldown: 0.5,     // одного врага — не чаще

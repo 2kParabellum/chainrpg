@@ -85,11 +85,11 @@ function sizeReport(cssW, cssH, dpr) {
   };
   const r = Math.round;
   return [
-    vv ? `vv ${r(vv.width)}×${r(vv.height)} x${vv.scale.toFixed(2)} @${r(vv.offsetLeft)},${r(vv.offsetTop)}` : 'vv нет',
+    vv ? `vv ${r(vv.width)}×${r(vv.height)} x${vv.scale.toFixed(2)} @${r(vv.offsetLeft)},${r(vv.offsetTop)}` : 'no vv',
     `inner ${window.innerWidth}×${window.innerHeight}`, `client ${de.clientWidth}×${de.clientHeight}`,
     `screen ${screen.width}×${screen.height}`, `svh ${vh('svh')} lvh ${vh('lvh')}`,
     `safe ${r(ins.t)},${r(ins.r)},${r(ins.b)},${r(ins.l)}`,
-    `сцена ${cssW}×${cssH} вид ${CONFIG.VIEW.w}×${CONFIG.VIEW.h} dpr ${dpr}${standalone ? ' домой' : ''}`,
+    `stage ${cssW}×${cssH} view ${CONFIG.VIEW.w}×${CONFIG.VIEW.h} dpr ${dpr}${standalone ? ' home' : ''}`,
   ].join(' | ');
 }
 

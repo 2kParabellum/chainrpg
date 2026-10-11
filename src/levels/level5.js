@@ -68,15 +68,15 @@ const ROOM_PLAN = {
 };
 
 G.level5 = {
-  name: 'Логово',
-  blurb: 'Квадратный зал: прикопанный спрут в центре и четыре гнезда',
-  goal: 'Убей спрута: он быстро лечится — бей всей цепочкой разом',
+  name: 'Lair',
+  blurb: 'A square hall: a buried kraken in the middle and four nests',
+  goal: 'Kill the kraken: it heals fast — hit it with the whole chain at once',
   geometry: { kind: 'rect', width: 2368, height: 2368, wall: 40 },
   spawn: { room: 0, at: [563, 1725], heading: -Math.PI / 4 }, // в левом нижнем углу, у подиума скорости, лицом к центру
   // враги гнёзд — как на «Обороне»: подвижные типы с теми же весами (колесница занимает два места)
   enemyPool: ['shooter', 'bull', 'scorpion', 'zombie', 'hunter', 'chariot'],
   enemyWeights: { shooter: 4, zombie: 2, hunter: 2, bull: 1, scorpion: 1, chariot: 1 },
-  zoneNames: ['ЛОГОВО'],
+  zoneNames: ['LAIR'],
   // гнёзда: у каждого свой таймер. Первая волна гнезда k — на firstAt + k·stagger секунде, дальше пауза между
   // волнами сокращается от interval до ramp.to за ramp.time секунд партии. Размер n-й волны гнезда (с нуля) —
   // first + grow·n с округлением вниз. Враги волн идут прямо к Герою (базы здесь нет)
@@ -90,7 +90,7 @@ G.level5 = {
     maxAlive: 36,
   },
   // победа: спрут уничтожен; в строке состояния — его HP
-  victory: { kind: 'destroyType', type: 'kraken', label: 'СПРУТ', showHp: true },
+  victory: { kind: 'destroyType', type: 'kraken', label: 'KRAKEN', showHp: true },
   exit: { room: 0, at: [C, C] },   // на месте спрута
   // спрута надо сбивать разом, поэтому профессий и дружочков чуть больше обычного, «сила» выпадает чаще.
   // anywhere — подиумы и дружочки появляются в случайном месте зала, а не около Героя

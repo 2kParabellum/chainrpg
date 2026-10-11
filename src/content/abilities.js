@@ -17,7 +17,7 @@ const { COLORS } = G;
 
 // Стрелок: дальняя атака вместо ближней, бьёт на дальность лука
 const shooter = {
-  name: 'стрелок',
+  name: 'Gun Mate',
   color: COLORS.shooter,
   weapons: { bow: {} },
   // прокачка: дальность и скорость стрельбы
@@ -42,7 +42,7 @@ const shooter = {
 
 // Медик: лечит цепочку и не атакует
 const medic = {
-  name: 'медик',
+  name: 'Doc',
   color: COLORS.medic,
   weapons: { heal: {} },
   // прокачка: сила лечения, дальность и частота
@@ -64,7 +64,7 @@ const medic = {
 
 // Копейщик: раз в 2 секунды сильно бьёт в две небольшие зоны по бокам от себя
 const spear = {
-  name: 'копейщик',
+  name: 'Brawler',
   color: COLORS.spear,
   weapons: { spear: {} },
   // прокачка: HP и урон
@@ -89,7 +89,7 @@ const spear = {
 
 // Искра: молния средней дальности, которая присасывается к врагу и жжёт его, пока он рядом
 const spark = {
-  name: 'искра',
+  name: 'Spark Mate',
   color: COLORS.spark,
   weapons: { spark: {} },
   // прокачка: урон
@@ -130,8 +130,8 @@ const spark = {
 //                                 не чаще, чем раз в contactInterval секунд
 //   revive     — true: если HP звена падает до 0, оно не погибает, а остаётся с 1 HP
 const speed = {
-  name: 'скорость',
-  desc: 'быстрее ход и атаки',
+  name: 'speed',
+  desc: 'faster movement and attacks',
   color: COLORS.speed,
   duration: 30,
   move: 1.3, rate: 1.25,
@@ -149,8 +149,8 @@ const speed = {
 };
 
 const power = {
-  name: 'сила',
-  desc: 'больше урона и здоровья',
+  name: 'power',
+  desc: 'more damage and health',
   color: COLORS.power,
   duration: 30,
   dmg: 1.5, hp: 1.3,
@@ -170,8 +170,8 @@ const power = {
 
 // Регенерация: сильно лечит себя, пока действует
 const regen = {
-  name: 'регенерация',
-  desc: 'быстро лечит само себя',
+  name: 'regen',
+  desc: 'heals itself quickly',
   color: COLORS.regen,
   duration: 15,
   regenRate: 18,
@@ -186,8 +186,8 @@ const regen = {
 
 // Крепкость: пока действует, звено нельзя выбить из цепочки никаким способом
 const sturdy = {
-  name: 'крепкость',
-  desc: 'звено нельзя выбить из цепочки',
+  name: 'grip',
+  desc: 'can’t be knocked out of the chain',
   color: COLORS.sturdy,
   duration: 30,
   sturdy: true,
@@ -206,8 +206,8 @@ const sturdy = {
 
 // Шипастость: наносит урон каждому врагу, который касается тела
 const spiky = {
-  name: 'шипастость',
-  desc: 'ранит врагов, которые касаются тела',
+  name: 'spikes',
+  desc: 'hurts enemies that touch it',
   color: COLORS.spiky,
   duration: 30,
   contactDmg: 24,
@@ -225,8 +225,8 @@ const spiky = {
 
 // Воля: пока действует, смертельный урон не убивает звено — оно остаётся с 1 HP
 const will = {
-  name: 'воля',
-  desc: 'смертельный удар оставляет 1 HP',
+  name: 'grit',
+  desc: 'a killing blow leaves 1 HP',
   color: COLORS.will,
   duration: 20,
   revive: true,

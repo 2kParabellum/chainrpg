@@ -56,5 +56,11 @@ function allyColor(u) {
   return u.ability && !t.anchor ? abilities[u.ability].color : t.color;
 }
 
-G.shapes = { canvas, ctx, screenTransform, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor };
+// подпись союзника: со способностью — её название и уровень прокачки («Gun Mate 2»), без неё — имя типа («Mate», «Hero»)
+function unitName(u) {
+  if (!u.ability) return u.cfg.name;
+  return abilities[u.ability].name + (u.abilityLevel > 1 ? ' ' + u.abilityLevel : '');
+}
+
+G.shapes = { canvas, ctx, screenTransform, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor, unitName };
 })(window.Game = window.Game || {});

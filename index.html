@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
@@ -147,7 +147,7 @@
   @media (hover: hover) { .tIcon:hover { background: rgba(60,60,72,0.9); } }
   .tIcon.pressed { background: rgba(80,80,95,0.9); }
   #tRestart.armed { width: auto; padding: 0 10px; font-size: 13px; background: rgba(150,50,50,0.85); }
-  #tRestart.armed::after { content: ' ещё раз — заново'; }
+  #tRestart.armed::after { content: ' again to restart'; }
   #panelWin h1 { color: #fff2b8; }
   #panelWin p { margin: 0 0 10px; font-size: 16px; color: #c8c8d2; }
   #panelWin p.pickHint { margin: 4px 0 0; font-size: 13px; color: #8a8a95; }
@@ -178,81 +178,81 @@
 <body>
   <div id="debug"></div>
   <div id="safeProbe"></div>
-  <div id="rotate"><div class="phone"></div>Поверни телефон горизонтально</div>
+  <div id="rotate"><div class="phone"></div>Rotate your phone to landscape</div>
   <div id="stage">
     <canvas id="c"></canvas>
     <div id="touch">
       <div id="tStick"><div class="knob"></div></div>
       <div class="tPad">
-        <button id="tGrab" class="tBtn">ВЗЯТЬ</button>
-        <button id="tDrop" class="tBtn">БРОСИТЬ</button>
+        <button id="tGrab" class="tBtn">GRAB</button>
+        <button id="tDrop" class="tBtn">DROP</button>
       </div>
     </div>
     <div id="corner">
-      <button id="tRestart" class="tIcon" title="Заново (R)">↻</button>
-      <button id="tPause" class="tIcon" title="Пауза (P)">❚❚</button>
+      <button id="tRestart" class="tIcon" title="Restart (R)">↻</button>
+      <button id="tPause" class="tIcon" title="Pause (P)">❚❚</button>
     </div>
     <div id="overlay">
       <div id="panelMain" class="panel active">
         <h1>CHAIN</h1>
-        <button id="startBtn">Играть</button>
-        <button id="controlsBtn">Управление</button>
-        <button id="levelsBtn">Выбор уровня</button>
-        <p id="homeHint">Во весь экран, без панелей браузера: «Поделиться» <span class="share">⬆</span> → «На экран Домой»,
-          потом запускай игру с иконки</p>
+        <button id="startBtn">Play</button>
+        <button id="controlsBtn">Controls</button>
+        <button id="levelsBtn">Select Level</button>
+        <p id="homeHint">Full screen without browser bars: tap Share <span class="share">⬆</span> → “Add to Home Screen”,
+          then launch the game from the icon</p>
       </div>
       <div id="panelLevels" class="panel">
-        <h2>Выбор уровня</h2>
+        <h2>Select Level</h2>
         <div id="levelList"></div>
-        <button id="levelsBackBtn">Назад</button>
+        <button id="levelsBackBtn">Back</button>
       </div>
       <div id="panelWin" class="panel">
         <h1 id="winTitle"></h1>
         <p id="winText"></p>
         <div id="cards"></div>
-        <p class="pickHint">Выбери улучшение<span class="kbd-only"> (мышью или 1 / 2 / 3)</span> — оно останется до конца игры</p>
+        <p class="pickHint">Pick an upgrade<span class="kbd-only"> (click or press 1 / 2 / 3)</span> — it stays with you until the end of the run</p>
         <div class="btnRow">
           <button id="nextBtn"></button>
-          <button id="winMenuBtn">В меню</button>
+          <button id="winMenuBtn">Main Menu</button>
         </div>
       </div>
       <div id="panelDead" class="panel">
-        <h1 id="deadTitle">ПОРАЖЕНИЕ</h1>
+        <h1 id="deadTitle">DEFEAT</h1>
         <div class="btnRow">
-          <button id="deadRestartBtn">Заново<span class="kbd-only"> (R)</span></button>
-          <button id="deadMenuBtn">В меню</button>
+          <button id="deadRestartBtn">Restart<span class="kbd-only"> (R)</span></button>
+          <button id="deadMenuBtn">Main Menu</button>
         </div>
       </div>
       <div id="panelPause" class="panel">
-        <h1>ПАУЗА</h1>
-        <button id="resumeBtn">Продолжить</button>
-        <button id="pauseRestartBtn">Заново</button>
-        <button id="pauseMenuBtn">В меню</button>
+        <h1>PAUSED</h1>
+        <button id="resumeBtn">Resume</button>
+        <button id="pauseRestartBtn">Restart</button>
+        <button id="pauseMenuBtn">Main Menu</button>
       </div>
       <div id="panelControls" class="panel">
-        <h2>Управление</h2>
+        <h2>Controls</h2>
         <table class="controls kbd-only">
-          <tr><td>W</td><td>ехать вперёд (можно и стрелкой); назад Герой не ездит, отпустил — тормозит</td></tr>
-          <tr><td>A / D</td><td>поворот налево / направо</td></tr>
-          <tr><td>ПРОБЕЛ</td><td>присоединить дружочка, поднять выбитого (подиумы подбираются сами, без пробела)</td></tr>
-          <tr><td>X</td><td>бросить последнего дружочка цепочки (Героя бросить нельзя); если Герой стоит на кнопке — дружочек остаётся на кнопке и держит её</td></tr>
-          <tr><td>R</td><td>начать заново</td></tr>
-          <tr><td>ESC</td><td>пауза</td></tr>
+          <tr><td>W</td><td>drive forward (or the up arrow); the Hero can’t reverse — let go to brake</td></tr>
+          <tr><td>A / D</td><td>turn left / right</td></tr>
+          <tr><td>SPACE</td><td>recruit a mate or pick up a knocked-out one (pads are picked up just by driving over them)</td></tr>
+          <tr><td>X</td><td>drop the last mate in the chain (the Hero can’t be dropped); if the Hero is on a button, the mate stays on it and holds it down</td></tr>
+          <tr><td>R</td><td>restart the level</td></tr>
+          <tr><td>P / ESC</td><td>pause</td></tr>
         </table>
         <table class="controls touch-only">
-          <tr><td>ДЖОЙСТИК</td><td>коснись своей половины экрана и веди пальцем — джойстик появится там, где коснулся</td></tr>
-          <tr><td>ВЗЯТЬ</td><td>присоединить дружочка, поднять выбитого (подиумы подбираются сами)</td></tr>
-          <tr><td>БРОСИТЬ</td><td>бросить последнего дружочка; если Герой на кнопке — дружочек остаётся держать её</td></tr>
-          <tr><td>❚❚ &nbsp; ↻</td><td>пауза; начать заново (нажать два раза)</td></tr>
+          <tr><td>JOYSTICK</td><td>touch your half of the screen and drag — the joystick appears where you touch</td></tr>
+          <tr><td>GRAB</td><td>recruit a mate or pick up a knocked-out one (pads are picked up by driving over them)</td></tr>
+          <tr><td>DROP</td><td>drop the last mate; if the Hero is on a button, the mate stays to hold it down</td></tr>
+          <tr><td>❚❚ &nbsp; ↻</td><td>pause; restart (tap twice)</td></tr>
         </table>
         <div class="opts touch-only">
-          <span>Джойстик</span><button data-mode="aim">Направление</button><button data-mode="tank">Танк</button>
-          <span>Джойстик</span><button data-mirror="0">справа</button><button data-mirror="1">слева</button>
+          <span>Joystick</span><button data-mode="aim">Steer</button><button data-mode="tank">Tank</button>
+          <span>Side</span><button data-mirror="0">right</button><button data-mirror="1">left</button>
         </div>
         <p id="modeHint" class="touch-only"></p>
-        <button id="backBtn">Назад</button>
+        <button id="backBtn">Back</button>
       </div>
-      <div id="build">сборка 10</div>
+      <div id="build">build 11</div>
     </div>
   </div>
   <script src="src/core/debug.js"></script>

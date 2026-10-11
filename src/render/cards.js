@@ -11,7 +11,7 @@ const W = 200, H = 120;  // размер рисунка карточки
 // цвет и подпись того, чьё улучшение
 function whoOf(key) {
   const who = upgrades[key].who;
-  if (who === 'hero') return { color: COLORS.hero, label: 'ГЕРОЙ' };
+  if (who === 'hero') return { color: COLORS.hero, label: 'HERO' };
   return { color: abilities[who].color, label: abilities[who].name.toUpperCase() };
 }
 

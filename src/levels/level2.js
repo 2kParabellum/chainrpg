@@ -101,8 +101,8 @@ const ZONE_PLANS = [
 
 G.level2 = {
   name: 'Playground',
-  blurb: 'Большое поле из девяти зон: разрушь все четыре портала в углах',
-  goal: 'Разрушь все четыре портала в углах поля',
+  blurb: 'A big field of nine zones: destroy all four portals in the corners',
+  goal: 'Destroy all four portals in the corners of the field',
   // поле примерно 4 × 4 экрана, разбитое на сетку 3 × 3 зон; вокруг каждого стыка зон стоят
   // четыре короткие стенки: сам стык свободен (dividerGap — расстояние от центра стыка до начала
   // стенки), длина и толщина стенки в пикселях
@@ -113,10 +113,10 @@ G.level2 = {
   // относительная частота типов врагов (и в зонах, и у порождённых порталами; без веса — 1):
   // стрелков больше всех, быков и скорпионов меньше остальных
   enemyWeights: { shooter: 4, tower: 2, zombie: 2, hunter: 2, bull: 1, scorpion: 1 },
-  zoneNames: ['СЕВЕРО-ЗАПАД', 'СЕВЕР', 'СЕВЕРО-ВОСТОК', 'ЗАПАД', 'ЦЕНТР', 'ВОСТОК',
-              'ЮГО-ЗАПАД', 'ЮГ', 'ЮГО-ВОСТОК'],
+  zoneNames: ['NORTHWEST', 'NORTH', 'NORTHEAST', 'WEST', 'CENTER', 'EAST',
+              'SOUTHWEST', 'SOUTH', 'SOUTHEAST'],
   // победа: все порталы разрушены
-  victory: { kind: 'destroyType', type: 'portal', label: 'ПОРТАЛОВ' },
+  victory: { kind: 'destroyType', type: 'portal', label: 'PORTALS' },
   // светлый портал выхода: открывается после победы, в него надо заехать
   exit: { room: 4, at: [0.5, 0.5] },   // в центре поля, где старт
   rooms: ZONE_PLANS,

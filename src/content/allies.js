@@ -19,7 +19,7 @@ const { COLORS } = G;
 const hero = {
   color: COLORS.hero,
   anchor: true,
-  stats: { name: 'Герой', hp: 120, radius: 14, mass: 2 },
+  stats: { name: 'Hero', hp: 120, radius: 14, mass: 2 },
   base: { weapons: {} },
   // треугольник-«нос» показывает направление движения (heading), а не взгляд оружия
   mark(u, f, ctx) {
@@ -36,7 +36,7 @@ const hero = {
 // Дружочек: обычный союзник, в базовом виде бьёт кулаком в ближнем бою
 const buddy = {
   color: COLORS.buddy,
-  stats: { name: 'Дружочек', hp: 80, radius: 12, mass: 1.2 },
+  stats: { name: 'Mate', hp: 80, radius: 12, mass: 1.2 },
   base: { weapons: { fist: {} } },
   // точка-«кулачок» впереди
   mark(u, f, ctx) {
