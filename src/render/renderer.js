@@ -713,6 +713,8 @@ function drawPadLinks() {
     if (!pad) continue;
     // серый подиум профессии отдать некому — и подсказка «кто подберёт» не нужна
     if (!G.buffs[pad.ability] && !G.chain.jobTarget(pad.ability)) continue;
+    // подиум усиления берёт только Герой
+    if (G.buffs[pad.ability] && u !== state.party[0]) continue;
     const def = G.buffs[pad.ability] || abilities[pad.ability];
     const cx = pad.x + pad.w / 2, cy = pad.y + pad.h / 2;
     const pulse = 0.75 + 0.25 * Math.sin(state.time * 6);

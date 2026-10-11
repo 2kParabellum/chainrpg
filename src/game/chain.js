@@ -91,7 +91,7 @@ function maxBuffs() {
   return CONFIG.BUFFS.maxActive + (up ? up.extra : 0);
 }
 
-// временное усиление; у звена не больше maxBuffs() разом: лишнее снимается самое давнее
+// временное усиление Герою; у него не больше maxBuffs() разом: лишнее снимается самое давнее
 // по времени взятия. Повторное взятие того же обновляет таймер и делает его самым свежим
 function giveBuff(u, key) {
   const def = G.buffs[key];
@@ -101,20 +101,37 @@ function giveBuff(u, key) {
   u.buffOrder.push(key);
   while (u.buffOrder.length > maxBuffs()) endBuff(u, u.buffOrder[0]);
   recalcStats(u);
-  if (fresh) state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 8, life: 0.4, color: def.color });
+  syncChainBuffs();
+  if (fresh) for (const a of state.party) state.effects.push({ type: 'ring', x: a.x, y: a.y, r: a.r + 8, life: 0.4, color: def.color });
 }
 
-// таймеры усилений (и у цепочки, и у выбитых); регенерация тикает каждый кадр, пока активна
+// звено получает ровно эти усиления (копию таймеров); характеристики пересчитываются, только если набор сменился
+function copyBuffs(u, buffs, order) {
+  const same = u.buffOrder.length === order.length && order.every((k, i) => u.buffOrder[i] === k);
+  u.buffs = { ...buffs };
+  u.buffOrder = order.slice();
+  if (!same) recalcStats(u);
+}
+
+// усиления держит Герой, а действуют они на всю цепочку: звенья получают копию его таймеров;
+// выбитое из цепи звено их теряет, подобранное обратно — снова получает
+function syncChainBuffs() {
+  const lead = leader();
+  for (const u of state.party) if (u !== lead) copyBuffs(u, lead.buffs, lead.buffOrder);
+  for (const d of state.downed) if (d.buffOrder.length) copyBuffs(d, {}, []);
+}
+
+// таймеры усилений Героя; регенерация тикает каждый кадр каждому звену цепочки, пока активна
 function updateBuffs(dt) {
-  for (const u of state.party.concat(state.downed)) {
-    for (const key of Object.keys(u.buffs)) {
-      if (!(u.buffs[key] > 0)) continue;
-      const def = G.buffs[key];
-      if (def.regenRate) u.hp = Math.min(u.maxHp, u.hp + def.regenRate * dt);
-      u.buffs[key] -= dt;
-      if (u.buffs[key] <= 0) endBuff(u, key);
-    }
+  const lead = leader();
+  for (const key of Object.keys(lead.buffs)) {
+    if (!(lead.buffs[key] > 0)) continue;
+    const def = G.buffs[key];
+    if (def.regenRate) for (const u of state.party) u.hp = Math.min(u.maxHp, u.hp + def.regenRate * dt);
+    lead.buffs[key] -= dt;
+    if (lead.buffs[key] <= 0) endBuff(lead, key);
   }
+  syncChainBuffs();
 }
 
 // звено защищено усилением «крепкость» (или другим с флагом sturdy), пока таймер не истёк
@@ -139,8 +156,8 @@ function jobTarget(key) {
 }
 
 // автоподбор подиумов при касании, пробел не нужен.
-// Усиление получает каждое коснувшееся звено (и Герой); подиум одноразовый: касание запускает (и продлевает)
-// таймер исчезновения, так что вся цепочка успевает проехать, а после хвоста он гаснет.
+// Подиум усиления берёт только Герой (касание других звеньев не в счёт), а действует усиление на всю цепочку
+// (см. syncChainBuffs); подиум одноразовый: касание Героя запускает таймер исчезновения, и он гаснет.
 // Профессию получает одно звено (см. jobTarget), не обязательно коснувшееся: подиум сразу исчезает.
 // Постоянный подиум усиления (pad.permanent) берётся так же, но не исчезает, а гаснет на перезарядку (см. game/pads.js)
 function touchPads() {
@@ -148,11 +165,12 @@ function touchPads() {
     const pad = padUnder(u);
     if (!pad) continue;
     if (G.buffs[pad.ability]) {
+      if (u !== leader()) continue;
       markPadUsed(pad);
-      // каждое звено берёт с одного подиума один раз, хотя касается его много кадров подряд
+      // Герой берёт с одного подиума один раз, хотя касается его много кадров подряд
       if (pad.takenBy.includes(u)) continue;
-      // о взятом усилении — надпись на экране, один раз на подиум (первым его касается Герой)
-      if (!pad.takenBy.length) state.notice = { key: pad.ability, at: state.time };
+      // о взятом усилении — надпись на экране
+      state.notice = { key: pad.ability, at: state.time };
       pad.takenBy.push(u);
       giveBuff(u, pad.ability);
       continue;
@@ -191,6 +209,7 @@ function tryRecruit() {
   u.prevTarget = null;
   u.drag = null;
   state.party.push(u);
+  syncChainBuffs();
 }
 
 // выбить из цепочки или утащить можно только рядового союзника: Героя — нельзя,
@@ -208,6 +227,7 @@ function knockOutAlly(a, angle, speed) {
   a.vy = Math.sin(angle) * speed;
   a.cd = 0;
   a.prevTarget = null;
+  copyBuffs(a, {}, []); // усиления цепочки выбитому больше не достаются
   state.downed.push(a);
 }
 
