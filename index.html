@@ -36,8 +36,12 @@
   /* телефон (режим касаний): игра на весь экран, без полоски сверху, в обход выреза экрана */
   body.touch { position: fixed; inset: 0; overflow: hidden; }
   body.touch #bar { display: none; }
-  /* положение и размер сцены на телефоне задаёт core/screen.js — по видимой области экрана минус вырез */
-  body.touch #stage { position: fixed; left: 0; top: 0; touch-action: none; }
+  /* сцена на телефоне — весь экран страницы минус вырез; размер берётся из макета, а не из видимой области:
+     на iPhone она меняется от зума и при повороте врёт */
+  body.touch #stage { position: fixed; top: env(safe-area-inset-top); right: env(safe-area-inset-right);
+                      bottom: env(safe-area-inset-bottom); left: env(safe-area-inset-left);
+                      width: auto; height: auto; touch-action: none; }
+  body.touch #c { width: 100% !important; height: 100% !important; }
   #safeProbe { position: fixed; left: 0; top: 0; visibility: hidden; pointer-events: none;
                padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
   #rotate { display: none; position: fixed; inset: 0; z-index: 50; background: #0e0e10; color: #c8c8d2;
@@ -251,7 +255,7 @@
         <p id="modeHint" class="touch-only"></p>
         <button id="backBtn">Назад</button>
       </div>
-      <div id="build">сборка 8</div>
+      <div id="build">сборка 9</div>
     </div>
   </div>
   <script src="src/core/debug.js"></script>

@@ -45,10 +45,16 @@ function safeInsets() {
   return { t: px(cs.paddingTop), r: px(cs.paddingRight), b: px(cs.paddingBottom), l: px(cs.paddingLeft) };
 }
 
+// размер страницы без учёта зума (layout viewport): на него зум и панели браузера после поворота не влияют
+function layoutSize() {
+  const de = document.documentElement;
+  return { w: de.clientWidth || window.innerWidth, h: de.clientHeight || window.innerHeight };
+}
+
 // телефон держат вертикально (экран выше, чем шире)
 function isPortrait() {
-  const v = viewport();
-  return touch && v.h > v.w;
+  const l = layoutSize();
+  return touch && l.h > l.w;
 }
 // вертикально, а вертикаль выключена (CONFIG.SCREEN.allowPortrait) — плашка «Поверни телефон» и пауза
 function needsRotate() { return isPortrait() && !CONFIG.SCREEN.allowPortrait; }
@@ -58,7 +64,7 @@ function needsRotate() { return isPortrait() && !CONFIG.SCREEN.allowPortrait; }
 let zoomResets = 0;
 function resetZoom() {
   const vv = window.visualViewport;
-  if (!touch || !vv || Math.abs(vv.scale - 1) < 0.01 || zoomResets >= 3) return;
+  if (!touch || !vv || Math.abs(vv.scale - 1) < 0.01 || zoomResets >= 3) return; // счётчик обнуляет refit()
   zoomResets++;
   const content = viewportMeta.getAttribute('content');
   viewportMeta.setAttribute('content', content.includes('initial-scale=1.0')
@@ -100,13 +106,9 @@ function fit() {
   const S = CONFIG.SCREEN;
   let cssW, cssH;
   if (touch) {
-    // сцена — ровно видимая область без выреза
-    const v = viewport(), ins = safeInsets();
-    cssW = Math.max(1, Math.round(v.w - ins.l - ins.r));
-    cssH = Math.max(1, Math.round(v.h - ins.t - ins.b));
-    Object.assign(stage.style, {
-      left: Math.round(v.x + ins.l) + 'px', top: Math.round(v.y + ins.t) + 'px', width: cssW + 'px', height: cssH + 'px',
-    });
+    // сцена — весь экран страницы минус вырез (растягивает CSS, здесь только читаем размер)
+    cssW = Math.max(1, stage.clientWidth);
+    cssH = Math.max(1, stage.clientHeight);
     // страница не должна уезжать прокруткой (iPhone прокручивает её при повороте и показе панелей)
     if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
     // объекты одного размера на любом телефоне и при любом положении: масштаб считаем по короткой стороне;
@@ -116,12 +118,11 @@ function fit() {
     CONFIG.VIEW.w = Math.round(cssW / k);
     CONFIG.VIEW.h = Math.round(cssH / k);
   } else {
-    Object.assign(stage.style, { left: '', top: '', width: '', height: '' });
     cssW = S.desktop.w; cssH = S.desktop.h;
     CONFIG.VIEW.w = S.desktop.w; CONFIG.VIEW.h = S.desktop.h;
   }
   const dpr = Math.min(window.devicePixelRatio || 1, S.maxDpr);
-  canvas.style.width = cssW + 'px';
+  canvas.style.width = cssW + 'px';   // на телефоне CSS растягивает канвас на всю сцену (100%)
   canvas.style.height = cssH + 'px';
   canvas.width = Math.round(cssW * dpr);
   canvas.height = Math.round(cssH * dpr);
@@ -134,8 +135,8 @@ function fit() {
 
 // всё, от чего зависит раскладка: если поменялось, а события браузер не прислал — пересчитать
 function sizeKey() {
-  const v = viewport();
-  return [touch, v.x, v.y, v.w, v.h, window.innerWidth, window.innerHeight, window.devicePixelRatio].join(',');
+  const v = viewport(), l = layoutSize();
+  return [touch, v.w, v.h, l.w, l.h, stage.clientWidth, stage.clientHeight, window.devicePixelRatio].join(',');
 }
 
 function onChange(fn) { listeners.push(fn); }
@@ -152,7 +153,7 @@ function enterFullscreen() {
 }
 
 // пересчёт после поворота: часть браузеров (iPhone) сообщает новый размер не сразу, а то и без события
-function refit() { fit(); for (const ms of [100, 300, 700, 1500]) setTimeout(fit, ms); }
+function refit() { zoomResets = 0; fit(); for (const ms of [100, 300, 700, 1500]) setTimeout(fit, ms); }
 window.addEventListener('resize', refit);
 window.addEventListener('orientationchange', refit);
 if (window.visualViewport) {
