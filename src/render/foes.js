@@ -21,7 +21,7 @@ const LOOK = {
   chariot: { col: '#773421', sh: '#300f0a', eye: C.red, edge: 'wobble' },
   hunter: { col: '#550f0a', sh: '#300f0a', eye: C.gold, edge: 'spiky' },
   zombie: { col: '#39571c', sh: '#1f240a', eye: C.gold, edge: 'drip' },
-  scorpion: { col: '#724113', sh: '#36170c', eye: C.red, edge: 'wobble' },
+  scorpion: { col: '#724113', sh: '#36170c', eye: C.red, edge: 'wobble' }, // громила с большой лапой
 };
 
 const anim = new WeakMap();
@@ -147,25 +147,13 @@ function draw(e) {
   ctx.translate(x, y);
   ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
 
-  // хвост Скорпиона и лапки
-  if (type === 'scorpion') {
-    const segs = 5;
-    for (let i = segs; i >= 1; i--) {
-      const k = i / segs, ang = Math.PI * (0.15 + 0.75 * k), sw = Math.sin(t * 3 + i * 0.5) * 0.1;
-      const px = -face * Math.cos(ang + sw) * r * 1.2, py = r * 0.1 - Math.sin(ang + sw) * r * 1.25;
-      ctx.fillStyle = i % 2 ? L.col : L.sh; ell(px, py, r * (0.3 - k * 0.08), r * (0.3 - k * 0.08)); ctx.fill(); ctx.stroke();
-      if (i === segs) {
-        ctx.fillStyle = C.red; ctx.beginPath(); ctx.moveTo(px - face * r * 0.1, py - r * 0.2); ctx.lineTo(px + face * r * 0.45, py - r * 0.05);
-        ctx.lineTo(px, py + r * 0.15); ctx.closePath(); ctx.fill(); ctx.stroke();
-      }
-    }
-  }
+  // лапки
   if (type !== 'shooter' && type !== 'zombie') {
-    const n = type === 'scorpion' ? 3 : 2, fast = a.speed > 10;
+    const n = 2, fast = a.speed > 10;
     ctx.fillStyle = L.sh;
     for (let i = 0; i < n; i++) for (const s of [-1, 1]) {
       const lift = fast ? Math.max(0, Math.sin(a.ph * 2.5 + i + (s > 0 ? Math.PI : 0))) * r * 0.14 : 0;
-      ell(s * r * (0.35 + i * 0.3) * (type === 'scorpion' ? 1.2 : 1), r * 0.75 - lift, r * 0.18, r * 0.14); ctx.fill(); ctx.stroke();
+      ell(s * r * (0.35 + i * 0.3), r * 0.75 - lift, r * 0.18, r * 0.14); ctx.fill(); ctx.stroke();
     }
   }
 
@@ -175,10 +163,6 @@ function draw(e) {
   edgePath(rx, ry, t, L.edge, a.seed); ctx.clip();
   ctx.fillStyle = telegraph ? '#ab5c1c' : L.col; ell(-rx * 0.05, -ry * 0.12, rx * 0.92, ry * 0.85); ctx.fill();
   ctx.strokeStyle = hexA(L.eye, telegraph ? 0.6 : 0.35); ctx.lineWidth = r * 0.24; ell(0, -r * 0.18, rx * 1.02, ry); ctx.stroke();
-  if (type === 'scorpion') {
-    ctx.strokeStyle = L.sh; ctx.lineWidth = r * 0.1;
-    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(-face * r * 0.4, 0, r * (0.45 + i * 0.3), -1.1, 1.1); ctx.stroke(); }
-  }
   if (type === 'zombie') { ctx.fillStyle = C.olive; ell(-rx * 0.45, ry * 0.3, rx * 0.2, ry * 0.12); ctx.fill(); ell(rx * 0.5, -ry * 0.45, rx * 0.12, ry * 0.08); ctx.fill(); }
   if (flash > 0) { ctx.fillStyle = `rgba(255,250,240,${0.9 * flash})`; ctx.fillRect(-rx * 1.5, -ry * 1.5, rx * 3, ry * 3); }
   ctx.restore();
@@ -240,22 +224,41 @@ function draw(e) {
     ctx.fillStyle = C.dark; ell(fx, r * 0.33, r * 0.28, r * 0.18 + 0.04 * r * Math.sin(t * 2)); ctx.fill(); ctx.stroke();
     ctx.fillStyle = C.cream; ctx.fillRect(fx - r * 0.08, r * 0.17, r * 0.12, r * 0.12);
   } else if (type === 'scorpion') {
-    for (const [ex, ey, er] of [[-0.2, -0.25, 0.12], [0.2, -0.25, 0.12], [-0.08, -0.48, 0.08], [0.2, -0.48, 0.08]]) glowEye(fx + ex * r, ey * r, er * r, L.eye);
-    // клешни смыкаются при уколе
-    const snap = e.pinchFx > 0 ? 0.1 : 0.45 + 0.08 * Math.sin(t * 5);
-    for (const s of [-1, 1]) {
-      const px = face * r * 1.05, py = s * r * 0.45 + r * 0.15;
-      ctx.fillStyle = L.col;
-      ctx.beginPath(); ctx.moveTo(face * r * 0.7, py); ctx.lineTo(px, py); ctx.stroke();
-      ctx.beginPath(); ctx.arc(px + face * r * 0.2, py, r * 0.3, face > 0 ? -Math.PI + snap : snap, face > 0 ? Math.PI - snap : TAU - snap);
-      ctx.lineTo(px + face * r * 0.2, py); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // громила с одной огромной лапой: ей бьёт вплотную (pinchFx) и замахивается, бросая гарпун (выстрел)
+    for (const sx2 of [-1, 1]) glowEye(fx + sx2 * r * 0.24, -r * 0.25, r * 0.13, L.eye, 0, 0.7);
+    ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(fx - r * 0.42, -r * 0.48); ctx.lineTo(fx + r * 0.42, -r * 0.48); ctx.stroke();
+    ctx.fillStyle = C.dark; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(fx, r * 0.22, r * 0.3, r * 0.14, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.cream;
+    for (const sx2 of [-1, 1]) { ctx.beginPath(); ctx.moveTo(fx + sx2 * r * 0.2, r * 0.25); ctx.lineTo(fx + sx2 * r * 0.13, r * 0.05); ctx.lineTo(fx + sx2 * r * 0.06, r * 0.25); ctx.closePath(); ctx.fill(); }
+    let px = face * r * 1.1, py = r * 0.3 + Math.sin(t * 3) * r * 0.05, pk = 1;
+    if (e.pinchFx > 0) { const k = e.pinchFx / 0.2; px = face * r * (1.1 + 0.45 * k); py = r * (0.3 + 0.25 * k); pk = 1 + 0.15 * k; }
+    else if (sa >= 0 && sa < 0.4) {
+      if (sa < 0.15) { const k = sa / 0.15; px = face * r * (1.1 - 0.9 * k); py = r * (0.3 - 1.3 * k); }
+      else { const k = (sa - 0.15) / 0.25; px = face * r * (0.2 + 1.3 * k); py = r * (-1.0 + 1.3 * k); }
     }
+    for (const [lw, col] of [[r * 0.42, C.ink], [r * 0.28, L.sh]]) {
+      ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(face * r * 0.55, r * 0.1); ctx.lineTo(px, py); ctx.stroke();
+    }
+    const pr = r * 0.55 * pk;
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
+    ctx.fillStyle = C.cream;
+    for (let i = -1; i <= 1; i++) {
+      const cyc = py + i * pr * 0.45;
+      ctx.beginPath(); ctx.moveTo(px + face * pr * 0.7, cyc - pr * 0.14); ctx.lineTo(px + face * pr * 1.35, cyc + i * pr * 0.12); ctx.lineTo(px + face * pr * 0.7, cyc + pr * 0.14); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.fillStyle = L.col; ell(px, py, pr, pr * 0.9); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = L.sh; ctx.lineWidth = 2;
+    for (const i of [-1, 1]) { ctx.beginPath(); ctx.moveTo(px + face * pr * 0.25, py + i * pr * 0.25); ctx.lineTo(px + face * pr * 0.75, py + i * pr * 0.25); ctx.stroke(); }
+    ctx.fillStyle = hexA(L.eye, 0.35); ell(px - face * pr * 0.3, py - pr * 0.35, pr * 0.3, pr * 0.18); ctx.fill();
+    if (e.pinchFx > 0.1) star(px + face * pr * 1.3, py, r * 0.35, C.orange);
   }
   ctx.restore();
   ctx.lineCap = 'butt';
 
   if (e.hp < e.maxHp) {
-    const top = y - ry - r * (type === 'bull' || type === 'chariot' ? 0.75 : type === 'scorpion' ? 0.95 : 0.35);
+    const top = y - ry - r * (type === 'bull' || type === 'chariot' ? 0.75 : type === 'scorpion' ? 0.5 : 0.35);
     hpBar(x, top - 8, r, e.hp / e.maxHp);
   }
 }
@@ -270,32 +273,51 @@ function hurtFlash(a) {
   return ha >= 0 && ha < 0.1 ? 1 - ha / 0.1 : 0;
 }
 
-// катапульта: деревянная телега на колёсах, рычаг с ковшом слизи смотрит на цель; после броска ковш пуст
+// катапульта (вид сбоку): деревянная станина на двух колёсах, А-образная стойка, рычаг с ковшом слизи и
+// противовесом. Бросает в сторону цели: рычаг резко перекидывается вперёд, ковш пустеет, потом рычаг возвращается
 function drawCatapult(e, a) {
-  const r = e.r, f = e.facing || 0, fl = hurtFlash(a), fired = state.time - a.atkAt < 0.6;
-  ctx.fillStyle = 'rgba(20,10,5,0.5)'; ell(e.x, e.y + r * 0.85, r * 1.2, r * 0.35); ctx.fill();
-  ctx.save(); ctx.translate(e.x, e.y);
-  ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.lineJoin = 'round';
-  for (const [wx, wy] of [[-0.85, -0.55], [0.85, -0.55], [-0.85, 0.65], [0.85, 0.65]]) {
-    ctx.fillStyle = '#45230d'; ell(wx * r, wy * r, r * 0.28, r * 0.28); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(wx * r - r * 0.2, wy * r); ctx.lineTo(wx * r + r * 0.2, wy * r);
-    ctx.moveTo(wx * r, wy * r - r * 0.2); ctx.lineTo(wx * r, wy * r + r * 0.2); ctx.stroke();
+  const r = e.r * 1.3, face = a.face, fl = hurtFlash(a);
+  const since = state.time - a.atkAt;
+  // рычаг: k = 0 — заряжен (ковш сзади у земли), k = 1 — бросок (рычаг перекинут через верх вперёд)
+  let k = 0;
+  if (since >= 0 && since < 0.15) k = since / 0.15;
+  else if (since >= 0.15 && since < 1.2) k = 1 - (since - 0.15) / 1.05;
+  const loaded = !(since >= 0 && since < 0.9);
+  ctx.fillStyle = 'rgba(20,10,5,0.5)'; ell(e.x, e.y + r * 0.9, r * 1.3, r * 0.32); ctx.fill();
+  ctx.save(); ctx.translate(e.x, e.y); ctx.scale(face, 1);
+  ctx.strokeStyle = C.ink; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const wood = '#ab5c1c', dark = '#724113';
+  // А-образная стойка
+  for (const [lw, col] of [[r * 0.26, C.ink], [r * 0.15, dark]]) {
+    ctx.strokeStyle = col; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(-r * 0.7, r * 0.35); ctx.lineTo(-r * 0.1, -r * 0.45); ctx.lineTo(r * 0.5, r * 0.35); ctx.stroke();
   }
-  ctx.fillStyle = '#36170c'; ctx.fillRect(-r * 0.8, -r * 0.75, r * 1.6, r * 1.45);
-  ctx.fillStyle = C.brown; ctx.fillRect(-r * 0.8, -r * 0.75, r * 1.6, r * 1.15);
-  ctx.strokeRect(-r * 0.8, -r * 0.75, r * 1.6, r * 1.45);
-  ctx.beginPath(); for (const k of [-0.3, 0.2]) { ctx.moveTo(-r * 0.8, k * r); ctx.lineTo(r * 0.8, k * r); } ctx.stroke();
-  flashOver(r * 0.8, r * 0.75, fl);
-  // рычаг и ковш
-  const len = r * (fired ? 1.45 : 1.15), bx = Math.cos(f) * len, by = Math.sin(f) * len - r * 0.15;
-  for (const [lw, col] of [[8, C.ink], [4, '#ab5c1c']]) {
-    ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(-Math.cos(f) * r * 0.3, -Math.sin(f) * r * 0.3 - r * 0.15); ctx.lineTo(bx, by); ctx.stroke();
+  // рычаг: короткий конец с противовесом, длинный — с ковшом
+  const ang = 2.75 + k * 2.4, px = -r * 0.1, py = -r * 0.45;
+  const ex = px + Math.cos(ang) * r * 1.35, ey = py + Math.sin(ang) * r * 1.35;
+  const cx2 = px - Math.cos(ang) * r * 0.45, cy2 = py - Math.sin(ang) * r * 0.45;
+  for (const [lw, col] of [[r * 0.24, C.ink], [r * 0.13, wood]]) {
+    ctx.strokeStyle = col; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(cx2, cy2); ctx.lineTo(ex, ey); ctx.stroke();
   }
-  ctx.fillStyle = C.ink; ell(bx, by, r * 0.32, r * 0.32); ctx.fill();
-  if (!fired) {
-    glowEye(bx, by, r * 0.18, '#9b1a0a');
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
+  ctx.fillStyle = C.stone; ctx.beginPath(); ctx.roundRect(cx2 - r * 0.22, cy2 - r * 0.2, r * 0.44, r * 0.4, 3); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = dark; ell(ex, ey, r * 0.3, r * 0.22, ang); ctx.fill(); ctx.stroke();
+  if (loaded) {
+    ctx.fillStyle = '#550f0a'; ell(ex, ey - r * 0.12, r * 0.24, r * 0.22); ctx.fill(); ctx.stroke();
+    glowEye(ex + r * 0.04, ey - r * 0.14, r * 0.09, C.red);
   }
+  ctx.fillStyle = C.mud; ell(px, py, r * 0.1, r * 0.1); ctx.fill(); ctx.stroke();
+  // станина и колёса
+  ctx.fillStyle = wood; ctx.beginPath(); ctx.roundRect(-r * 1.05, r * 0.25, r * 2.1, r * 0.32, 4); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = C.stone; ctx.fillRect(-r * 0.75, r * 0.25, r * 0.12, r * 0.32); ctx.fillRect(r * 0.6, r * 0.25, r * 0.12, r * 0.32);
+  for (const wx of [-0.7, 0.7]) {
+    ctx.fillStyle = '#45230d'; ell(wx * r, r * 0.68, r * 0.3, r * 0.3); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(wx * r - r * 0.22, r * 0.68); ctx.lineTo(wx * r + r * 0.22, r * 0.68);
+    ctx.moveTo(wx * r, r * 0.46); ctx.lineTo(wx * r, r * 0.9); ctx.stroke();
+    ctx.fillStyle = C.mud; ell(wx * r, r * 0.68, r * 0.08, r * 0.08); ctx.fill();
+  }
+  flashOver(r * 1.1, r * 0.9, fl);
   ctx.restore(); ctx.lineCap = 'butt';
 }
 

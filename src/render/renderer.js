@@ -275,6 +275,33 @@ function clipToView(r) {
   return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
 }
 
+// шипы: тёмно-красная плита с рамкой, на ней ряды металлических конусов — светлый бок, тёмный бок, блик на острие
+function drawSpikes(r) {
+  ctx.fillStyle = COLORS.spikeFloor;
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.strokeStyle = COLORS.floorLine;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+  const s = 16, hw = 5, h = 11;
+  ctx.lineWidth = 1.2;
+  ctx.lineJoin = 'round';
+  for (let y = r.y + s * 0.85; y < r.y + r.h - 2; y += s) {
+    const row = Math.round((y - r.y) / s);
+    for (let x = r.x + s / 2 + (row % 2) * s / 2; x < r.x + r.w - 4; x += s) {
+      ctx.fillStyle = 'rgba(20,10,5,0.5)';
+      ctx.beginPath(); ctx.ellipse(x, y, hw + 1, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = COLORS.spikeTeeth;
+      ctx.beginPath(); ctx.moveTo(x - hw, y); ctx.lineTo(x, y - h); ctx.lineTo(x, y); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = COLORS.pillarSide;
+      ctx.beginPath(); ctx.moveTo(x + hw, y); ctx.lineTo(x, y - h); ctx.lineTo(x, y); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = COLORS.floorLine;
+      ctx.beginPath(); ctx.moveTo(x - hw, y); ctx.lineTo(x, y - h); ctx.lineTo(x + hw, y); ctx.stroke();
+      ctx.fillStyle = COLORS.allyShot;
+      ctx.fillRect(x - 1, y - h + 1, 1.5, 2.5);
+    }
+  }
+}
+
 // стена и колонна объёмные: светлый верх и тёмная передняя грань внизу, тёмная обводка
 function drawBlocks(list, top, side) {
   ctx.strokeStyle = COLORS.floorLine;
@@ -312,23 +339,7 @@ function drawTerrain() {
   // тропы и островки над пропастью — чуть светлее пола, чтобы мостки читались
   drawRects(world.bridges, COLORS.bridge);
 
-  for (const r of world.spikes) {
-    if (!visible(r)) continue;
-    ctx.fillStyle = COLORS.spikeFloor;
-    ctx.fillRect(r.x, r.y, r.w, r.h);
-    ctx.fillStyle = COLORS.spikeTeeth;
-    const s = 12;
-    for (let y = r.y + 4; y < r.y + r.h - 4; y += s) {
-      for (let x = r.x + 4; x < r.x + r.w - 4; x += s) {
-        ctx.beginPath();
-        ctx.moveTo(x, y + s * 0.6);
-        ctx.lineTo(x + s * 0.35, y);
-        ctx.lineTo(x + s * 0.7, y + s * 0.6);
-        ctx.closePath();
-        ctx.fill();
-      }
-    }
-  }
+  for (const r of world.spikes) if (visible(r)) drawSpikes(r);
 
   drawBlocks(world.walls, COLORS.wall, COLORS.wallSide);
   drawBlocks(world.pillars, COLORS.pillar, COLORS.pillarSide);
@@ -653,13 +664,41 @@ function drawPadCooldown(pad, def) {
   ctx.globalAlpha = 1;
 }
 
+// подиум усиления: каменная плита (светлый верх, тёмная передняя грань), верх светится цветом усиления,
+// над плитой парит его значок — тот же, что над Героем
+function drawBuffPad(pad, def, alpha, wave) {
+  const cx = pad.x + pad.w / 2, face = 10, topH = pad.h - face;
+  const g = ctx.createRadialGradient(cx, pad.y + topH / 2, pad.w * 0.3, cx, pad.y + topH / 2, pad.w * 0.95);
+  g.addColorStop(0, def.color);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.globalAlpha = (0.3 + 0.08 * wave) * alpha;
+  ctx.beginPath(); ctx.arc(cx, pad.y + topH / 2, pad.w * 0.95, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = COLORS.wallSide;
+  ctx.fillRect(pad.x + 3, pad.y + topH, pad.w - 6, face);
+  ctx.fillStyle = COLORS.wall;
+  ctx.fillRect(pad.x + 3, pad.y + 3, pad.w - 6, topH - 3);
+  ctx.fillStyle = def.color;
+  ctx.globalAlpha = (0.35 + 0.1 * wave) * alpha;
+  ctx.fillRect(pad.x + 9, pad.y + 8, pad.w - 18, topH - 13);
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = def.color; ctx.lineWidth = 3;
+  ctx.strokeRect(pad.x + 7, pad.y + 6, pad.w - 14, topH - 9);
+  ctx.strokeStyle = COLORS.floorLine; ctx.lineWidth = 2;
+  ctx.strokeRect(pad.x + 3, pad.y + 3, pad.w - 6, pad.h - 6);
+  ctx.beginPath(); ctx.moveTo(pad.x + 3, pad.y + topH); ctx.lineTo(pad.x + pad.w - 3, pad.y + topH); ctx.stroke();
+  const float = Math.sin(state.time * 2.5) * 3;
+  G.blobs.glyph(pad.ability, cx, pad.y + topH / 2 - 6 + float, pad.w * 0.24);
+  ctx.globalAlpha = 1;
+}
+
 // подиумы: профессии — большие дружочки (см. drawJobPad), усиления — светящийся квадрат на полу
 // в широком мягком свечении; у постоянного — ещё и рамка вокруг
 function drawPads() {
   const { pulse } = CONFIG.PADS;
   const warnTime = G.pads.settings().warnTime;
   const wave = Math.sin((state.time / pulse) * Math.PI * 2);
-  const glow = 0.25 + 0.1 * wave;
   for (const pad of state.pads) {
     if (!visible(pad)) continue;
     const alpha = padAlpha(pad, warnTime);
@@ -673,24 +712,7 @@ function drawPads() {
       if (pad.life <= warnTime) drawHourglass(pad.x + pad.w, pad.y - 4, 7);
       continue;
     }
-    const halo = pad.w * 0.75;
-    const g = ctx.createRadialGradient(cx, cy, pad.w * 0.4, cx, cy, halo * (1 + 0.06 * wave));
-    g.addColorStop(0, def.color);
-    g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g;
-    ctx.globalAlpha = (0.22 + 0.08 * wave) * alpha;
-    ctx.beginPath();
-    ctx.arc(cx, cy, halo * 1.1, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = def.color;
-    ctx.globalAlpha = glow * alpha;
-    ctx.fillRect(pad.x, pad.y, pad.w, pad.h);
-    ctx.strokeStyle = def.color;
-    ctx.globalAlpha = 0.9 * alpha;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(pad.x + 1, pad.y + 1, pad.w - 2, pad.h - 2);
-    G.blobs.glyph(pad.ability, cx, cy, pad.w * 0.26);
-    ctx.globalAlpha = 1;
+    drawBuffPad(pad, def, alpha, wave);
     if (pad.life <= warnTime && pad.usedLeft === undefined) drawHourglass(pad.x + pad.w, pad.y - 4, 7);
   }
 }
@@ -763,50 +785,69 @@ function drawPadLinks() {
 // в середине пульсирует ядро; появляется, разрастаясь, над ним подпись. Пока в него уходит цепочка — крутится быстрее
 function drawExit() {
   const ex = state.exit;
-  if (!ex || !onScreen(ex, ex.r * 2.4)) return;
+  if (!ex || !onScreen(ex, ex.r * 3)) return;
   const age = state.time - ex.at, grow = clamp(age / 0.6, 0, 1), r = ex.r * grow;
   if (r < 1) return;
   const spin = state.time * (state.leaving ? 4 : 1.2);
   const pulse = 0.5 + 0.5 * Math.sin(state.time * 3);
-  const g = ctx.createRadialGradient(ex.x, ex.y, r * 0.5, ex.x, ex.y, r * 2.4);
-  g.addColorStop(0, 'rgba(255,240,190,0.45)');
-  g.addColorStop(1, 'rgba(255,230,150,0)');
+  const ry = r * 0.5, face = r * 0.22;
+  // тёплое свечение вокруг
+  const g = ctx.createRadialGradient(ex.x, ex.y, r * 0.5, ex.x, ex.y, r * 2.2);
+  g.addColorStop(0, 'rgba(239,172,40,0.35)');
+  g.addColorStop(1, 'rgba(239,172,40,0)');
   ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(ex.x, ex.y, r * 2.2, 0, Math.PI * 2); ctx.fill();
+  // каменный круглый постамент: боковина и верх
+  ctx.strokeStyle = COLORS.floorLine; ctx.lineWidth = 3;
+  ctx.fillStyle = COLORS.wallSide;
   ctx.beginPath();
-  ctx.arc(ex.x, ex.y, r * 2.4, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.ellipse(ex.x, ex.y + face, r * 1.15, ry * 1.15, 0, 0, Math.PI);
+  ctx.lineTo(ex.x - r * 1.15, ex.y);
+  ctx.ellipse(ex.x, ex.y, r * 1.15, ry * 1.15, 0, Math.PI, 0, true);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = COLORS.pillar;
+  ctx.beginPath(); ctx.ellipse(ex.x, ex.y, r * 1.15, ry * 1.15, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  // светящаяся воронка внутри
   ctx.fillStyle = COLORS.exit;
-  ctx.globalAlpha = 0.55 + 0.1 * pulse;
-  ctx.beginPath();
-  ctx.arc(ex.x, ex.y, r, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.globalAlpha = 0.85 + 0.1 * pulse;
+  ctx.beginPath(); ctx.ellipse(ex.x, ex.y, r * 0.9, ry * 0.9, 0, 0, Math.PI * 2); ctx.fill();
   ctx.globalAlpha = 1;
   ctx.strokeStyle = COLORS.exitGlow;
   ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(ex.x, ex.y, r, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([9, 7]);
+  ctx.setLineDash([12, 9]);
   for (const [k, dir] of [[0.72, 1], [0.45, -1.6]]) {
     ctx.lineDashOffset = -spin * 30 * dir;
-    ctx.beginPath();
-    ctx.arc(ex.x, ex.y, r * k, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(ex.x, ex.y, r * k, ry * k, 0, 0, Math.PI * 2); ctx.stroke();
   }
   ctx.setLineDash([]);
   ctx.lineDashOffset = 0;
-  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = COLORS.floorLine; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(ex.x, ex.y, r * 0.9, ry * 0.9, 0, 0, Math.PI * 2); ctx.stroke();
+  // столб света вверх и искры
+  const col = ctx.createLinearGradient(0, ex.y - r * 2.4, 0, ex.y);
+  col.addColorStop(0, 'rgba(255,244,220,0)');
+  col.addColorStop(1, `rgba(255,244,220,${0.4 + 0.15 * pulse})`);
+  ctx.fillStyle = col;
   ctx.beginPath();
-  ctx.arc(ex.x, ex.y, r * (0.18 + 0.06 * pulse), 0, Math.PI * 2);
-  ctx.fill();
+  ctx.moveTo(ex.x - r * 0.75, ex.y); ctx.lineTo(ex.x - r * 0.55, ex.y - r * 2.4);
+  ctx.lineTo(ex.x + r * 0.55, ex.y - r * 2.4); ctx.lineTo(ex.x + r * 0.75, ex.y);
+  ctx.ellipse(ex.x, ex.y, r * 0.75, ry * 0.75, 0, 0, Math.PI);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = COLORS.exit;
+  for (let i = 0; i < 6; i++) {
+    const k = (state.time * 0.6 + i / 6) % 1, sx = ex.x + Math.sin(i * 2.3 + state.time) * r * 0.55;
+    ctx.globalAlpha = 1 - k;
+    ctx.fillRect(sx - 1.5, ex.y - k * r * 2.2 - 1.5, 3, 3);
+  }
+  ctx.globalAlpha = 1;
   if (state.leaving) return;
   ctx.globalAlpha = grow;
-  ctx.fillStyle = COLORS.exitGlow;
-  ctx.font = 'bold 13px "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
+  ctx.font = 'bold 15px "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('EXIT', ex.x, ex.y - r - 12);
+  ctx.lineWidth = 4; ctx.strokeStyle = COLORS.floorLine; ctx.lineJoin = 'round';
+  ctx.strokeText('EXIT', ex.x, ex.y - r * 2.5);
+  ctx.fillStyle = COLORS.exitGlow;
+  ctx.fillText('EXIT', ex.x, ex.y - r * 2.5);
   ctx.globalAlpha = 1;
 }
 

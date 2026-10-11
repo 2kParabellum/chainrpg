@@ -114,7 +114,7 @@ function sweep(list) {
 }
 
 // --- блоб ---
-// mode: 'chain' (в цепочке), 'downed' (выбит, лежит), 'neutral' (ждёт вербовки)
+// mode: 'chain' (в цепочке), 'downed' (выбит или брошен: стоит один и дерётся, над ним «!»), 'neutral' (ждёт вербовки)
 function drawAlly(u, mode, alpha = 1) {
   baseA = alpha;
   ctx.globalAlpha = alpha;
@@ -153,7 +153,6 @@ function drawAlly(u, mode, alpha = 1) {
   }
   const ja = t - a.happyAt;
   if (ja >= 0 && ja < 0.7) { hop += Math.sin(Math.min(ja / 0.5, 1) * Math.PI) * r * 0.7; eyes = 'happy'; swing = -1.2; }
-  if (mode === 'downed') { sx = 1.3; sy = 0.62; hop = 0; lean = 0; eyes = 'ko'; }
   if (buffs.includes('power')) { sx *= 1.12; sy *= 1.12; }
 
   const x = u.x + dx, by = u.y - hop, rx = r * sx, ry = r * 0.95 * sy;
@@ -197,7 +196,8 @@ function drawAlly(u, mode, alpha = 1) {
     }
     ctx.globalAlpha = baseA;
   }
-  if (mode !== 'downed') drawHand(-face * r * 0.88, r * 0.3 - swing * r * 0.12, r, weapon);
+  if (buffs.includes('will')) drawWings(rx, ry, r, t);
+  drawHand(-face * r * 0.88, r * 0.3 - swing * r * 0.12, r, weapon);
   if (buffs.includes('spiky')) {
     ctx.fillStyle = C.blood; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
     for (let i = 0; i < 9; i++) {
@@ -230,24 +230,13 @@ function drawAlly(u, mode, alpha = 1) {
   }
   drawEyes(eyes, r, face, lx, ly, t, a.seed);
   drawHat(hat, rx, ry, r, face, t);
-  if (buffs.includes('will')) {
-    ctx.strokeStyle = C.cream; ctx.lineWidth = r * 0.14; ctx.globalAlpha = baseA * (0.75 + 0.25 * Math.sin(t * 4));
-    ell(0, -ry * 1.75 + Math.sin(t * 2.5) * 1.5, r * 0.6, r * 0.18); ctx.stroke(); ctx.globalAlpha = baseA;
-  }
-  if (mode !== 'downed') {
-    const hx = face * (r * 0.95 + handFx), hy = r * 0.22 + swing * r * 0.12;
-    drawWeapon(weapon, lvl, hx, hy, r, face, t, sa >= 0 && sa < 0.15);
-    drawHand(hx, hy, r, weapon);
-  }
+  if (buffs.includes('will')) drawHalo(ry, r, t);
+  const hx = face * (r * 0.95 + handFx), hy = r * 0.22 + swing * r * 0.12;
+  drawWeapon(weapon, lvl, hx, hy, r, face, t, sa >= 0 && sa < 0.15);
+  drawHand(hx, hy, r, weapon);
   ctx.restore();
 
-  if (mode === 'downed') {
-    for (let i = 0; i < 3; i++) {
-      const ang = t * 3 + i / 3 * TAU;
-      star(x + Math.cos(ang) * r * 0.8, by - ry - r * 0.35 + Math.sin(ang) * r * 0.2, r * 0.2, C.gold);
-    }
-  }
-  if (eyes === 'tired' && mode !== 'downed') {
+  if (eyes === 'tired') {
     const k = (t * 0.7 + a.seed) % 1, px = x - face * r * 0.8, py = by - r * 0.6 + k * r * 0.6;
     ctx.globalAlpha = baseA * (1 - k); ctx.fillStyle = C.teal; ctx.strokeStyle = C.ink; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(px, py - r * 0.28); ctx.quadraticCurveTo(px + r * 0.17, py, px, py + r * 0.09);
@@ -264,8 +253,17 @@ function drawAlly(u, mode, alpha = 1) {
   }
 
   // над головой: полоска HP (только у раненых), выше — значки усилений Героя
-  let top = by - ry - (hat === 'wizard' ? r * 1.3 : hat && hat !== 'band' ? r * 0.75 : 0) - (buffs.includes('will') ? r * 0.5 : 0) - 4;
+  let top = by - ry - (hat === 'wizard' ? r * 1.3 : hat && hat !== 'band' ? r * 0.75 : 0) - (buffs.includes('will') ? r * 0.7 : 0) - 4;
   if (mode !== 'neutral' && u.hp < u.maxHp) { hpBar(x, top - 5, r, u.hp / u.maxHp); top -= 9; }
+  // выбитый или брошенный: «!» над головой — он один, его можно подобрать
+  if (mode === 'downed') {
+    const bob = Math.sin(t * 5) * 2, ey = top - 8 + bob;
+    ctx.font = `bold ${Math.round(r * 1.1)}px "Trebuchet MS", system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 4; ctx.strokeStyle = C.ink; ctx.lineJoin = 'round';
+    ctx.strokeText('!', x, ey); ctx.fillStyle = C.gold; ctx.fillText('!', x, ey);
+    top -= r * 1.1;
+  }
   if (buffs.length) {
     const gap = 17, y0 = top - 8;
     buffs.forEach((b, i) => {
@@ -276,10 +274,36 @@ function drawAlly(u, mode, alpha = 1) {
   ctx.globalAlpha = 1;
 }
 
+// «воля»: ангельские крылья за спиной (машут) и сияющий нимб над головой
+function drawWings(rx, ry, r, t) {
+  const flap = Math.sin(t * 6) * 0.25;
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.fillStyle = C.eye;
+  for (const s of [-1, 1]) {
+    ctx.save(); ctx.translate(s * rx * 0.7, -ry * 0.15); ctx.rotate(s * (-0.35 + flap)); ctx.scale(s, 1);
+    ctx.beginPath(); ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(r * 0.6, -r * 1.0, r * 1.35, -r * 0.75);
+    ctx.quadraticCurveTo(r * 1.1, -r * 0.45, r * 1.25, -r * 0.3);
+    ctx.quadraticCurveTo(r * 0.95, -r * 0.1, r * 1.05, r * 0.08);
+    ctx.quadraticCurveTo(r * 0.6, r * 0.05, r * 0.6, r * 0.3);
+    ctx.quadraticCurveTo(r * 0.3, r * 0.15, 0, r * 0.15);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(r * 0.35, -r * 0.3); ctx.lineTo(r * 0.95, -r * 0.45); ctx.moveTo(r * 0.3, 0); ctx.lineTo(r * 0.8, -r * 0.05); ctx.stroke();
+    ctx.restore();
+  }
+}
+function drawHalo(ry, r, t) {
+  const y = -ry * 1.75 + Math.sin(t * 2.5) * 1.5;
+  const g = ctx.createRadialGradient(0, y, r * 0.2, 0, y, r * 1.1);
+  g.addColorStop(0, 'rgba(239,172,40,0.45)'); g.addColorStop(1, 'rgba(239,172,40,0)');
+  ctx.fillStyle = g; ell(0, y, r * 1.1, r * 0.6); ctx.fill();
+  ctx.strokeStyle = C.ink; ctx.lineWidth = r * 0.22; ell(0, y, r * 0.6, r * 0.19); ctx.stroke();
+  ctx.strokeStyle = C.gold; ctx.lineWidth = r * 0.13; ell(0, y, r * 0.6, r * 0.19); ctx.stroke();
+}
+
 function hpBar(x, y, r, k) {
   const w = Math.max(22, r * 2), h = 4, bx = x - w / 2;
   ctx.fillStyle = C.ink; rr(bx - 1.5, y - 1.5, w + 3, h + 3, 3); ctx.fill();
-  ctx.fillStyle = k < 0.35 ? C.orange : C.teal; rr(bx, y, w * clamp(k, 0.03, 1), h, 2); ctx.fill();
+  ctx.fillStyle = k < 0.35 ? C.orange : G.COLORS.hpAlly; rr(bx, y, w * clamp(k, 0.03, 1), h, 2); ctx.fill();
 }
 
 function drawHand(hx, hy, r, weapon) {
@@ -366,16 +390,19 @@ function drawHatShape(hat, rx, ry, r, face, t) {
     ctx.beginPath(); ctx.moveTo(-rx * 0.75, -ry * 0.62); ctx.quadraticCurveTo(-rx * 0.2, -ry * 1.3, -face * rx * 0.45 + tip, -ry * 1.85);
     ctx.quadraticCurveTo(rx * 0.25, -ry * 1.2, rx * 0.75, -ry * 0.62); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.fillStyle = C.tealD; ell(0, -ry * 0.64, rx * 0.85, ry * 0.12); ctx.fill(); ctx.stroke();
-    star(rx * 0.05, -ry * 1.05, r * 0.18, C.gold);
+    star(rx * 0.05, -ry * 1.05, r * 0.18, C.cream);
   }
 }
 
 // шапка профессии отдельно, без тела (подиум профессии): x, y — где была бы середина тела радиуса r
+// под шапкой — оружие профессии первого уровня, чтобы было видно, чем звено будет драться
 function hatIcon(ability, x, y, r, face = 1) {
   const p = PROF[ability];
   if (!p) return;
   ctx.save(); ctx.translate(x, y);
   drawHat(p.hat, r, r * 0.95, r, face, state.time);
+  const wx = p.weapon === 'spear' ? -r * 0.55 : p.weapon === 'gun' ? -r * 0.45 : -r * 0.2;
+  drawWeapon(p.weapon, 1, wx, r * 0.05, r * 1.15, face, state.time, false);
   ctx.restore();
 }
 
@@ -454,9 +481,9 @@ function drawWeapon(w, lvl, hx, hy, r, face, t, firing) {
       ctx.strokeStyle = lvl === 3 ? C.mud : C.brown; ctx.lineWidth = r * 0.1; ctx.beginPath(); ctx.moveTo(r * 0.1, r * 0.45); ctx.lineTo(ox, oy + orr * 0.6); ctx.stroke();
     }
     const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, orr * 2.6);
-    g.addColorStop(0, 'rgba(239,172,40,0.75)'); g.addColorStop(1, 'rgba(239,172,40,0)');
+    g.addColorStop(0, 'rgba(60,159,156,0.8)'); g.addColorStop(1, 'rgba(60,159,156,0)');
     ctx.fillStyle = g; ell(ox, oy, orr * 2.6, orr * 2.6); ctx.fill();
-    ctx.fillStyle = C.gold; ctx.strokeStyle = C.ink; ctx.lineWidth = lw; ell(ox, oy, orr * p, orr * p); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.teal; ctx.strokeStyle = C.ink; ctx.lineWidth = lw; ell(ox, oy, orr * p, orr * p); ctx.fill(); ctx.stroke();
     ctx.fillStyle = C.eye; ell(ox - orr * 0.25, oy - orr * 0.25, orr * 0.35, orr * 0.35); ctx.fill();
     if (lvl === 3) {
       ctx.strokeStyle = C.cream; ctx.lineWidth = 1.2;

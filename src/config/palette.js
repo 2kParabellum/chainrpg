@@ -16,7 +16,7 @@ const COLORS = {
   // подсветка пола зон поля: по ней видно, насколько зона опасна
   zoneTint: { calm: 'rgba(90,150,210,0.07)', easy: 'rgba(110,200,120,0.06)', danger: 'rgba(220,140,60,0.06)', deadly: 'rgba(220,50,70,0.10)' },
   allyShot: '#efd8a1', enemyShot: '#ef692f', blast: '#ef692f',
-  hpBack: '#2a1d0d', hpAlly: '#3c9f9c', hpEnemy: '#ef3a0c',
+  hpBack: '#2a1d0d', hpAlly: '#6fae3a', hpEnemy: '#ef3a0c',
   // двери, кнопки и неуязвимая пушка-ловушка (уровень «Тропа над пропастью»)
   door: '#724113', doorEdge: '#ab5c1c', button: '#45230d', buttonEdge: '#927e6a', buttonPressed: '#3c9f9c',
   cannon: '#45230d', cannonShot: '#ef692f', finish: '#3c9f9c', bridge: '#724113',
