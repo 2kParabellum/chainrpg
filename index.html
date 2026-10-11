@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
-<meta name="theme-color" content="#0e0e10">
+<meta name="theme-color" content="#2a1d0d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -15,18 +15,18 @@
 <style>
   html, body { height: 100%; }
   /* фон и за краем страницы: на iPhone браузер показывает его под вырезом и под своими панелями */
-  html { background: #0e0e10; }
+  html { background: #2a1d0d; }
   /* игра на всё окно страницы и на компьютере, и на телефоне; страница не прокручивается и с самого начала, ещё до
      скриптов, не шире окна — иначе iPhone при загрузке отдаляет её и так оставляет */
-  body { margin: 0; background: #0e0e10; color: #b9b9c0; font: 13px/1.4 monospace;
+  body { margin: 0; background: #2a1d0d; color: #efd8a1; font: 13px/1.4 monospace;
          position: fixed; inset: 0; overflow: hidden;
          -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
          -webkit-touch-callout: none; overscroll-behavior: none; }
-  button { font: 13px monospace; padding: 5px 12px; background: #23232a; color: #ddd;
-           border: 1px solid #45454f; cursor: pointer; }
-  @media (hover: hover) { button:hover { background: #2e2e37; } }
-  button:active { background: #3a3a46; }
-  canvas { background: #0a0a0c; display: block; touch-action: none; }
+  button { font: 13px monospace; padding: 5px 12px; background: #392a1c; color: #efd8a1;
+           border: 1px solid #684c3c; cursor: pointer; }
+  @media (hover: hover) { button:hover { background: #45230d; } }
+  button:active { background: #45230d; }
+  canvas { background: #1d140a; display: block; touch-action: none; }
   /* сцена — всё окно страницы минус вырез экрана; размер берётся из макета, а не из видимой области:
      на iPhone она меняется от зума и при повороте врёт */
   #stage { position: fixed; top: env(safe-area-inset-top); right: env(safe-area-inset-right);
@@ -34,36 +34,36 @@
   #c { width: 100%; height: 100%; }
   #safeProbe { position: fixed; left: 0; top: 0; visibility: hidden; pointer-events: none;
                padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
-  #rotate { display: none; position: fixed; inset: 0; z-index: 50; background: #0e0e10; color: #c8c8d2;
+  #rotate { display: none; position: fixed; inset: 0; z-index: 50; background: #2a1d0d; color: #efd8a1;
             flex-direction: column; align-items: center; justify-content: center; gap: 16px; font-size: 18px; text-align: center; }
-  #rotate .phone { width: 34px; height: 60px; border: 3px solid #c8c8d2; border-radius: 6px; animation: turn 2s ease-in-out infinite; }
+  #rotate .phone { width: 34px; height: 60px; border: 3px solid #efd8a1; border-radius: 6px; animation: turn 2s ease-in-out infinite; }
   @keyframes turn { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
   body.rotate #rotate { display: flex; }
   #debug { display: none; position: fixed; top: 2px; left: 50%; transform: translateX(-50%); z-index: 60;
-           pointer-events: none; padding: 2px 8px; font-size: 11px; color: #8ce27a; background: rgba(0,0,0,0.75);
+           pointer-events: none; padding: 2px 8px; font-size: 11px; color: #3c9f9c; background: rgba(0,0,0,0.75);
            width: max-content; max-width: 94%; text-align: center; }
-  #build { position: absolute; right: 10px; bottom: 6px; font-size: 11px; color: #55555f; pointer-events: none; }
+  #build { position: absolute; right: 10px; bottom: 6px; font-size: 11px; color: #684c3c; pointer-events: none; }
   #overlay:not(.menu) #build { display: none; }
-  #homeHint { display: none; margin: 4px 0 0; max-width: 420px; font-size: 12px; color: #8a8a95; text-align: center; }
-  #homeHint .share { display: inline-block; padding: 0 3px; border: 1px solid #6b6b78; border-radius: 3px; font-size: 10px; }
+  #homeHint { display: none; margin: 4px 0 0; max-width: 420px; font-size: 12px; color: #927e6a; text-align: center; }
+  #homeHint .share { display: inline-block; padding: 0 3px; border: 1px solid #927e6a; border-radius: 3px; font-size: 10px; }
   body.ios-browser #homeHint { display: block; }
-  #overlay { position: absolute; inset: 0; background: rgba(10,10,12,0.97); overflow-y: auto; touch-action: pan-y;
+  #overlay { position: absolute; inset: 0; background: rgba(29,20,10,0.97); overflow-y: auto; touch-action: pan-y;
              display: flex; align-items: center; justify-content: center; }
   #overlay.hidden { display: none; }
   .panel { display: none; flex-direction: column; align-items: center; gap: 14px; margin: auto; padding: 10px 0; }
   .btnRow { display: flex; flex-direction: column; align-items: center; gap: 14px; }
   .panel.active { display: flex; }
-  .panel h1 { margin: 0 0 14px; font: 28px monospace; color: #c8c8d2; letter-spacing: 4px; }
-  .panel h2 { margin: 0 0 6px; font: 20px monospace; color: #c8c8d2; }
+  .panel h1 { margin: 0 0 14px; font: 28px monospace; color: #efd8a1; letter-spacing: 4px; }
+  .panel h2 { margin: 0 0 6px; font: 20px monospace; color: #efd8a1; }
   .panel button { width: 240px; padding: 10px 12px; font-size: 16px; }
   #levelList { display: flex; flex-direction: column; align-items: center; gap: 14px; }
   .panel button.level { width: 420px; text-align: left; }
-  .panel button.level small { display: block; margin-top: 4px; font-size: 12px; color: #8a8a95; }
+  .panel button.level small { display: block; margin-top: 4px; font-size: 12px; color: #927e6a; }
   #overlay { z-index: 10; }
   #overlay.win { background: #000; }
-  #overlay.pause { background: rgba(10,10,12,0.8); }
-  #overlay.dead { background: rgba(10,10,12,0.6); }
-  #panelDead h1 { color: #e06060; }
+  #overlay.pause { background: rgba(29,20,10,0.8); }
+  #overlay.dead { background: rgba(29,20,10,0.6); }
+  #panelDead h1 { color: #ef3a0c; }
   /* подписи только для клавиатуры или только для касаний */
   body.touch .kbd-only, body:not(.touch) .touch-only { display: none !important; }
   /* телефон: крупные кнопки под палец, всё влезает в низкий горизонтальный экран */
@@ -136,43 +136,43 @@
           color: rgba(255,255,255,0.75); font: bold 12px monospace; letter-spacing: 1px; touch-action: none; }
   #tGrab { left: 100px; bottom: 18px; width: 86px; height: 86px; }
   #tDrop { left: 16px; bottom: 70px; width: 72px; height: 72px; }
-  .tBtn.glow { border-color: #f0f0f5; color: #fff; background: rgba(240,240,245,0.18); box-shadow: 0 0 14px rgba(240,240,245,0.35); }
-  #tDrop.glow { border-color: #8ce27a; color: #d8f8c8; background: rgba(140,226,122,0.18); box-shadow: 0 0 14px rgba(140,226,122,0.4); }
+  .tBtn.glow { border-color: #fff4dc; color: #fff; background: rgba(239,216,161,0.18); box-shadow: 0 0 14px rgba(239,216,161,0.35); }
+  #tDrop.glow { border-color: #3c9f9c; color: #efd8a1; background: rgba(60,159,156,0.18); box-shadow: 0 0 14px rgba(60,159,156,0.4); }
   .tBtn.pressed { background: rgba(255,255,255,0.3); }
   /* значки паузы и «заново» в углу — во время партии, и при касаниях, и мышью */
   #corner { display: none; position: absolute; top: 6px; right: 8px; z-index: 6; gap: 8px; }
   #corner.on { display: flex; }
-  .tIcon { width: 44px; height: 40px; padding: 0; font-size: 18px; background: rgba(35,35,42,0.75); border: 1px solid rgba(255,255,255,0.2);
-           color: #ddd; touch-action: none; }
-  @media (hover: hover) { .tIcon:hover { background: rgba(60,60,72,0.9); } }
-  .tIcon.pressed { background: rgba(80,80,95,0.9); }
-  #tRestart.armed { width: auto; padding: 0 10px; font-size: 13px; background: rgba(150,50,50,0.85); }
+  .tIcon { width: 44px; height: 40px; padding: 0; font-size: 18px; background: rgba(57,42,28,0.75); border: 1px solid rgba(255,255,255,0.2);
+           color: #efd8a1; touch-action: none; }
+  @media (hover: hover) { .tIcon:hover { background: rgba(69,35,13,0.9); } }
+  .tIcon.pressed { background: rgba(104,76,60,0.9); }
+  #tRestart.armed { width: auto; padding: 0 10px; font-size: 13px; background: rgba(155,26,10,0.85); }
   #tRestart.armed::after { content: ' again to restart'; }
-  #panelWin h1 { color: #fff2b8; }
-  #panelWin p { margin: 0 0 10px; font-size: 16px; color: #c8c8d2; }
-  #panelWin p.pickHint { margin: 4px 0 0; font-size: 13px; color: #8a8a95; }
+  #panelWin h1 { color: #efd8a1; }
+  #panelWin p { margin: 0 0 10px; font-size: 16px; color: #efd8a1; }
+  #panelWin p.pickHint { margin: 4px 0 0; font-size: 13px; color: #927e6a; }
   #cards { display: flex; gap: 16px; }
   #cards:empty, #cards:empty + .pickHint { display: none; }
-  .card { position: relative; width: 220px; padding: 10px 10px 12px; background: #1b1b21; border: 2px solid #3a3a44;
+  .card { position: relative; width: 220px; padding: 10px 10px 12px; background: #2a1d0d; border: 2px solid #45230d;
           display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; text-align: center; }
-  @media (hover: hover) { .card:hover { border-color: #6b6b78; background: #212128; } }
-  .card.selected { border-color: #fff2b8; background: #26262e; box-shadow: 0 0 18px rgba(255,230,150,0.25); }
+  @media (hover: hover) { .card:hover { border-color: #927e6a; background: #392a1c; } }
+  .card.selected { border-color: #efd8a1; background: #392a1c; box-shadow: 0 0 18px rgba(255,230,150,0.25); }
   .card canvas { width: 200px; height: 120px; display: block; }
   .card .who { font-size: 11px; letter-spacing: 2px; }
-  .card .num { position: absolute; top: 4px; left: 8px; font-size: 11px; color: #6b6b78; }
-  .card h3 { margin: 0; font: bold 15px monospace; color: #f0f0f5; }
-  .card .desc { margin: 0; font-size: 12px; color: #9a9aa5; min-height: 30px; }
+  .card .num { position: absolute; top: 4px; left: 8px; font-size: 11px; color: #927e6a; }
+  .card h3 { margin: 0; font: bold 15px monospace; color: #fff4dc; }
+  .card .desc { margin: 0; font-size: 12px; color: #927e6a; min-height: 30px; }
   button:disabled { opacity: 0.35; cursor: default; }
   .controls { margin: 0 0 8px; border-collapse: collapse; font-size: 14px; }
   .controls td { padding: 5px 10px; }
-  .controls td:first-child { color: #f0f0f5; text-align: right; white-space: nowrap; }
+  .controls td:first-child { color: #fff4dc; text-align: right; white-space: nowrap; }
   body.touch .controls { margin: 0; font-size: 13px; }
   body.touch .controls td { padding: 3px 8px; }
   .opts { display: grid; grid-template-columns: auto auto auto; gap: 8px 10px; align-items: center; justify-content: center; font-size: 13px; }
-  .opts span { color: #f0f0f5; text-align: right; }
+  .opts span { color: #fff4dc; text-align: right; }
   body.touch .panel .opts button { width: 200px; min-height: 42px; font-size: 14px; }
-  .opts button.sel { border-color: #fff2b8; color: #fff2b8; background: #2e2e37; }
-  #modeHint { margin: 0; max-width: 640px; font-size: 12px; color: #8a8a95; text-align: center; }
+  .opts button.sel { border-color: #efd8a1; color: #efd8a1; background: #45230d; }
+  #modeHint { margin: 0; max-width: 640px; font-size: 12px; color: #927e6a; text-align: center; }
 </style>
 </head>
 <body>

@@ -87,14 +87,14 @@ const tower = {
     ctx.fillStyle = COLORS.tower;
     ctx.fillRect(e.x - e.r, e.y - e.r, e.r * 2, e.r * 2);
     // рычаг катапульты, направленный на цель
-    ctx.strokeStyle = '#0e0e10';
+    ctx.strokeStyle = '#2a1d0d';
     ctx.lineWidth = 3;
     const f = e.facing || 0;
     ctx.beginPath();
     ctx.moveTo(e.x - Math.cos(f) * e.r * 0.6, e.y - Math.sin(f) * e.r * 0.6);
     ctx.lineTo(e.x + Math.cos(f) * e.r * 0.8, e.y + Math.sin(f) * e.r * 0.8);
     ctx.stroke();
-    ctx.fillStyle = '#0e0e10';
+    ctx.fillStyle = '#2a1d0d';
     ctx.beginPath();
     ctx.arc(e.x + Math.cos(f) * e.r * 0.8, e.y + Math.sin(f) * e.r * 0.8, 4, 0, Math.PI * 2);
     ctx.fill();
@@ -123,7 +123,7 @@ const scorpion = {
     const [t0x, t0y] = at(Math.PI, 0.8), [t1x, t1y] = at(Math.PI + 0.45, 1.45), [t2x, t2y] = at(Math.PI + 1.05, 1.4);
     ctx.lineWidth = 4;
     ctx.beginPath(); ctx.moveTo(t0x, t0y); ctx.quadraticCurveTo(t1x, t1y, t2x, t2y); ctx.stroke();
-    ctx.fillStyle = '#5a2a1a';
+    ctx.fillStyle = '#36170c';
     ctx.beginPath(); ctx.arc(t2x, t2y, 3, 0, Math.PI * 2); ctx.fill();
     // клешни: короткая рука и две чёрточки-щипцы
     const open = e.pinchFx > 0 ? 0.12 : 0.55;
@@ -140,7 +140,7 @@ const scorpion = {
     }
     ctx.lineCap = 'butt';
     g.drawUnitBody(e, COLORS.scorpion, true);
-    ctx.fillStyle = '#0e0e10';
+    ctx.fillStyle = '#2a1d0d';
     for (const s of [0.35, -0.35]) {
       const [x, y] = at(s, 0.55);
       ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill();
@@ -219,7 +219,7 @@ const zombie = {
     ctx.arc(e.x, e.y, e.r * 1.35, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = '#0e0e10';
+    ctx.fillStyle = '#2a1d0d';
     const f = e.facing || 0;
     for (const s of [0.55, -0.55]) {
       ctx.beginPath();
@@ -259,14 +259,14 @@ const hunter = {
     g.drawUnitBody(e, COLORS.hunter, true);
     // острая морда вперёд и два уха назад
     const f = e.facing || 0;
-    ctx.fillStyle = '#0e0e10';
+    ctx.fillStyle = '#2a1d0d';
     ctx.beginPath();
     ctx.moveTo(e.x + Math.cos(f) * e.r * 1.5, e.y + Math.sin(f) * e.r * 1.5);
     ctx.lineTo(e.x + Math.cos(f + 0.5) * e.r * 0.8, e.y + Math.sin(f + 0.5) * e.r * 0.8);
     ctx.lineTo(e.x + Math.cos(f - 0.5) * e.r * 0.8, e.y + Math.sin(f - 0.5) * e.r * 0.8);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = '#0e0e10';
+    ctx.strokeStyle = '#2a1d0d';
     ctx.lineWidth = 2;
     ctx.beginPath();
     for (const s of [2.4, -2.4]) {
@@ -362,9 +362,9 @@ const bull = {
   },
   draw(e, g) {
     const { ctx } = g;
-    const color = e.state === 'telegraph' ? '#ffe070' : COLORS.bull;
+    const color = e.state === 'telegraph' ? '#efac28' : COLORS.bull;
     g.drawUnitBody(e, color, true);
-    ctx.strokeStyle = '#0e0e10';
+    ctx.strokeStyle = '#2a1d0d';
     ctx.lineWidth = 3;
     const f = e.facing || 0;
     ctx.beginPath();
@@ -434,7 +434,7 @@ const chariot = {
       // две оглобли от быка к катапульте
       const { ctx } = g;
       const a = Math.atan2(c.y - e.y, c.x - e.x), nx = -Math.sin(a), ny = Math.cos(a);
-      ctx.strokeStyle = '#8a6a48';
+      ctx.strokeStyle = '#724113';
       ctx.lineWidth = 3;
       ctx.beginPath();
       for (const s of [1, -1]) {
@@ -485,7 +485,7 @@ const mine = {
     ctx.beginPath();
     ctx.arc(m.x, m.y, m.r * 0.7, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#0e0e10';
+    ctx.strokeStyle = '#2a1d0d';
     ctx.beginPath();
     ctx.arc(m.x, m.y, m.r * 0.3, 0, Math.PI * 2);
     ctx.stroke();
@@ -538,7 +538,7 @@ const portal = {
     const soon = e.spawnIn < 1.5 ? 1 - Math.max(0, e.spawnIn) / 1.5 : 0;
     ctx.beginPath();
     ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
-    ctx.fillStyle = '#1a1024';
+    ctx.fillStyle = '#183f39';
     ctx.fill();
     ctx.lineWidth = 3;
     ctx.strokeStyle = COLORS.portal;
@@ -608,7 +608,7 @@ const doorTarget = {
     ctx.lineWidth = 2;
     ctx.strokeRect(e.x - w / 2 + 1, e.y - h / 2 + 1, w - 2, h - 2);
     // мишень: красно-белые кольца
-    for (const [r, color] of [[e.r, COLORS.enemy], [e.r * 0.66, '#f0f0f5'], [e.r * 0.33, COLORS.enemy]]) {
+    for (const [r, color] of [[e.r, COLORS.enemy], [e.r * 0.66, '#fff4dc'], [e.r * 0.33, COLORS.enemy]]) {
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
@@ -637,13 +637,13 @@ const turret = {
     ctx.closePath();
     ctx.fill();
     const f = e.facing || 0;
-    ctx.strokeStyle = '#0e0e10';
+    ctx.strokeStyle = '#2a1d0d';
     ctx.lineWidth = 6;
     ctx.beginPath();
     ctx.moveTo(e.x, e.y);
     ctx.lineTo(e.x + Math.cos(f) * e.r * 1.25, e.y + Math.sin(f) * e.r * 1.25);
     ctx.stroke();
-    ctx.fillStyle = '#0e0e10';
+    ctx.fillStyle = '#2a1d0d';
     ctx.beginPath();
     ctx.arc(e.x, e.y, e.r * 0.42, 0, Math.PI * 2);
     ctx.fill();
@@ -930,7 +930,7 @@ const boss = {
     }
     const color = glowing ? BOSS_ATTACK_COLOR[e.attack] : COLORS.boss;
     g.drawUnitBody(e, color, true);
-    ctx.strokeStyle = '#0e0e10';
+    ctx.strokeStyle = '#2a1d0d';
     ctx.lineWidth = 3;
     const f = e.facing || -Math.PI / 2;
     for (const s of [0.75, -0.75]) {
@@ -940,14 +940,14 @@ const boss = {
       ctx.stroke();
     }
     // злобный взгляд перед тараном: глаза больше, над ними сведённые к переносице брови
-    ctx.fillStyle = glowing ? '#fff3c0' : COLORS.bossGlow;
+    ctx.fillStyle = glowing ? '#efd8a1' : COLORS.bossGlow;
     for (const s of [0.35, -0.35]) {
       ctx.beginPath();
       ctx.arc(e.x + Math.cos(f + s) * e.r * 0.5, e.y + Math.sin(f + s) * e.r * 0.5, e.r * (angry ? 0.17 : 0.13), 0, Math.PI * 2);
       ctx.fill();
     }
     if (angry) {
-      ctx.strokeStyle = '#0e0e10';
+      ctx.strokeStyle = '#2a1d0d';
       ctx.lineWidth = 4;
       for (const s of [1, -1]) {
         ctx.beginPath();
@@ -1193,10 +1193,10 @@ function drawTentacle(e, t, g) {
   ctx.fillStyle = COLORS.tentacle;
   strip(1, hw * 0.9, hw * 0.35);
   ctx.fill();
-  ctx.strokeStyle = '#0e0e10';
+  ctx.strokeStyle = '#2a1d0d';
   ctx.lineWidth = 2;
   ctx.stroke();
-  ctx.fillStyle = '#d8b0f0';
+  ctx.fillStyle = '#efd8a1';
   for (let k = 1; k < 9; k++) {
     const f = k / 9, x = sx + (end.x - sx) * f, y = sy + (end.y - sy) * f;
     ctx.beginPath();
@@ -1225,7 +1225,7 @@ function drawKrakenMine(e, m, g) {
     ctx.lineTo(m.x + Math.cos(a) * rr, m.y + Math.sin(a) * rr);
   }
   ctx.closePath();
-  ctx.fillStyle = lit && Math.sin(m.age * 30) > 0 ? '#6a1a40' : COLORS.kraken;
+  ctx.fillStyle = lit && Math.sin(m.age * 30) > 0 ? '#550f0a' : COLORS.kraken;
   ctx.fill();
   ctx.strokeStyle = lit ? COLORS.krakenMine : COLORS.krakenEdge;
   ctx.lineWidth = 3;
@@ -1388,11 +1388,11 @@ const kraken = {
     ctx.stroke();
     // пасть: при всасывании раскрыта шире, по кругу зубы
     const mouth = e.r * (eating ? 0.6 : sucking ? 0.5 + 0.06 * Math.sin(e.age * 12) : 0.36);
-    ctx.fillStyle = '#0e0e10';
+    ctx.fillStyle = '#2a1d0d';
     ctx.beginPath();
     ctx.arc(e.x, e.y, mouth, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#e8e0f0';
+    ctx.fillStyle = '#efd8a1';
     for (let i = 0; i < 10; i++) {
       const a = (i / 10) * Math.PI * 2 + e.age * 0.3;
       ctx.beginPath();

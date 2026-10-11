@@ -78,7 +78,7 @@ function bannerAlpha(age, duration) {
 }
 
 // плашка поперёк экрана: мелкий заголовок и крупный текст; age — сколько секунд она уже видна, y — где по высоте
-function drawBanner(title, text, age, duration, color = '#f0f0f5', y = 130) {
+function drawBanner(title, text, age, duration, color = '#fff4dc', y = 130) {
   const a = bannerAlpha(age, duration);
   if (a <= 0 || state.status !== 'play') return;
   const V = CONFIG.VIEW;
@@ -86,10 +86,10 @@ function drawBanner(title, text, age, duration, color = '#f0f0f5', y = 130) {
   ctx.font = 'bold 22px monospace';
   const lines = wrapLines(text.split(' '), V.w - 24);
   ctx.globalAlpha = a;
-  ctx.fillStyle = 'rgba(10,10,12,0.75)';
+  ctx.fillStyle = 'rgba(29,20,10,0.75)';
   ctx.fillRect(0, y - 42, V.w, 74 + (lines.length - 1) * 26);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#8a8a95';
+  ctx.fillStyle = '#927e6a';
   ctx.font = '14px monospace';
   ctx.fillText(title, V.w / 2, y - 18);
   ctx.fillStyle = color;
@@ -107,7 +107,7 @@ function drawBanners() {
   const plan = state.level.rooms[state.room];
   if (plan && plan.hint) {
     const hintY = CONFIG.VIEW.h - (isTouch() ? (isPortrait() ? 330 : 220) : 150);
-    drawBanner(`ROOM ${state.room + 1}`, withKeys(plan.hint), state.time - state.roomAt, 5, '#e8d48a', hintY);
+    drawBanner(`ROOM ${state.room + 1}`, withKeys(plan.hint), state.time - state.roomAt, 5, '#efac28', hintY);
   }
   // «Оборона»: начался натиск — последние минуты волны больше
   const w = state.level.waves;
@@ -166,7 +166,7 @@ function drawNotice() {
   ctx.textAlign = 'left';
   ctx.fillStyle = def.color;
   ctx.fillText(name, x, y);
-  ctx.fillStyle = '#b4b4be';
+  ctx.fillStyle = '#efd8a1';
   ctx.fillText(rest, x + nw, y);
   ctx.shadowBlur = 0;
   ctx.shadowColor = 'transparent';
@@ -203,12 +203,12 @@ function drawHud() {
   // строка состояния; на узком экране — в несколько строк, и справа не заходит под значки паузы и «заново»
   const maxW = CONFIG.VIEW.w - 24 - 140;
   let ty = 22;
-  ctx.fillStyle = '#c8c8d2';
+  ctx.fillStyle = '#efd8a1';
   for (const line of wrapLines(parts, maxW, '   ')) { ctx.fillText(line, 12, ty); ty += 16; }
 
   // задача комнаты (обучение: что сделать, чтобы пройти её), иначе — общее напоминание
   const task = level.rooms[here] && level.rooms[here].task;
-  ctx.fillStyle = task ? '#e8d48a' : '#8a8a95';
+  ctx.fillStyle = task ? '#efac28' : '#927e6a';
   for (const line of wrapLines((task || 'Pads are picked up automatically: drive your chain over them').split(' '), maxW)) {
     ctx.fillText(line, 12, ty); ty += 16;
   }
@@ -227,7 +227,7 @@ function drawHud() {
   // улучшения прохождения: названия цветом того, чьё улучшение
   if (state.upgrades.length) {
     y += 4;
-    ctx.fillStyle = '#8a8a95';
+    ctx.fillStyle = '#927e6a';
     ctx.fillText('UPGRADES:', 12, y);
     let x = 12 + ctx.measureText('UPGRADES: ').width;
     for (const key of state.upgrades) {
@@ -248,11 +248,11 @@ function drawHud() {
   if (state.leaving) {
     // цепочка уходит в портал — подсказки внизу не нужны
   } else if (btn && !btn.pressed && state.party.length > 1 && state.status === 'play') {
-    ctx.fillStyle = '#8ce27a';
+    ctx.fillStyle = '#3c9f9c';
     ctx.textAlign = 'center';
     ctx.fillText(withKeys('{drop} — LEAVE A MATE ON THE BUTTON'), CONFIG.VIEW.w / 2, bottomHintY());
   } else if (pickup && state.status === 'play') {
-    ctx.fillStyle = '#f0f0f5';
+    ctx.fillStyle = '#fff4dc';
     ctx.textAlign = 'center';
     const msg = pickup.kind === 'downed' ? '{recruit} — PICK UP' : '{recruit} — RECRUIT';
     ctx.fillText(withKeys(msg), CONFIG.VIEW.w / 2, bottomHintY());

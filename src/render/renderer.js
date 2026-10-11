@@ -212,7 +212,7 @@ function drawCannons() {
     if (!visible({ x: c.x - 16, y: c.y - 16, w: 32, h: 32 })) continue;
     ctx.fillStyle = COLORS.cannon;
     ctx.fillRect(c.x - 13, c.y - 13, 26, 26);
-    ctx.strokeStyle = '#0e0e10';
+    ctx.strokeStyle = '#2a1d0d';
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(c.x, c.y);
@@ -396,7 +396,7 @@ function drawNests() {
     // пасть с зубцами
     const r = 50;
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#1c0b10';
+    ctx.fillStyle = '#300f0a';
     ctx.beginPath();
     ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
     ctx.fill();
@@ -545,7 +545,7 @@ function drawPadMarks() {
     if (round) ctx.arc(cx, cy, half, 0, Math.PI * 2); else ctx.rect(cx - half, cy - half, half * 2, half * 2);
     ctx.fill();
     ctx.globalAlpha = 0.35 + 0.4 * k;
-    ctx.strokeStyle = '#8a8a95';
+    ctx.strokeStyle = '#927e6a';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([6, 5]);
     ctx.beginPath();
@@ -623,7 +623,7 @@ function drawPermanentFrame(pad, def) {
 // цвета усиления убывает), посередине горят секунды до того, как он загорится снова
 function drawPadCooldown(pad, def) {
   const cx = pad.x + pad.w / 2, cy = pad.y + pad.h / 2, k = clamp(pad.cooldown / pad.cooldownTime, 0, 1);
-  ctx.fillStyle = '#0e0e10';
+  ctx.fillStyle = '#2a1d0d';
   ctx.globalAlpha = 0.6;
   ctx.fillRect(pad.x, pad.y, pad.w, pad.h);
   ctx.strokeStyle = COLORS.neutral;
@@ -709,7 +709,7 @@ function drawCannonShots() {
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#fff3c0';
+    ctx.fillStyle = '#efd8a1';
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.r * 0.45, 0, Math.PI * 2);
     ctx.fill();

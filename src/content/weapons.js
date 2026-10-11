@@ -172,7 +172,7 @@ const spark = {
     pts.push([foe.x, foe.y]);
     // чем дольше держится молния (чем сильнее разогналась), тем она толще
     const thick = Math.min(2.2, 1 + 0.25 * Math.floor(b.held || 0));
-    for (const [width, color, alpha] of [[5 * thick, w.color, 0.35], [1.6 * thick, '#eef4ff', 0.95]]) {
+    for (const [width, color, alpha] of [[5 * thick, w.color, 0.35], [1.6 * thick, '#fff4dc', 0.95]]) {
       ctx.globalAlpha = alpha;
       ctx.strokeStyle = color;
       ctx.lineWidth = width;

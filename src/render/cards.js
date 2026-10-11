@@ -22,7 +22,7 @@ function kit(ctx) {
     ctx.fillStyle = color;
     ctx.fill();
   };
-  const mark = (u, paint) => { ctx.lineWidth = 2; ctx.strokeStyle = '#0e0e10'; paint(u, u.facing, ctx); };
+  const mark = (u, paint) => { ctx.lineWidth = 2; ctx.strokeStyle = '#2a1d0d'; paint(u, u.facing, ctx); };
   // заранее заданный разброс изломов: рисунок одинаковый при каждом показе
   const JAG = [0.6, -0.9, 0.4, -0.3, 0.8, -0.7, 0.2];
   return {
@@ -40,7 +40,7 @@ function kit(ctx) {
     },
     enemy(x, y, color = COLORS.enemy, r = 14) {
       body(x, y, r, color);
-      ctx.fillStyle = '#0e0e10';
+      ctx.fillStyle = '#2a1d0d';
       for (const s of [-0.4, 0.4]) {
         ctx.beginPath();
         ctx.arc(x - r * 0.35, y + s * r, 2, 0, Math.PI * 2);
@@ -140,7 +140,7 @@ function kit(ctx) {
       ctx.strokeRect(x - 11, y - 11, 22, 22);
     },
     speedLines(x, y) {
-      ctx.strokeStyle = '#8a8a95';
+      ctx.strokeStyle = '#927e6a';
       ctx.lineWidth = 2;
       for (const [dy, len] of [[-12, 26], [0, 36], [12, 26]]) {
         ctx.beginPath(); ctx.moveTo(x, y + dy); ctx.lineTo(x + len, y + dy); ctx.stroke();
