@@ -16,32 +16,22 @@
   html, body { height: 100%; }
   /* фон и за краем страницы: на iPhone браузер показывает его под вырезом и под своими панелями */
   html { background: #0e0e10; }
+  /* игра на всё окно страницы и на компьютере, и на телефоне; страница не прокручивается и с самого начала, ещё до
+     скриптов, не шире окна — иначе iPhone при загрузке отдаляет её и так оставляет */
   body { margin: 0; background: #0e0e10; color: #b9b9c0; font: 13px/1.4 monospace;
-         display: flex; flex-direction: column; align-items: center;
+         position: fixed; inset: 0; overflow: hidden;
          -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
          -webkit-touch-callout: none; overscroll-behavior: none; }
-  #bar { padding: 8px; display: flex; gap: 14px; align-items: center; }
   button { font: 13px monospace; padding: 5px 12px; background: #23232a; color: #ddd;
            border: 1px solid #45454f; cursor: pointer; }
   @media (hover: hover) { button:hover { background: #2e2e37; } }
   button:active { background: #3a3a46; }
   canvas { background: #0a0a0c; display: block; touch-action: none; }
-  #stage { position: relative; }
-  /* сенсорный экран ещё до скриптов: страница не шире экрана, иначе iPhone при загрузке отдаляет её и так оставляет */
-  @media (pointer: coarse) {
-    body { overflow: hidden; }
-    #bar { display: none; }
-    #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; }
-  }
-  /* телефон (режим касаний): игра на весь экран, без полоски сверху, в обход выреза экрана */
-  body.touch { position: fixed; inset: 0; overflow: hidden; }
-  body.touch #bar { display: none; }
-  /* сцена на телефоне — весь экран страницы минус вырез; размер берётся из макета, а не из видимой области:
+  /* сцена — всё окно страницы минус вырез экрана; размер берётся из макета, а не из видимой области:
      на iPhone она меняется от зума и при повороте врёт */
-  body.touch #stage { position: fixed; top: env(safe-area-inset-top); right: env(safe-area-inset-right);
-                      bottom: env(safe-area-inset-bottom); left: env(safe-area-inset-left);
-                      width: auto; height: auto; touch-action: none; }
-  body.touch #c { width: 100% !important; height: 100% !important; }
+  #stage { position: fixed; top: env(safe-area-inset-top); right: env(safe-area-inset-right);
+           bottom: env(safe-area-inset-bottom); left: env(safe-area-inset-left); overflow: hidden; touch-action: none; }
+  #c { width: 100%; height: 100%; }
   #safeProbe { position: fixed; left: 0; top: 0; visibility: hidden; pointer-events: none;
                padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
   #rotate { display: none; position: fixed; inset: 0; z-index: 50; background: #0e0e10; color: #c8c8d2;
@@ -93,6 +83,15 @@
   body.touch .card h3 { font-size: 14px; }
   body.touch .card .desc { font-size: 11px; min-height: 0; }
   body.touch #panelControls { max-width: 760px; padding: 10px 16px; }
+  /* низкое окно и на компьютере (окно игры на сайте бывает 821×462): кнопки в ряд, список уровней в две колонки */
+  @media (max-height: 600px) {
+    .panel { gap: 10px; }
+    .panel h1 { margin: 0 0 4px; font-size: 24px; }
+    .btnRow { flex-direction: row; gap: 12px; }
+    #levelList { display: grid; grid-template-columns: repeat(2, minmax(0, 360px)); gap: 10px; }
+    .panel button.level { width: auto; height: 100%; }
+    #panelWin p { margin: 0; }
+  }
   /* совсем низкая область (iPhone в браузере: панели и вырез отнимают треть экрана) — ещё компактнее */
   @media (max-height: 320px) {
     body.touch .panel { gap: 6px; padding: 4px 0; }
@@ -140,9 +139,12 @@
   .tBtn.glow { border-color: #f0f0f5; color: #fff; background: rgba(240,240,245,0.18); box-shadow: 0 0 14px rgba(240,240,245,0.35); }
   #tDrop.glow { border-color: #8ce27a; color: #d8f8c8; background: rgba(140,226,122,0.18); box-shadow: 0 0 14px rgba(140,226,122,0.4); }
   .tBtn.pressed { background: rgba(255,255,255,0.3); }
-  .tTop { position: absolute; top: 6px; right: 8px; display: flex; gap: 8px; }
+  /* значки паузы и «заново» в углу — во время партии, и при касаниях, и мышью */
+  #corner { display: none; position: absolute; top: 6px; right: 8px; z-index: 6; gap: 8px; }
+  #corner.on { display: flex; }
   .tIcon { width: 44px; height: 40px; padding: 0; font-size: 18px; background: rgba(35,35,42,0.75); border: 1px solid rgba(255,255,255,0.2);
            color: #ddd; touch-action: none; }
+  @media (hover: hover) { .tIcon:hover { background: rgba(60,60,72,0.9); } }
   .tIcon.pressed { background: rgba(80,80,95,0.9); }
   #tRestart.armed { width: auto; padding: 0 10px; font-size: 13px; background: rgba(150,50,50,0.85); }
   #tRestart.armed::after { content: ' ещё раз — заново'; }
@@ -177,11 +179,6 @@
   <div id="debug"></div>
   <div id="safeProbe"></div>
   <div id="rotate"><div class="phone"></div>Поверни телефон горизонтально</div>
-  <div id="bar">
-    <button id="restart">RESTART (R)</button>
-    <button id="menuBtn">ПАУЗА (ESC)</button>
-    <span>W — вперёд, A/D — поворот &nbsp;|&nbsp; ПРОБЕЛ — присоединить дружочка &nbsp;|&nbsp; X — бросить последнего</span>
-  </div>
   <div id="stage">
     <canvas id="c"></canvas>
     <div id="touch">
@@ -190,10 +187,10 @@
         <button id="tGrab" class="tBtn">ВЗЯТЬ</button>
         <button id="tDrop" class="tBtn">БРОСИТЬ</button>
       </div>
-      <div class="tTop">
-        <button id="tRestart" class="tIcon">↻</button>
-        <button id="tPause" class="tIcon">❚❚</button>
-      </div>
+    </div>
+    <div id="corner">
+      <button id="tRestart" class="tIcon" title="Заново (R)">↻</button>
+      <button id="tPause" class="tIcon" title="Пауза (P)">❚❚</button>
     </div>
     <div id="overlay">
       <div id="panelMain" class="panel active">
@@ -255,7 +252,7 @@
         <p id="modeHint" class="touch-only"></p>
         <button id="backBtn">Назад</button>
       </div>
-      <div id="build">сборка 9</div>
+      <div id="build">сборка 10</div>
     </div>
   </div>
   <script src="src/core/debug.js"></script>

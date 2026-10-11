@@ -1,5 +1,6 @@
 // Сенсорное управление: HTML-слой поверх канваса — плавающий джойстик и кнопки. Касания превращаются в те же
 // намерения, что и клавиши: команды уходят в input.command(), отклонение джойстика — в input.setStick().
+// Значки паузы и «заново» в углу — отдельно от слоя: они есть и на компьютере (мышью).
 // Размеры — в пикселях экрана, от масштаба игры не зависят. Мультитач: у каждого пальца свой pointerId,
 // можно ехать джойстиком и одновременно жать «ВЗЯТЬ».
 //
@@ -10,7 +11,8 @@
 //            решает движение Героя в game/update.js).
 // Настройка mirror — зеркально: джойстик слева, кнопки справа. Настройки хранятся в localStorage.
 //
-// setVisible(on) — показывать ли слой (только во время партии); setGlow(name, on) — подсветка кнопки команды
+// setVisible(on) — показывать ли кнопки (только во время партии; джойстик и «ВЗЯТЬ» / «БРОСИТЬ» — только при
+// касаниях, значки в углу — всегда); setGlow(name, on) — подсветка кнопки команды
 // ('recruit' — рядом есть кого взять, 'drop' — Герой на кнопке и можно оставить дружочка).
 (function (G) {
 'use strict';
@@ -21,6 +23,7 @@ const { isTouch } = G.screen;
 const { command, setStick } = G.input;
 
 const layer = document.getElementById('touch');
+const corner = document.getElementById('corner');
 const stickEl = document.getElementById('tStick');
 const knobEl = stickEl.querySelector('.knob');
 const restartEl = document.getElementById('tRestart');
@@ -97,15 +100,17 @@ function local(ev) {
   return { x: ev.clientX - r.left, y: ev.clientY - r.top, w: r.width };
 }
 
+// кнопку нажали пальцем или мышью: подсвечена, пока держат
+function pressButton(ev, btn) {
+  pressed.set(ev.pointerId, btn);
+  btn.classList.add('pressed');
+  press(btn);
+}
+
 layer.addEventListener('pointerdown', (ev) => {
   ev.preventDefault();
-  const btn = ev.target.closest('.tBtn, .tIcon');
-  if (btn) {
-    pressed.set(ev.pointerId, btn);
-    btn.classList.add('pressed');
-    press(btn);
-    return;
-  }
+  const btn = ev.target.closest('.tBtn');
+  if (btn) { pressButton(ev, btn); return; }
   const p = local(ev);
   // джойстик ведётся только со своей половины экрана: промах мимо кнопки другой рукой его не включает
   const stickSide = settings.mirror ? p.x < p.w / 2 : p.x >= p.w / 2;
@@ -130,10 +135,18 @@ function onUp(ev) {
   const btn = pressed.get(ev.pointerId);
   if (btn) { btn.classList.remove('pressed'); pressed.delete(ev.pointerId); }
 }
-layer.addEventListener('pointerup', onUp);
-layer.addEventListener('pointercancel', onUp);
+corner.addEventListener('pointerdown', (ev) => {
+  const btn = ev.target.closest('.tIcon');
+  if (!btn) return;
+  ev.preventDefault(); // и фокус не забирает: пробел потом не «нажмёт» кнопку
+  pressButton(ev, btn);
+});
+
+// отпустить могут где угодно: кнопка паузы, например, уже под оверлеем
+window.addEventListener('pointerup', onUp);
+window.addEventListener('pointercancel', onUp);
 layer.addEventListener('lostpointercapture', onUp);
-layer.addEventListener('contextmenu', (ev) => ev.preventDefault());
+for (const el of [layer, corner]) el.addEventListener('contextmenu', (ev) => ev.preventDefault());
 
 // все пальцы отпущены: свернули вкладку, слой спрятан — Герой не должен ехать сам
 function releaseAll() {
@@ -143,13 +156,14 @@ function releaseAll() {
 }
 document.addEventListener('visibilitychange', releaseAll);
 
-let visible = false;
+let visible = false, visibleTouch = false;
 function setVisible(on) {
-  on = on && isTouch();
-  if (on === visible) return;
-  visible = on;
-  layer.classList.toggle('on', on);
-  if (!on) releaseAll();
+  const onTouch = on && isTouch();
+  if (on === visible && onTouch === visibleTouch) return;
+  visible = on; visibleTouch = onTouch;
+  corner.classList.toggle('on', on);
+  layer.classList.toggle('on', onTouch);
+  releaseAll();
 }
 
 const glowEls = { recruit: document.getElementById('tGrab'), drop: document.getElementById('tDrop') };

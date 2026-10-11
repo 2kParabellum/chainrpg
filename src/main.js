@@ -230,9 +230,6 @@ LEVELS.forEach((level, i) => {
   levelList.append(btn);
 });
 
-onClick('restart', restart);
-// пауза посреди партии; после поражения — сразу в меню
-onClick('menuBtn', () => { if (state.status === 'dead') toMenu(); else pause(); });
 onClick('resumeBtn', () => { screenInfo.enterFullscreen(); resume(); });
 onClick('pauseRestartBtn', restart);
 onClick('pauseMenuBtn', toMenu);

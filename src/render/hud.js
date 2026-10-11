@@ -201,7 +201,7 @@ function drawHud() {
   }
   parts.push(`ЦЕПОЧКА: ${state.party.length}`, `СКОРОСТЬ: ${Math.round(leaderSpeedMul() * 100)}%`);
   // строка состояния; на узком экране — в несколько строк, и справа не заходит под значки паузы и «заново»
-  const maxW = CONFIG.VIEW.w - 24 - (isTouch() ? 140 : 0);
+  const maxW = CONFIG.VIEW.w - 24 - 140;
   let ty = 22;
   ctx.fillStyle = '#c8c8d2';
   for (const line of wrapLines(parts, maxW, '   ')) { ctx.fillText(line, 12, ty); ty += 16; }

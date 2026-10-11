@@ -1,7 +1,8 @@
 // Экран: размер канваса и вида, способ ввода (клавиатура или касание), положение телефона, полноэкранный режим.
-// На компьютере канвас постоянного размера, как раньше. На телефоне (режим касаний) канвас на всю видимую область,
-// высота вида — чтобы масштаб был около CONFIG.SCREEN.touchScale (но не ниже touchViewMin и не выше, чем на компьютере),
-// ширина — по соотношению сторон; CONFIG.VIEW переписывается здесь.
+// Способ ввода решает устройство (сенсорное или нет), а размер — окно: сцена всегда на всё окно страницы (минус вырез),
+// и на компьютере, и на телефоне. Короткая сторона вида — CONFIG.SCREEN.viewMax, если окно достаточно большое
+// (большой экран показывает то же, только крупнее), а в тесном окне — сколько влезет при масштабе minScale (но не
+// меньше viewMin); длинная сторона — по соотношению сторон окна. CONFIG.VIEW переписывается здесь.
 // iPhone: браузер (Chrome, Safari) оставляет странице не весь экран — панели и вырез; весь экран — только у игры,
 // запущенной с иконки «На экран Домой». На iPhone в браузере у body класс ios-browser (подсказка в меню).
 // Канвас рисуется в разрешении экрана (× devicePixelRatio): игра рисует в единицах мира, а pixelScale() —
@@ -104,26 +105,20 @@ function fit() {
   document.body.classList.toggle('portrait', isPortrait());
   document.body.classList.toggle('rotate', needsRotate());
   const S = CONFIG.SCREEN;
-  let cssW, cssH;
-  if (touch) {
-    // сцена — весь экран страницы минус вырез (растягивает CSS, здесь только читаем размер)
-    cssW = Math.max(1, stage.clientWidth);
-    cssH = Math.max(1, stage.clientHeight);
-    // страница не должна уезжать прокруткой (iPhone прокручивает её при повороте и показе панелей)
-    if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
-    // объекты одного размера на любом телефоне и при любом положении: масштаб считаем по короткой стороне;
-    // если места мало, обзор меньше, но не до тесноты; планшет — как компьютер
-    const short = Math.min(cssW, cssH);
-    const k = short / clamp(short / S.touchScale, S.touchViewMin, S.desktop.h); // точек экрана на единицу мира
-    CONFIG.VIEW.w = Math.round(cssW / k);
-    CONFIG.VIEW.h = Math.round(cssH / k);
-  } else {
-    cssW = S.desktop.w; cssH = S.desktop.h;
-    CONFIG.VIEW.w = S.desktop.w; CONFIG.VIEW.h = S.desktop.h;
-  }
-  const dpr = Math.min(window.devicePixelRatio || 1, S.maxDpr);
-  canvas.style.width = cssW + 'px';   // на телефоне CSS растягивает канвас на всю сцену (100%)
-  canvas.style.height = cssH + 'px';
+  // сцена — всё окно страницы минус вырез (растягивает CSS, здесь только читаем размер)
+  const cssW = Math.max(1, stage.clientWidth);
+  const cssH = Math.max(1, stage.clientHeight);
+  // страница не должна уезжать прокруткой (iPhone прокручивает её при повороте и показе панелей)
+  if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+  // масштаб по короткой стороне — объекты одного размера при любом положении телефона и любой форме окна;
+  // если места мало, обзор меньше, но не до тесноты
+  const short = Math.min(cssW, cssH);
+  const minScale = touch ? S.minScale.touch : S.minScale.desktop;
+  const k = short / clamp(short / minScale, S.viewMin, S.viewMax); // точек экрана на единицу мира
+  CONFIG.VIEW.w = Math.round(cssW / k);
+  CONFIG.VIEW.h = Math.round(cssH / k);
+  // чёткость под экран, но без лишних пикселей: на большом экране с высокой чёткостью канвас чуть мягче
+  const dpr = Math.min(window.devicePixelRatio || 1, S.maxDpr, Math.max(1, Math.sqrt(S.maxPixels / (cssW * cssH))));
   canvas.width = Math.round(cssW * dpr);
   canvas.height = Math.round(cssH * dpr);
   scale = canvas.height / CONFIG.VIEW.h;
