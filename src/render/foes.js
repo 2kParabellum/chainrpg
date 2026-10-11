@@ -1,6 +1,7 @@
-// Обычные враги — другая раса, чем свои (graphics.md): тёмные тела с колышущимся краем, светящиеся глаза
-// без белков, вместо рук — лапы, клешни, хвост, рога, ствол. Рисует Стрелка, Бычка, Колесницу, Скорпиона,
-// Зомби и Хантера; остальных (катапульта, порталы, боссы, турели, мины) по-прежнему рисуют их записи в реестре.
+// Враги — другая раса, чем свои (graphics.md): тёмные тела с колышущимся краем, светящиеся глаза
+// без белков, вместо рук — лапы, клешни, хвост, рога, ствол. Целиком рисует Стрелка, Бычка, Колесницу, Скорпиона,
+// Зомби, Хантера, катапульту, мину, портал и турель. Демону и Спруту даёт тела (demon, kraken): прицелы, тентакли,
+// лужи и прочее вокруг них рисуют их записи в реестре.
 // Анимация выводится из изменений врага между кадрами (свой кэш, состояние игры только читается).
 (function (G) {
 'use strict';
@@ -94,9 +95,10 @@ function hpBar(x, y, r, k) {
   ctx.fillStyle = C.red; ctx.beginPath(); ctx.roundRect(bx, y, w * Math.max(0.03, Math.min(1, k)), h, 2); ctx.fill();
 }
 
-function has(type) { return !!LOOK[type]; }
+function has(type) { return !!LOOK[type] || !!SPECIAL[type]; }
 
 function draw(e) {
+  if (SPECIAL[e.type]) { drawSpecial(e); return; }
   const L = LOOK[e.type], a = track(e), t = state.time + a.seed, r = e.r, face = a.face, type = e.type;
   const w = Math.sin(t * 4);
   let sx = 1 + 0.045 * w, sy = 1 - 0.045 * w, dx = 0, flash = 0;
@@ -258,6 +260,234 @@ function draw(e) {
   }
 }
 
+// --- машины и громадины ---
+
+function flashOver(rx, ry, flash) {
+  if (flash > 0) { ctx.fillStyle = `rgba(255,250,240,${0.85 * flash})`; ctx.fillRect(-rx * 1.6, -ry * 1.6, rx * 3.2, ry * 3.2); }
+}
+function hurtFlash(a) {
+  const ha = state.time - a.hurtAt;
+  return ha >= 0 && ha < 0.1 ? 1 - ha / 0.1 : 0;
+}
+
+// катапульта: деревянная телега на колёсах, рычаг с ковшом слизи смотрит на цель; после броска ковш пуст
+function drawCatapult(e, a) {
+  const r = e.r, f = e.facing || 0, fl = hurtFlash(a), fired = state.time - a.atkAt < 0.6;
+  ctx.fillStyle = 'rgba(20,10,5,0.5)'; ell(e.x, e.y + r * 0.85, r * 1.2, r * 0.35); ctx.fill();
+  ctx.save(); ctx.translate(e.x, e.y);
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+  for (const [wx, wy] of [[-0.85, -0.55], [0.85, -0.55], [-0.85, 0.65], [0.85, 0.65]]) {
+    ctx.fillStyle = '#45230d'; ell(wx * r, wy * r, r * 0.28, r * 0.28); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(wx * r - r * 0.2, wy * r); ctx.lineTo(wx * r + r * 0.2, wy * r);
+    ctx.moveTo(wx * r, wy * r - r * 0.2); ctx.lineTo(wx * r, wy * r + r * 0.2); ctx.stroke();
+  }
+  ctx.fillStyle = '#36170c'; ctx.fillRect(-r * 0.8, -r * 0.75, r * 1.6, r * 1.45);
+  ctx.fillStyle = C.brown; ctx.fillRect(-r * 0.8, -r * 0.75, r * 1.6, r * 1.15);
+  ctx.strokeRect(-r * 0.8, -r * 0.75, r * 1.6, r * 1.45);
+  ctx.beginPath(); for (const k of [-0.3, 0.2]) { ctx.moveTo(-r * 0.8, k * r); ctx.lineTo(r * 0.8, k * r); } ctx.stroke();
+  flashOver(r * 0.8, r * 0.75, fl);
+  // рычаг и ковш
+  const len = r * (fired ? 1.45 : 1.15), bx = Math.cos(f) * len, by = Math.sin(f) * len - r * 0.15;
+  for (const [lw, col] of [[8, C.ink], [4, '#ab5c1c']]) {
+    ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-Math.cos(f) * r * 0.3, -Math.sin(f) * r * 0.3 - r * 0.15); ctx.lineTo(bx, by); ctx.stroke();
+  }
+  ctx.fillStyle = C.ink; ell(bx, by, r * 0.32, r * 0.32); ctx.fill();
+  if (!fired) {
+    glowEye(bx, by, r * 0.18, '#9b1a0a');
+  }
+  ctx.restore(); ctx.lineCap = 'butt';
+}
+
+// мина: тёмный колючий комок, наполовину в земле, красный глаз часто мигает
+function drawMine(m, a) {
+  const r = m.r, t = state.time + a.seed;
+  ctx.fillStyle = 'rgba(20,10,5,0.6)'; ell(m.x, m.y + r * 0.3, r * 1.25, r * 0.6); ctx.fill();
+  ctx.save(); ctx.translate(m.x, m.y);
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.fillStyle = C.stone;
+  for (let i = 0; i < 8; i++) {
+    const ang = i / 8 * TAU + 0.2;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(ang - 0.3) * r * 0.65, Math.sin(ang - 0.3) * r * 0.6);
+    ctx.lineTo(Math.cos(ang) * r * 1.2, Math.sin(ang) * r * 1.1);
+    ctx.lineTo(Math.cos(ang + 0.3) * r * 0.65, Math.sin(ang + 0.3) * r * 0.6);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  edgePath(r * 0.72, r * 0.66, t, 'wobble', a.seed); ctx.fillStyle = '#36170c'; ctx.fill(); ctx.lineWidth = 2; ctx.stroke();
+  if (Math.sin(t * 9) > -0.3) glowEye(0, -r * 0.05, r * 0.24, C.red);
+  ctx.restore();
+}
+
+// портал: тёмный водоворот с красными рукавами; перед выходом врага ядро разгорается и изнутри глядят глаза
+function drawPortal(e, a) {
+  const r = e.r, age = e.age || 0, t = state.time + a.seed, fl = hurtFlash(a);
+  const soon = e.spawnIn < 1.5 ? 1 - Math.max(0, e.spawnIn) / 1.5 : 0;
+  const g = ctx.createRadialGradient(e.x, e.y, r * 0.8, e.x, e.y, r * 1.6);
+  g.addColorStop(0, 'rgba(155,26,10,0.35)'); g.addColorStop(1, 'rgba(155,26,10,0)');
+  ctx.fillStyle = g; ell(e.x, e.y, r * 1.6, r * 1.6); ctx.fill();
+  ctx.save(); ctx.translate(e.x, e.y);
+  edgePath(r, r, t, 'wobble', a.seed); ctx.fillStyle = '#300f0a'; ctx.fill();
+  ctx.save(); edgePath(r, r, t, 'wobble', a.seed); ctx.clip();
+  ctx.lineCap = 'round';
+  for (let arm = 0; arm < 3; arm++) {
+    for (const [lw, col] of [[r * 0.2, '#550f0a'], [r * 0.08, '#9b1a0a']]) {
+      ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath();
+      for (let k = 0; k <= 20; k++) {
+        const q = k / 20, ang = arm / 3 * TAU - age * 1.5 + q * 3.2, rr = r * (0.15 + 0.9 * q);
+        if (k) ctx.lineTo(Math.cos(ang) * rr, Math.sin(ang) * rr); else ctx.moveTo(Math.cos(ang) * rr, Math.sin(ang) * rr);
+      }
+      ctx.stroke();
+    }
+  }
+  const core = r * (0.22 + 0.04 * Math.sin(age * 3) + soon * 0.15);
+  const cg = ctx.createRadialGradient(0, 0, 0, 0, 0, core * 2);
+  cg.addColorStop(0, `rgba(239,105,47,${0.6 + soon * 0.4})`); cg.addColorStop(1, 'rgba(239,58,12,0)');
+  ctx.fillStyle = cg; ell(0, 0, core * 2, core * 2); ctx.fill();
+  if (soon > 0.2) for (let i = 0; i < 3; i++) {
+    const ang = i * 2.1 + 0.5, d = r * 0.55;
+    ctx.globalAlpha = Math.min(1, (soon - 0.2) * 2);
+    for (const s of [-1, 1]) glowEye(Math.cos(ang) * d + s * r * 0.07, Math.sin(ang) * d, r * 0.045, C.gold);
+    ctx.globalAlpha = 1;
+  }
+  flashOver(r, r, fl);
+  ctx.restore();
+  edgePath(r, r, t, 'wobble', a.seed); ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.stroke();
+  ctx.restore(); ctx.lineCap = 'butt';
+}
+
+// кольцо щита (турель, Демон): пульсирует, пока щит включён
+function shieldRing(e, extra) {
+  ctx.strokeStyle = '#3c9f9c'; ctx.lineWidth = 3;
+  ctx.globalAlpha = 0.6 + 0.25 * Math.sin((e.age || state.time) * 4);
+  ell(e.x, e.y, e.r + extra, e.r + extra); ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+// турель: каменная восьмигранная башня, наверху тёмный купол с одним светящимся глазом и стволом к цели
+function drawTurret(e, a) {
+  const r = e.r, f = e.facing || 0, fl = hurtFlash(a), shot = state.time - a.atkAt < 0.08;
+  ctx.fillStyle = 'rgba(20,10,5,0.5)'; ell(e.x, e.y + r * 0.8, r * 1.1, r * 0.35); ctx.fill();
+  const oct = (cx, cy, rr) => { ctx.beginPath(); for (let i = 0; i < 8; i++) { const ang = i / 8 * TAU + Math.PI / 8; ctx.lineTo(cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr * 0.85); } ctx.closePath(); };
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
+  oct(e.x, e.y + 6, r); ctx.fillStyle = '#684c3c'; ctx.fill(); ctx.stroke();
+  oct(e.x, e.y, r); ctx.fillStyle = C.stone; ctx.fill(); ctx.stroke();
+  ctx.save(); ctx.translate(e.x, e.y - 2);
+  for (const [lw, col] of [[9, C.ink], [5, '#45230d']]) {
+    ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(f) * r * (shot ? 1.05 : 1.25), Math.sin(f) * r * (shot ? 1.05 : 1.25)); ctx.stroke();
+  }
+  if (shot) star(Math.cos(f) * r * 1.4, Math.sin(f) * r * 1.4, r * 0.3, C.orange);
+  edgePath(r * 0.55, r * 0.5, state.time + a.seed, 'wobble', a.seed); ctx.fillStyle = '#550f0a'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.stroke();
+  glowEye(Math.cos(f) * r * 0.12, Math.sin(f) * r * 0.1 - r * 0.05, r * 0.2, C.gold);
+  flashOver(r * 0.6, r * 0.6, fl);
+  ctx.restore(); ctx.lineCap = 'butt';
+  if (e.shielded) shieldRing(e, e.cfg.shieldAuraExtra);
+}
+
+const SPECIAL = { tower: drawCatapult, mine: drawMine, portal: drawPortal, turret: drawTurret };
+
+function drawSpecial(e) {
+  const a = track(e);
+  SPECIAL[e.type](e, a);
+  if (e.type !== 'mine' && e.hp < e.maxHp) hpBar(e.x, e.y - e.r * (e.type === 'portal' ? 1.15 : 1.3) - 8, Math.min(e.r, 40), e.hp / e.maxHp);
+}
+
+// тело Демона: громадный тёмный блоб с рогами, светящимися глазами, зубастой пастью и когтистыми лапами.
+// color — цвет тела (при замахе — цвет атаки), angry — злобный взгляд перед тараном
+function demon(e, color, angry, glowing) {
+  const a = track(e), r = e.r, t = state.time + a.seed, face = a.face, f = e.facing || -Math.PI / 2, fl = hurtFlash(a);
+  const w = Math.sin(t * 2.5);
+  const rx = r * (1 + 0.03 * w), ry = r * 0.92 * (1 - 0.03 * w);
+  ctx.fillStyle = 'rgba(20,10,5,0.5)'; ell(e.x, e.y + r * 0.85, r * 1.1, r * 0.33); ctx.fill();
+  ctx.save(); ctx.translate(e.x, e.y);
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // рога
+  ctx.fillStyle = C.cream;
+  for (const s of [-1, 1]) {
+    ctx.beginPath(); ctx.moveTo(s * r * 0.35, -r * 0.7); ctx.quadraticCurveTo(s * r * 1.1, -r * 0.9, s * r * 0.95, -r * 1.55);
+    ctx.quadraticCurveTo(s * r * 0.75, -r * 1.05, s * r * 0.1, -r * 0.85); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  // лапы с когтями по бокам
+  for (const s of [-1, 1]) {
+    const px = s * r * 1.02, py = r * 0.25 + Math.sin(t * 3 + s) * r * 0.05;
+    ctx.fillStyle = '#300f0a'; ell(px, py, r * 0.26, r * 0.22); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.cream;
+    for (let k = -1; k <= 1; k++) { ctx.beginPath(); ctx.moveTo(px + s * r * 0.15, py + k * r * 0.1 - r * 0.04); ctx.lineTo(px + s * r * 0.36, py + k * r * 0.12); ctx.lineTo(px + s * r * 0.15, py + k * r * 0.1 + r * 0.04); ctx.closePath(); ctx.fill(); }
+  }
+  edgePath(rx, ry, t, 'wobble', a.seed); ctx.fillStyle = '#300f0a'; ctx.fill();
+  ctx.save(); edgePath(rx, ry, t, 'wobble', a.seed); ctx.clip();
+  ctx.fillStyle = color; ell(-rx * 0.05, -ry * 0.12, rx * 0.92, ry * 0.85); ctx.fill();
+  ctx.strokeStyle = hexA(glowing ? C.gold : C.orange, glowing ? 0.6 : 0.35); ctx.lineWidth = r * 0.22; ell(0, -r * 0.18, rx * 1.02, ry); ctx.stroke();
+  flashOver(rx, ry, fl);
+  ctx.restore();
+  edgePath(rx, ry, t, 'wobble', a.seed); ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.stroke();
+  // глаза: перед тараном больше и с бровями
+  const fx = face * r * 0.15, er = r * (angry ? 0.17 : 0.13), ec = glowing ? C.cream : C.orange;
+  for (const s of [-1, 1]) {
+    glowEye(fx + s * r * 0.32, -r * 0.22, er, ec, 0, 0.8);
+    ctx.fillStyle = C.ink; ell(fx + s * r * 0.32 + Math.cos(f) * er * 0.35, -r * 0.22 + Math.sin(f) * er * 0.3, er * 0.25, er * 0.7); ctx.fill();
+  }
+  if (angry) {
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 5;
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(fx + s * r * 0.55, -r * 0.5); ctx.lineTo(fx + s * r * 0.12, -r * 0.36); ctx.stroke(); }
+  }
+  // пасть с зубами
+  const mw = r * 0.5, my = r * 0.22, open = angry ? r * 0.28 : r * 0.18;
+  ctx.fillStyle = C.dark; ctx.beginPath(); ctx.moveTo(fx - mw, my); ctx.quadraticCurveTo(fx, my + open * 2, fx + mw, my); ctx.closePath(); ctx.fill();
+  ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.fillStyle = C.cream;
+  for (let i = 0; i < 6; i++) { const tx = fx - mw + (i + 0.5) * (mw * 2 / 6); ctx.beginPath(); ctx.moveTo(tx - mw / 7, my); ctx.lineTo(tx, my + open * 0.6); ctx.lineTo(tx + mw / 7, my); ctx.closePath(); ctx.fill(); }
+  ctx.restore(); ctx.lineCap = 'butt';
+}
+
+// тело Спрута: шевелящиеся щупальца с присосками, тёмно-бирюзовый колышущийся блоб, светящиеся глаза над пастью,
+// круглая пасть с зубами (mouth — её радиус). swell — вспухание после глотка или пука, col — цвет тела
+function kraken(e, swell, col, mouth) {
+  const a = track(e), r = e.r, t = state.time + a.seed, fl = hurtFlash(a), age = e.age || 0;
+  ctx.save(); ctx.translate(e.x, e.y);
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 8; i++) {
+    const ang = (i / 8) * TAU + 0.2, wob = Math.sin(age * 2.2 + i * 1.7) * 0.5;
+    const x0 = Math.cos(ang) * r * 0.8, y0 = Math.sin(ang) * r * 0.8;
+    const x1 = Math.cos(ang + wob * 0.4) * r * 1.45, y1 = Math.sin(ang + wob * 0.4) * r * 1.45;
+    const x2 = Math.cos(ang + wob) * r * 1.8, y2 = Math.sin(ang + wob) * r * 1.8;
+    for (const [lw, c] of [[16, C.ink], [11, '#276468']]) {
+      ctx.strokeStyle = c; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(x1, y1, x2, y2); ctx.stroke();
+    }
+    ctx.fillStyle = C.cream;
+    for (const q of [0.55, 0.8]) {
+      const bx = (1 - q) * (1 - q) * x0 + 2 * (1 - q) * q * x1 + q * q * x2, by = (1 - q) * (1 - q) * y0 + 2 * (1 - q) * q * y1 + q * q * y2;
+      ell(bx, by, 2, 2); ctx.fill();
+    }
+  }
+  const rx = r * swell, ry = r * swell * 0.95;
+  edgePath(rx, ry, t, 'wobble', a.seed); ctx.fillStyle = '#183f39'; ctx.fill();
+  ctx.save(); edgePath(rx, ry, t, 'wobble', a.seed); ctx.clip();
+  ctx.fillStyle = col; ell(-rx * 0.05, -ry * 0.12, rx * 0.92, ry * 0.85); ctx.fill();
+  ctx.strokeStyle = hexA(C.gold, 0.3); ctx.lineWidth = r * 0.2; ell(0, -r * 0.18, rx * 1.02, ry); ctx.stroke();
+  flashOver(rx, ry, fl);
+  ctx.restore();
+  edgePath(rx, ry, t, 'wobble', a.seed); ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.stroke();
+  for (const [ex, ey, er] of [[-0.42, -0.55, 0.13], [0.42, -0.55, 0.13], [-0.18, -0.72, 0.09], [0.18, -0.72, 0.09]]) glowEye(ex * r, ey * r, er * r, C.gold);
+  ctx.fillStyle = C.dark; ell(0, r * 0.08, mouth, mouth); ctx.fill(); ctx.lineWidth = 3; ctx.stroke();
+  ctx.fillStyle = C.cream;
+  for (let i = 0; i < 10; i++) {
+    const ang = (i / 10) * TAU + age * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(ang - 0.15) * mouth, r * 0.08 + Math.sin(ang - 0.15) * mouth);
+    ctx.lineTo(Math.cos(ang + 0.15) * mouth, r * 0.08 + Math.sin(ang + 0.15) * mouth);
+    ctx.lineTo(Math.cos(ang) * mouth * 0.6, r * 0.08 + Math.sin(ang) * mouth * 0.6);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.restore(); ctx.lineCap = 'butt';
+}
+
+// проглатываемый дружочек: персиковый комок, сжимается по дороге в пасть
+function swallowed(x, y, r) {
+  ctx.fillStyle = '#efb775'; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
+  ell(x, y, r, r * 0.95); ctx.fill(); ctx.stroke();
+}
+
 // погибшие с прошлого кадра лопаются тёмными кусочками
 function sweep() {
   const now = new Set();
@@ -266,5 +496,5 @@ function sweep() {
   lastDrawn = now;
 }
 
-G.foes = { has, draw, sweep };
+G.foes = { has, draw, sweep, demon, kraken, swallowed, shieldRing };
 })(window.Game = window.Game || {});

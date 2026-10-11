@@ -38,9 +38,11 @@ function drawWarning(w) {
 }
 
 // обычных врагов рисует render/foes.js (тёмная раса, graphics.md), остальных — их запись в реестре, полоску HP — сцена
+// записи реестра получают примитивы рисования и тела тёмной расы (g.foe)
+const enemyDraw = { ...shapes, foe: G.foes };
 function drawEnemy(e) {
   if (G.foes.has(e.type)) { G.foes.draw(e); return; }
-  enemyTypes[e.type].draw(e, shapes);
+  enemyTypes[e.type].draw(e, enemyDraw);
   drawHpBar(e);
 }
 

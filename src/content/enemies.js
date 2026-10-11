@@ -928,34 +928,9 @@ const boss = {
       }
       ctx.globalAlpha = 1;
     }
-    const color = glowing ? BOSS_ATTACK_COLOR[e.attack] : COLORS.boss;
-    g.drawUnitBody(e, color, true);
-    ctx.strokeStyle = '#2a1d0d';
-    ctx.lineWidth = 3;
+    // тело — тёмная раса (render/foes.js): при замахе — цвет атаки, перед тараном — злобный взгляд
+    g.foe.demon(e, glowing ? BOSS_ATTACK_COLOR[e.attack] : COLORS.boss, angry, glowing);
     const f = e.facing || -Math.PI / 2;
-    for (const s of [0.75, -0.75]) {
-      ctx.beginPath();
-      ctx.moveTo(e.x + Math.cos(f + s) * e.r * 0.55, e.y + Math.sin(f + s) * e.r * 0.55);
-      ctx.lineTo(e.x + Math.cos(f + s) * e.r * 1.25, e.y + Math.sin(f + s) * e.r * 1.25);
-      ctx.stroke();
-    }
-    // злобный взгляд перед тараном: глаза больше, над ними сведённые к переносице брови
-    ctx.fillStyle = glowing ? '#efd8a1' : COLORS.bossGlow;
-    for (const s of [0.35, -0.35]) {
-      ctx.beginPath();
-      ctx.arc(e.x + Math.cos(f + s) * e.r * 0.5, e.y + Math.sin(f + s) * e.r * 0.5, e.r * (angry ? 0.17 : 0.13), 0, Math.PI * 2);
-      ctx.fill();
-    }
-    if (angry) {
-      ctx.strokeStyle = '#2a1d0d';
-      ctx.lineWidth = 4;
-      for (const s of [1, -1]) {
-        ctx.beginPath();
-        ctx.moveTo(e.x + Math.cos(f + s * 0.75) * e.r * 0.62, e.y + Math.sin(f + s * 0.75) * e.r * 0.62);
-        ctx.lineTo(e.x + Math.cos(f + s * 0.12) * e.r * 0.78, e.y + Math.sin(f + s * 0.12) * e.r * 0.78);
-        ctx.stroke();
-      }
-    }
     // прицел луча: пока целится, видно линию, куда он выстрелит
     if (e.state === 'beamAim') {
       ctx.strokeStyle = COLORS.fire;
@@ -970,7 +945,7 @@ const boss = {
       ctx.globalAlpha = 1;
     }
     // щит: включён постоянно, вокруг тела пульсирующее кольцо
-    drawShield(e, g, 10);
+    g.foe.shieldRing(e, 10);
   },
 };
 
@@ -1366,49 +1341,16 @@ const kraken = {
     if (sucking) drawSuck(e, g);
     ctx.globalAlpha = 1;
     for (const t of e.tentacles) if (t.phase === 'aim') drawTentacle(e, t, g);
-    // щупальца-обрубки вокруг тела шевелятся
-    ctx.strokeStyle = COLORS.tentacle;
-    ctx.lineCap = 'round';
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2 + 0.2, wob = Math.sin(e.age * 2.2 + i * 1.7) * 0.5;
-      const x0 = e.x + Math.cos(a) * e.r * 0.8, y0 = e.y + Math.sin(a) * e.r * 0.8;
-      const x1 = e.x + Math.cos(a + wob * 0.4) * e.r * 1.45, y1 = e.y + Math.sin(a + wob * 0.4) * e.r * 1.45;
-      const x2 = e.x + Math.cos(a + wob) * e.r * 1.75, y2 = e.y + Math.sin(a + wob) * e.r * 1.75;
-      ctx.lineWidth = 12;
-      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(x1, y1, x2, y2); ctx.stroke();
-    }
-    ctx.lineCap = 'butt';
+    // тело со щупальцами, глазами и пастью — тёмная раса (render/foes.js); пасть при всасывании раскрыта шире
     const swell = 1 + 0.12 * Math.sin((e.gulp / cfg.eatTime) * Math.PI) + 0.08 * Math.sin((e.fartFx / 0.6) * Math.PI);
-    const body = { x: e.x, y: e.y, r: e.r * swell };
-    g.drawUnitBody(body, e.fartFx > 0 ? COLORS.krakenFart : COLORS.kraken, true);
-    ctx.strokeStyle = COLORS.krakenEdge;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(e.x, e.y, body.r, 0, Math.PI * 2);
-    ctx.stroke();
-    // пасть: при всасывании раскрыта шире, по кругу зубы
     const mouth = e.r * (eating ? 0.6 : sucking ? 0.5 + 0.06 * Math.sin(e.age * 12) : 0.36);
-    ctx.fillStyle = '#2a1d0d';
-    ctx.beginPath();
-    ctx.arc(e.x, e.y, mouth, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#efd8a1';
-    for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * Math.PI * 2 + e.age * 0.3;
-      ctx.beginPath();
-      ctx.moveTo(e.x + Math.cos(a - 0.15) * mouth, e.y + Math.sin(a - 0.15) * mouth);
-      ctx.lineTo(e.x + Math.cos(a + 0.15) * mouth, e.y + Math.sin(a + 0.15) * mouth);
-      ctx.lineTo(e.x + Math.cos(a) * mouth * 0.6, e.y + Math.sin(a) * mouth * 0.6);
-      ctx.closePath();
-      ctx.fill();
-    }
+    g.foe.kraken(e, swell, e.fartFx > 0 ? COLORS.krakenFart : COLORS.kraken, mouth);
     // проглатываемые: тело по прямой втягивается в пасть, сжимаясь и вытягиваясь к ней
     for (const f of e.eating) {
       const k = clamp(f.t / cfg.eatTime, 0, 1), ease = k * k;
       const a = Math.atan2(f.y - e.y, f.x - e.x), d = dist(e, f) * (1 - ease);
-      const u = { ...f.u, x: e.x + Math.cos(a) * d, y: e.y + Math.sin(a) * d, r: f.u.r * (1 - 0.8 * k), facing: a };
       ctx.globalAlpha = 1 - 0.5 * k;
-      g.drawUnitBody(u, g.allyColor(f.u), true);
+      g.foe.swallowed(e.x + Math.cos(a) * d, e.y + 0.08 * e.r + Math.sin(a) * d, f.u.r * 1.2 * (1 - 0.8 * k));
       ctx.globalAlpha = 1;
     }
     for (const b of e.globs) drawGlob(e, b, g);

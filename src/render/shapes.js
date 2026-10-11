@@ -25,13 +25,15 @@ function drawRects(list, color) {
   for (const r of list) if (visible(r)) ctx.fillRect(r.x, r.y, r.w, r.h);
 }
 
+// полоска HP — только у раненых: тёмная подложка со скруглением, свои — бирюзовая, враги — красная
 function drawHpBar(u) {
-  const w = u.r * 2.2, h = 4;
-  const x = u.x - w / 2, y = u.y - u.r - 9;
+  if (!(u.hp < u.maxHp)) return;
+  const w = Math.min(90, u.r * 2.2), h = u.r > 30 ? 6 : 4;
+  const x = u.x - w / 2, y = u.y - u.r - 12;
   ctx.fillStyle = COLORS.hpBack;
-  ctx.fillRect(x, y, w, h);
+  ctx.beginPath(); ctx.roundRect(x - 1.5, y - 1.5, w + 3, h + 3, 3); ctx.fill();
   ctx.fillStyle = u.kind === 'enemy' ? COLORS.hpEnemy : COLORS.hpAlly;
-  ctx.fillRect(x, y, w * clamp(u.hp / u.maxHp, 0, 1), h);
+  ctx.beginPath(); ctx.roundRect(x, y, w * clamp(u.hp / u.maxHp, 0.03, 1), h, 2); ctx.fill();
 }
 
 function drawUnitBody(u, color, filled) {
