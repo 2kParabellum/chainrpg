@@ -43,6 +43,9 @@
            pointer-events: none; padding: 2px 8px; font-size: 11px; color: #8ce27a; background: rgba(0,0,0,0.6); white-space: nowrap; }
   #build { position: absolute; right: 10px; bottom: 6px; font-size: 11px; color: #55555f; pointer-events: none; }
   #overlay:not(.menu) #build { display: none; }
+  #homeHint { display: none; margin: 4px 0 0; max-width: 420px; font-size: 12px; color: #8a8a95; text-align: center; }
+  #homeHint .share { display: inline-block; padding: 0 3px; border: 1px solid #6b6b78; border-radius: 3px; font-size: 10px; }
+  body.ios-browser #homeHint { display: block; }
   #overlay { position: absolute; inset: 0; background: rgba(10,10,12,0.97); overflow-y: auto; touch-action: pan-y;
              display: flex; align-items: center; justify-content: center; }
   #overlay.hidden { display: none; }
@@ -79,6 +82,23 @@
   body.touch .card h3 { font-size: 14px; }
   body.touch .card .desc { font-size: 11px; min-height: 0; }
   body.touch #panelControls { max-width: 760px; padding: 10px 16px; }
+  /* совсем низкая область (iPhone в браузере: панели и вырез отнимают треть экрана) — ещё компактнее */
+  @media (max-height: 320px) {
+    body.touch .panel { gap: 6px; padding: 4px 0; }
+    body.touch .panel h1, body.touch #panelWin h1 { margin: 0; font-size: 18px; }
+    body.touch .panel h2 { font-size: 16px; }
+    body.touch .panel button { min-height: 40px; padding: 6px 12px; font-size: 15px; }
+    body.touch .panel button.level { min-height: 50px; padding: 5px 10px; }
+    body.touch #panelWin p { font-size: 12px; }
+    body.touch #panelWin p.pickHint { display: none; }
+    body.touch .card { width: 170px; padding: 4px 4px 6px; gap: 2px; }
+    body.touch .card canvas { width: 120px; height: 72px; }
+    body.touch .card h3 { font-size: 13px; }
+    body.touch .controls { font-size: 11px; }
+    body.touch .controls td { padding: 1px 6px; }
+    body.touch .panel .opts button { min-height: 34px; }
+    #homeHint { margin: 0; max-width: 560px; font-size: 11px; }
+  }
   /* сенсорное управление: джойстик и кнопки поверх канваса, только во время партии */
   #touch { display: none; position: absolute; inset: 0; z-index: 5; touch-action: none; }
   #touch.on { display: block; }
@@ -157,6 +177,8 @@
         <button id="startBtn">Играть</button>
         <button id="controlsBtn">Управление</button>
         <button id="levelsBtn">Выбор уровня</button>
+        <p id="homeHint">Во весь экран, без панелей браузера: «Поделиться» <span class="share">⬆</span> → «На экран Домой»,
+          потом запускай игру с иконки</p>
       </div>
       <div id="panelLevels" class="panel">
         <h2>Выбор уровня</h2>
@@ -209,7 +231,7 @@
         <p id="modeHint" class="touch-only"></p>
         <button id="backBtn">Назад</button>
       </div>
-      <div id="build">сборка 4</div>
+      <div id="build">сборка 5</div>
     </div>
   </div>
   <script src="src/core/debug.js"></script>

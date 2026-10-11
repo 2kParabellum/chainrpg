@@ -1,6 +1,9 @@
 // Экран: размер канваса и вида, способ ввода (клавиатура или касание), положение телефона, полноэкранный режим.
-// На компьютере канвас постоянного размера, как раньше. На телефоне (режим касаний) канвас на весь экран,
-// высота вида — CONFIG.SCREEN.touchViewH, ширина — по соотношению сторон экрана; CONFIG.VIEW переписывается здесь.
+// На компьютере канвас постоянного размера, как раньше. На телефоне (режим касаний) канвас на всю видимую область,
+// высота вида — чтобы масштаб был около CONFIG.SCREEN.touchScale (но не ниже touchViewMin и не выше, чем на компьютере),
+// ширина — по соотношению сторон; CONFIG.VIEW переписывается здесь.
+// iPhone: браузер (Chrome, Safari) оставляет странице не весь экран — панели и вырез; весь экран — только у игры,
+// запущенной с иконки «На экран Домой». На iPhone в браузере у body класс ios-browser (подсказка в меню).
 // Канвас рисуется в разрешении экрана (× devicePixelRatio): игра рисует в единицах мира, а pixelScale() —
 // сколько пикселей канваса в одной единице.
 //
@@ -48,8 +51,14 @@ function isPortrait() {
 }
 
 let lastKey = '';
+// iPhone / iPad (iPad с iOS 13 притворяется Mac'ом), открытый в браузере, а не с иконки на экране «Домой»
+const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const standalone = navigator.standalone === true
+  || matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches;
+
 function fit() {
   document.body.classList.toggle('touch', touch);
+  document.body.classList.toggle('ios-browser', ios && !standalone);
   document.body.classList.toggle('portrait', isPortrait());
   const S = CONFIG.SCREEN;
   let cssW, cssH;
@@ -63,8 +72,8 @@ function fit() {
     });
     // страница не должна уезжать прокруткой (iPhone прокручивает её при повороте и показе панелей)
     if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
-    // телефон — вид ниже, чем на компьютере (объекты крупнее); планшет — как на компьютере
-    CONFIG.VIEW.h = clamp(cssH, S.touchViewH, S.desktop.h);
+    // объекты одного размера на любом телефоне; если места мало, обзор меньше, но не до тесноты; планшет — как компьютер
+    CONFIG.VIEW.h = Math.round(clamp(cssH / S.touchScale, S.touchViewMin, S.desktop.h));
     CONFIG.VIEW.w = Math.round(CONFIG.VIEW.h * cssW / cssH);
   } else {
     Object.assign(stage.style, { left: '', top: '', width: '', height: '' });
