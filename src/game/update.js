@@ -39,22 +39,19 @@ const game = {
   spawnEnemy, freeSpotNear, pickChaser,
 };
 
-// джойстик в режиме «Направление»: куда тянут (aim), туда Герой разворачивается с обычной скоростью поворота
-// и едет вперёд; сильно в сторону — сперва разворот без газа; почти строго назад — задний ход (как S), при этом
-// поворачивает хвостом к aim. Задний ход держится, пока угол не станет заметно меньше порога, чтобы не дёргался
+// джойстик в режиме «Направление»: куда тянут (aim), туда Герой поворачивает с обычной скоростью поворота
+// и всё время едет вперёд — тянут назад, он разворачивается дугой
 function aimSteer(lead, aim, maxTurn) {
-  const T = CONFIG.TOUCH, deg = Math.PI / 180;
-  let diff = angleDiff(aim, lead.heading);
-  lead.aimReverse = Math.abs(diff) > (lead.aimReverse ? T.aimReverseKeep : T.aimReverseAngle) * deg;
-  if (lead.aimReverse) diff = angleDiff(diff + Math.PI, 0);
+  const diff = angleDiff(aim, lead.heading);
   return {
     turn: maxTurn > 0 ? clamp(diff / maxTurn, -1, 1) : 0, // у самой цели — ровно до неё, без перелёта
-    throttle: lead.aimReverse ? -1 : Math.abs(diff) > T.aimStopAngle * deg ? 0 : 1,
+    throttle: 1,
   };
 }
 
-// «танковое» движение Героя с инерцией: A/D поворачивают направление (heading), W/S дают газ
-// вперёд/назад вдоль него. Скорость тянется к желаемой с разгоном, без газа — накат и торможение.
+// «танковое» движение Героя с инерцией: A/D поворачивают направление (heading), W даёт газ вперёд вдоль него.
+// Заднего хода нет: Герой ездит только вперёд, S (или джойстик вниз в «Танке») — просто без газа.
+// Скорость тянется к желаемой с разгоном, без газа — накат и торможение.
 // heading отдельно от facing: оружие поворачивает facing к цели, но не должно разворачивать Героя.
 // Джойстик в режиме «Направление» задаёт угол aim, из которого получаются те же газ и поворот (aimSteer)
 function updateLeader(dt) {
@@ -65,13 +62,12 @@ function updateLeader(dt) {
   let { throttle, turn } = state.moveInput;
   const aim = state.moveInput.aim;
   if (aim !== null && aim !== undefined) ({ throttle, turn } = aimSteer(lead, aim, cfg.turnSpeed * mv * dt));
-  else lead.aimReverse = false;
 
   // в экранных координатах (y вниз) уменьшение угла — поворот налево
   lead.heading += turn * cfg.turnSpeed * mv * dt;
   lead.facing = lead.heading;
 
-  const k = throttle > 0 ? 1 : throttle < 0 ? -cfg.reverseMul : 0;
+  const k = throttle > 0 ? 1 : 0;
   const wantX = Math.cos(lead.heading) * cfg.speed * speedMul * k;
   const wantY = Math.sin(lead.heading) * cfg.speed * speedMul * k;
   const dx = wantX - lead.vx, dy = wantY - lead.vy;
