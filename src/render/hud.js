@@ -9,9 +9,14 @@ const { currentRoom, isSpotted, leaderSpeedMul, leader } = G.session;
 const { world, roomCount, roomIndexAt, buttonUnder } = G.world;
 const { clamp } = G.math;
 const { nearestPickup } = G.chain;
-const { ctx, screenTransform, allyColor, unitName } = G.shapes;
+const { ctx, screenTransform } = G.shapes;
 const { withKeys } = G.input;
 const { isTouch, isPortrait } = G.screen;
+
+// шрифт интерфейса: округлый, жирный (graphics.md); цвета — из палитры fantasy-24
+const UI_FONT = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
+const UI = { panel: 'rgba(42,29,13,0.85)', edge: '#45230d', text: '#efd8a1', muted: '#927e6a', gold: '#efac28',
+  red: '#ef3a0c', teal: '#3c9f9c', orange: '#ef692f', ink: '#2a1d0d' };
 
 // где по высоте подсказки у низа экрана: на телефоне выше — внизу лежат пальцы, кнопки и джойстик
 // (вертикально кнопки занимают больше высоты вида — ещё выше)
@@ -83,17 +88,17 @@ function drawBanner(title, text, age, duration, color = '#fff4dc', y = 130) {
   if (a <= 0 || state.status !== 'play') return;
   const V = CONFIG.VIEW;
   // длинный текст на узком экране (телефон вертикально) — в несколько строк, плашка растёт вниз
-  ctx.font = 'bold 22px monospace';
+  ctx.font = `bold 22px ${UI_FONT}`;
   const lines = wrapLines(text.split(' '), V.w - 24);
   ctx.globalAlpha = a;
   ctx.fillStyle = 'rgba(29,20,10,0.75)';
   ctx.fillRect(0, y - 42, V.w, 74 + (lines.length - 1) * 26);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#927e6a';
-  ctx.font = '14px monospace';
+  ctx.font = `bold 14px ${UI_FONT}`;
   ctx.fillText(title, V.w / 2, y - 18);
   ctx.fillStyle = color;
-  ctx.font = 'bold 22px monospace';
+  ctx.font = `bold 22px ${UI_FONT}`;
   lines.forEach((line, i) => ctx.fillText(line, V.w / 2, y + 14 + i * 26));
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
@@ -158,7 +163,7 @@ function drawNotice() {
   const y = V.h / 2 - 80 - Math.min(age, 1) * 8;
   const name = def.name[0].toUpperCase() + def.name.slice(1) + ': ';
   const rest = `${def.desc}, ${def.duration} s`;
-  ctx.font = '14px monospace';
+  ctx.font = `bold 14px ${UI_FONT}`;
   const nw = ctx.measureText(name).width, x = V.w / 2 - (nw + ctx.measureText(rest).width) / 2;
   ctx.globalAlpha = 0.85 * a;
   ctx.shadowColor = 'rgba(0,0,0,0.8)';
@@ -173,75 +178,187 @@ function drawNotice() {
   ctx.globalAlpha = 1;
 }
 
+// --- плашки и таймеры ---
+
+function shadowText(fn) {
+  ctx.shadowColor = 'rgba(20,10,5,0.9)';
+  ctx.shadowBlur = 3;
+  ctx.shadowOffsetY = 1;
+  fn();
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.shadowColor = 'transparent';
+}
+
+function chipWidth(c) {
+  ctx.font = `bold 14px ${UI_FONT}`;
+  return ctx.measureText(c.text).width + 20 + (c.icon ? 18 : 0) + (c.bar !== undefined ? 66 : 0);
+}
+
+function panel(x, y, w, h) {
+  ctx.fillStyle = UI.panel;
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill();
+  ctx.strokeStyle = UI.edge; ctx.lineWidth = 2; ctx.stroke();
+}
+
+// плашка: значок (враг / дружочек / часы), текст, по желанию полоска
+function drawChip(c, x, y, w, h) {
+  panel(x, y, w, h);
+  let tx = x + 10;
+  const cy = y + h / 2;
+  if (c.icon === 'foe') {
+    ctx.fillStyle = '#9b1a0a'; ctx.strokeStyle = UI.ink; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(tx + 6, cy, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = UI.gold; ctx.beginPath(); ctx.arc(tx + 7, cy - 1, 2.6, 0, Math.PI * 2); ctx.fill();
+    tx += 18;
+  } else if (c.icon === 'mate') {
+    ctx.fillStyle = '#efb775'; ctx.strokeStyle = UI.ink; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(tx + 6, cy, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff4dc';
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(tx + 6 + s * 2.6, cy - 1, 2, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = UI.ink;
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(tx + 6.6 + s * 2.6, cy - 1, 1, 0, Math.PI * 2); ctx.fill(); }
+    tx += 18;
+  } else if (c.icon === 'clock') {
+    ctx.strokeStyle = UI.gold; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(tx + 6, cy, 6.5, 0, Math.PI * 2); ctx.moveTo(tx + 6, cy); ctx.lineTo(tx + 6, cy - 4); ctx.moveTo(tx + 6, cy); ctx.lineTo(tx + 9, cy + 1); ctx.stroke();
+    tx += 18;
+  }
+  ctx.font = `bold 14px ${UI_FONT}`;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = c.color || UI.text;
+  ctx.fillText(c.text, tx, cy + 5);
+  if (c.bar !== undefined) {
+    const bx = tx + ctx.measureText(c.text).width + 8, bw = 56;
+    ctx.fillStyle = UI.ink; ctx.beginPath(); ctx.roundRect(bx, cy - 4, bw, 8, 3); ctx.fill();
+    ctx.fillStyle = c.bar < 0.35 ? UI.red : c.color;
+    ctx.beginPath(); ctx.roundRect(bx, cy - 4, bw * clamp(c.bar, 0.03, 1), 8, 3); ctx.fill();
+  }
+}
+
+// полоска HP босса: имя над ней, сама — широкая, красная, с числом
+function drawBossBar(e, label, x, y, w) {
+  panel(x - 8, y, w + 16, 30);
+  const k = clamp(e.hp / e.maxHp, 0, 1);
+  ctx.fillStyle = UI.ink; ctx.beginPath(); ctx.roundRect(x, y + 14, w, 10, 4); ctx.fill();
+  ctx.fillStyle = UI.red; ctx.beginPath(); ctx.roundRect(x, y + 14, w * Math.max(0.01, k), 10, 4); ctx.fill();
+  ctx.font = `bold 12px ${UI_FONT}`;
+  ctx.textAlign = 'left'; ctx.fillStyle = UI.text; ctx.fillText(label, x, y + 11);
+  ctx.textAlign = 'right'; ctx.fillStyle = UI.muted; ctx.fillText(`${Math.ceil(e.hp)}/${e.maxHp}`, x + w, y + 11);
+  ctx.textAlign = 'left';
+}
+
+// таймеры усилений Героя наверху посередине: значок, секунды, полоска остатка; перед концом мигают.
+// Если посередине тесно (узкий экран) — под плашками слева
+function drawBuffTimers(cx, y, leftRight, leftBottom) {
+  const lead = state.party[0];
+  if (!lead || !lead.buffOrder) return;
+  const keys = lead.buffOrder.filter((k) => lead.buffs[k] > 0);
+  if (!keys.length) return;
+  const itemW = 64, gap = 6, total = keys.length * itemW + (keys.length - 1) * gap;
+  let x = cx - total / 2;
+  if (x < leftRight + 4) { x = 10; y = leftBottom + 10; }
+  keys.forEach((k, i) => {
+    const left = lead.buffs[k], def = G.buffs[k], ix = x + i * (itemW + gap);
+    if (left < 4 && Math.floor(state.time * 6) % 2) ctx.globalAlpha = 0.45;
+    panel(ix, y, itemW, 30);
+    G.blobs.glyph(k, ix + 15, y + 13, 7);
+    ctx.font = `bold 15px ${UI_FONT}`;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = UI.text;
+    ctx.fillText(`${Math.ceil(left)}`, ix + 29, y + 19);
+    ctx.fillStyle = UI.ink; ctx.fillRect(ix + 6, y + 24, itemW - 12, 3);
+    ctx.fillStyle = def.color; ctx.fillRect(ix + 6, y + 24, (itemW - 12) * clamp(left / def.duration, 0, 1), 3);
+    ctx.globalAlpha = 1;
+  });
+}
+
 function drawHud() {
   ctx.save();
   screenTransform();
-  ctx.font = '13px monospace';
+  ctx.font = `bold 14px ${UI_FONT}`;
   ctx.textAlign = 'left';
 
   const level = state.level;
   const here = currentRoom();
+  const V = CONFIG.VIEW;
   // необнаруженные мины в счётчик не попадают, о них предупреждает только знак на полу
   const inRoom = state.enemies.filter((e) => roomIndexAt(e.x, e.y) === here && isSpotted(e)).length;
-  const where = level.zoneNames ? `ZONE: ${level.zoneNames[here]}` : `ROOM ${here + 1}/${roomCount()}`;
-  // цель уровня «разрушить всё заданного типа» показываем счётчиком
   const rule = level.victory;
-  const parts = [where, `ENEMIES HERE: ${inRoom}`];
-  // showHp — цель одна (босс): вместо счётчика её HP
+
+  // плашки слева вверху: где мы, сколько врагов, цель уровня, длина цепочки и её скорость;
+  // на узком экране переносятся, справа не заходят под значки паузы и «заново»
+  const maxX = V.w - 140;
+  const chips = [];
+  chips.push({ text: level.zoneNames ? level.zoneNames[here] : `ROOM ${here + 1}/${roomCount()}` });
+  chips.push({ text: `${inRoom}`, icon: 'foe' });
+  // showHp — цель одна (босс): её HP показывает полоска наверху посередине
+  let boss = null;
   if (rule.kind === 'destroyType') {
     const left = state.enemies.filter((e) => e.type === rule.type);
-    parts.push(rule.showHp && left.length === 1
-      ? `${rule.label}: ${Math.ceil(left[0].hp)}/${left[0].maxHp}` : `${rule.label}: ${left.length}`);
+    if (rule.showHp && left.length === 1) boss = left[0];
+    else chips.push({ text: `${rule.label}: ${left.length}`, color: UI.gold });
   }
-  // продержаться: сколько осталось и сколько HP у базы
   if (rule.kind === 'survive') {
     const left = Math.max(0, Math.ceil(rule.time - state.time));
-    parts.push(`${rule.label}: ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`);
-    if (state.base) parts.push(`BASE: ${Math.max(0, Math.ceil(state.base.hp))}/${state.base.maxHp}`);
+    chips.push({ text: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`, color: UI.gold, icon: 'clock' });
+    if (state.base) chips.push({ text: 'BASE', bar: state.base.hp / state.base.maxHp, color: UI.teal });
   }
-  parts.push(`CHAIN: ${state.party.length}`, `SPEED: ${Math.round(leaderSpeedMul() * 100)}%`);
-  // строка состояния; на узком экране — в несколько строк, и справа не заходит под значки паузы и «заново»
-  const maxW = CONFIG.VIEW.w - 24 - 140;
-  let ty = 22;
-  ctx.fillStyle = '#efd8a1';
-  for (const line of wrapLines(parts, maxW, '   ')) { ctx.fillText(line, 12, ty); ty += 16; }
+  const speed = Math.round(leaderSpeedMul() * 100);
+  chips.push({ text: `${state.party.length}`, icon: 'mate' });
+  if (speed < 100) chips.push({ text: `SPEED ${speed}%`, color: UI.orange }); // медленнее обычного — длинная цепочка
 
-  // задача комнаты (обучение: что сделать, чтобы пройти её), иначе — общее напоминание
+  let x = 10, y = 10, right = 10;
+  const h = 26;
+  for (const c of chips) {
+    const w = chipWidth(c);
+    if (x > 10 && x + w > maxX) { x = 10; y += h + 6; }
+    drawChip(c, x, y, w, h);
+    x += w + 6;
+    right = Math.max(right, x);
+  }
+  let bottom = y + h;
+
+  // задача комнаты (обучение: что сделать, чтобы пройти её)
   const task = level.rooms[here] && level.rooms[here].task;
-  ctx.fillStyle = task ? '#efac28' : '#927e6a';
-  for (const line of wrapLines((task || 'Pads are picked up automatically: drive your chain over them').split(' '), maxW)) {
-    ctx.fillText(line, 12, ty); ty += 16;
+  if (task) {
+    ctx.font = `bold 15px ${UI_FONT}`;
+    shadowText(() => {
+      ctx.fillStyle = UI.gold;
+      for (const line of wrapLines(task.split(' '), maxX - 12)) { bottom += 20; ctx.fillText(line, 12, bottom); }
+    });
   }
-  // список цепочки; на телефоне он не спускается ниже середины экрана (внизу слева кнопки) — дальше в соседнюю колонку
-  const top = ty + 4, step = 16, colW = 370;
-  const rows = isTouch() ? Math.max(3, Math.floor((CONFIG.VIEW.h * 0.45 - top) / step) + 1) : Infinity;
-  let y = top;
-  state.party.forEach((a, i) => {
-    ctx.fillStyle = allyColor(a);
-    const bf = Object.entries(a.buffs || {}).filter(([, t]) => t > 0).map(([k, t]) => ` ${G.buffs[k].name} ${Math.ceil(t)}s`).join('');
-    const label = unitName(a) + bf;
-    y = top + (i % rows) * step;
-    ctx.fillText(`${label.padEnd(30, ' ')} ${Math.max(0, Math.ceil(a.hp))}/${a.maxHp}`, 12 + Math.floor(i / rows) * colW, y);
-  });
-  y += step;
-  // улучшения прохождения: названия цветом того, чьё улучшение
+  // улучшения прохождения: мелко, названия цветом того, чьё улучшение
   if (state.upgrades.length) {
-    y += 4;
-    ctx.fillStyle = '#927e6a';
-    ctx.fillText('UPGRADES:', 12, y);
-    let x = 12 + ctx.measureText('UPGRADES: ').width;
-    for (const key of state.upgrades) {
-      const def = G.upgrades[key], who = def.who === 'hero' ? COLORS.hero : abilities[def.who].color;
-      ctx.fillStyle = who;
-      ctx.fillText(def.name, x, y);
-      x += ctx.measureText(def.name + '  ').width;
-    }
+    ctx.font = `bold 12px ${UI_FONT}`;
+    bottom += 18;
+    let ux = 12;
+    shadowText(() => {
+      for (const key of state.upgrades) {
+        const def = G.upgrades[key], who = def.who === 'hero' ? COLORS.hero : abilities[def.who].color;
+        const wd = ctx.measureText(def.name + '   ').width;
+        if (ux > 12 && ux + wd > maxX) { ux = 12; bottom += 16; }
+        ctx.fillStyle = who;
+        ctx.fillText(def.name, ux, bottom);
+        ux += wd;
+      }
+    });
   }
+
+  // наверху посередине: полоска HP босса, под ней — таймеры усилений Героя
+  let topY = 10;
+  if (boss) {
+    const bw = Math.min(360, V.w - 2 * 150), bx = (V.w - bw) / 2;
+    const by = bx < right + 4 ? bottom + 10 : topY;
+    drawBossBar(boss, rule.label, bx, by, bw);
+    topY = by + 34;
+  }
+  drawBuffTimers(V.w / 2, topY, boss ? -1 : right, bottom);
 
   drawEdgeMarkers();
   drawBanners();
   drawNotice();
-  ctx.font = '13px monospace';
+  ctx.font = `bold 14px ${UI_FONT}`;
 
   const pickup = nearestPickup();
   const btn = buttonUnder(leader());

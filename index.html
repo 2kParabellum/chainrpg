@@ -18,14 +18,14 @@
   html { background: #2a1d0d; }
   /* игра на всё окно страницы и на компьютере, и на телефоне; страница не прокручивается и с самого начала, ещё до
      скриптов, не шире окна — иначе iPhone при загрузке отдаляет её и так оставляет */
-  body { margin: 0; background: #2a1d0d; color: #efd8a1; font: 13px/1.4 monospace;
+  body { margin: 0; background: #2a1d0d; color: #efd8a1; font: 13px/1.4 "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
          position: fixed; inset: 0; overflow: hidden;
          -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
          -webkit-touch-callout: none; overscroll-behavior: none; }
-  button { font: 13px monospace; padding: 5px 12px; background: #392a1c; color: #efd8a1;
-           border: 1px solid #684c3c; cursor: pointer; }
-  @media (hover: hover) { button:hover { background: #45230d; } }
-  button:active { background: #45230d; }
+  button { font: bold 13px "Trebuchet MS", "Segoe UI", system-ui, sans-serif; padding: 5px 12px; background: #392a1c; color: #efd8a1;
+           border: 2px solid #684c3c; border-radius: 10px; box-shadow: 0 3px 0 #2a1d0d; cursor: pointer; }
+  @media (hover: hover) { button:hover { background: #45230d; border-color: #efac28; } }
+  button:active { background: #45230d; transform: translateY(2px); box-shadow: 0 1px 0 #2a1d0d; }
   canvas { background: #1d140a; display: block; touch-action: none; }
   /* сцена — всё окно страницы минус вырез экрана; размер берётся из макета, а не из видимой области:
      на iPhone она меняется от зума и при повороте врёт */
@@ -53,8 +53,8 @@
   .panel { display: none; flex-direction: column; align-items: center; gap: 14px; margin: auto; padding: 10px 0; }
   .btnRow { display: flex; flex-direction: column; align-items: center; gap: 14px; }
   .panel.active { display: flex; }
-  .panel h1 { margin: 0 0 14px; font: 28px monospace; color: #efd8a1; letter-spacing: 4px; }
-  .panel h2 { margin: 0 0 6px; font: 20px monospace; color: #efd8a1; }
+  .panel h1 { margin: 0 0 14px; color: #efac28; text-shadow: 0 3px 0 #2a1d0d; font: bold 34px "Trebuchet MS", "Segoe UI", system-ui, sans-serif; letter-spacing: 4px; }
+  .panel h2 { margin: 0 0 6px; font: 20px "Trebuchet MS", "Segoe UI", system-ui, sans-serif; color: #efd8a1; }
   .panel button { width: 240px; padding: 10px 12px; font-size: 16px; }
   #levelList { display: flex; flex-direction: column; align-items: center; gap: 14px; }
   .panel button.level { width: 420px; text-align: left; }
@@ -133,7 +133,7 @@
   body.mirror .tPad { left: auto; right: 0; transform: scaleX(-1); }
   body.mirror .tPad .tBtn { transform: scaleX(-1); }
   .tBtn { position: absolute; border-radius: 50%; padding: 0; background: rgba(255,255,255,0.07); border: 2px solid rgba(255,255,255,0.28);
-          color: rgba(255,255,255,0.75); font: bold 12px monospace; letter-spacing: 1px; touch-action: none; }
+          color: rgba(255,255,255,0.75); font: bold 12px "Trebuchet MS", "Segoe UI", system-ui, sans-serif; letter-spacing: 1px; touch-action: none; }
   #tGrab { left: 100px; bottom: 18px; width: 86px; height: 86px; }
   #tDrop { left: 16px; bottom: 70px; width: 72px; height: 72px; }
   .tBtn.glow { border-color: #fff4dc; color: #fff; background: rgba(239,216,161,0.18); box-shadow: 0 0 14px rgba(239,216,161,0.35); }
@@ -160,7 +160,7 @@
   .card canvas { width: 200px; height: 120px; display: block; }
   .card .who { font-size: 11px; letter-spacing: 2px; }
   .card .num { position: absolute; top: 4px; left: 8px; font-size: 11px; color: #927e6a; }
-  .card h3 { margin: 0; font: bold 15px monospace; color: #fff4dc; }
+  .card h3 { margin: 0; font: bold 15px "Trebuchet MS", "Segoe UI", system-ui, sans-serif; color: #fff4dc; }
   .card .desc { margin: 0; font-size: 12px; color: #927e6a; min-height: 30px; }
   button:disabled { opacity: 0.35; cursor: default; }
   .controls { margin: 0 0 8px; border-collapse: collapse; font-size: 14px; }

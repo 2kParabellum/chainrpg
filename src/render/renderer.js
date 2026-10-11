@@ -428,9 +428,9 @@ function drawNests() {
     ctx.globalAlpha = 1;
 
     ctx.textAlign = 'center';
-    ctx.font = 'bold 13px monospace';
+    ctx.font = 'bold 13px "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
     ctx.fillText('NEST', n.x, n.y - r - 12);
-    ctx.font = '12px monospace';
+    ctx.font = '12px "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
     ctx.fillText(`wave ×${G.waves.waveSize(cfg, n.wave)} in ${Math.max(0, Math.ceil(n.nextIn))}s`, n.x, n.y + r + 18);
   }
 }
@@ -598,7 +598,7 @@ function drawJobPad(pad, def, alpha, wave) {
   G.blobs.hatIcon(pad.ability, cx, top - r * 0.2 + float, r * 0.55);
   ctx.fillStyle = color;
   ctx.globalAlpha = (active ? 0.95 : 0.7) * alpha;
-  ctx.font = 'bold 12px monospace';
+  ctx.font = 'bold 12px "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText(def.name, cx, pad.y + pad.h + 16);
   ctx.globalAlpha = 1;
@@ -642,7 +642,7 @@ function drawPadCooldown(pad, def) {
   ctx.stroke();
   ctx.globalAlpha = 0.85 + 0.15 * Math.sin(state.time * 4);
   ctx.fillStyle = def.color;
-  ctx.font = 'bold 18px monospace';
+  ctx.font = 'bold 18px "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(String(Math.ceil(pad.cooldown)), cx, cy + 1);
@@ -801,7 +801,7 @@ function drawExit() {
   if (state.leaving) return;
   ctx.globalAlpha = grow;
   ctx.fillStyle = COLORS.exitGlow;
-  ctx.font = 'bold 13px monospace';
+  ctx.font = 'bold 13px "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('EXIT', ex.x, ex.y - r - 12);
   ctx.globalAlpha = 1;
