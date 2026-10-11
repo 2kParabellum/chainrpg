@@ -21,23 +21,53 @@ let touch = forced === '1' || (forced !== '0' && matchMedia('(pointer: coarse)')
 let scale = 1;
 const listeners = [];
 
+const probe = document.getElementById('safeProbe');
+
 function isTouch() { return touch; }
 function pixelScale() { return scale; }
-// телефон держат вертикально: игра не помещается, просим повернуть
-function isPortrait() { return touch && window.innerHeight > window.innerWidth; }
 
+// видимая область страницы. На iPhone CSS-размеры экрана после поворота и при панелях браузера часто неверны,
+// а visualViewport — то, что реально видно
+function viewport() {
+  const vv = window.visualViewport;
+  return vv
+    ? { x: vv.offsetLeft, y: vv.offsetTop, w: vv.width, h: vv.height }
+    : { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
+}
+// вырез экрана и полоска «домой»: env(safe-area-inset-*) читаем через невидимый элемент с такими отступами
+function safeInsets() {
+  const cs = getComputedStyle(probe);
+  const px = (v) => parseFloat(v) || 0;
+  return { t: px(cs.paddingTop), r: px(cs.paddingRight), b: px(cs.paddingBottom), l: px(cs.paddingLeft) };
+}
+
+// телефон держат вертикально: игра не помещается, просим повернуть
+function isPortrait() {
+  const v = viewport();
+  return touch && v.h > v.w;
+}
+
+let lastKey = '';
 function fit() {
   document.body.classList.toggle('touch', touch);
   document.body.classList.toggle('portrait', isPortrait());
   const S = CONFIG.SCREEN;
   let cssW, cssH;
   if (touch) {
-    cssW = Math.max(1, stage.clientWidth);
-    cssH = Math.max(1, stage.clientHeight);
+    // сцена — ровно видимая область без выреза
+    const v = viewport(), ins = safeInsets();
+    cssW = Math.max(1, Math.round(v.w - ins.l - ins.r));
+    cssH = Math.max(1, Math.round(v.h - ins.t - ins.b));
+    Object.assign(stage.style, {
+      left: Math.round(v.x + ins.l) + 'px', top: Math.round(v.y + ins.t) + 'px', width: cssW + 'px', height: cssH + 'px',
+    });
+    // страница не должна уезжать прокруткой (iPhone прокручивает её при повороте и показе панелей)
+    if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
     // телефон — вид ниже, чем на компьютере (объекты крупнее); планшет — как на компьютере
     CONFIG.VIEW.h = clamp(cssH, S.touchViewH, S.desktop.h);
     CONFIG.VIEW.w = Math.round(CONFIG.VIEW.h * cssW / cssH);
   } else {
+    Object.assign(stage.style, { left: '', top: '', width: '', height: '' });
     cssW = S.desktop.w; cssH = S.desktop.h;
     CONFIG.VIEW.w = S.desktop.w; CONFIG.VIEW.h = S.desktop.h;
   }
@@ -47,7 +77,15 @@ function fit() {
   canvas.width = Math.round(cssW * dpr);
   canvas.height = Math.round(cssH * dpr);
   scale = canvas.height / CONFIG.VIEW.h;
+  lastKey = sizeKey();
+  if (G.debug) G.debug.note(`экран ${Math.round(viewport().w)}×${Math.round(viewport().h)} сцена ${cssW}×${cssH} вид ${CONFIG.VIEW.w}×${CONFIG.VIEW.h} dpr ${dpr}`);
   for (const fn of listeners) fn();
+}
+
+// всё, от чего зависит раскладка: если поменялось, а события браузер не прислал — пересчитать
+function sizeKey() {
+  const v = viewport();
+  return [touch, v.x, v.y, v.w, v.h, window.innerWidth, window.innerHeight, window.devicePixelRatio].join(',');
 }
 
 function onChange(fn) { listeners.push(fn); }
@@ -63,11 +101,15 @@ function enterFullscreen() {
     .catch(() => {});
 }
 
-// пересчёт после поворота: часть браузеров сообщает новый размер не сразу
-function refit() { fit(); setTimeout(fit, 250); }
+// пересчёт после поворота: часть браузеров (iPhone) сообщает новый размер не сразу, а то и без события
+function refit() { fit(); for (const ms of [100, 300, 700, 1500]) setTimeout(fit, ms); }
 window.addEventListener('resize', refit);
 window.addEventListener('orientationchange', refit);
-if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', refit);
+  window.visualViewport.addEventListener('scroll', fit);
+}
+setInterval(() => { if (sizeKey() !== lastKey) fit(); }, 400);
 // сенсорный экран у компьютера: включаем режим касаний с первого касания
 window.addEventListener('pointerdown', (ev) => {
   if (ev.pointerType === 'touch' && !touch && forced !== '0') { touch = true; fit(); }

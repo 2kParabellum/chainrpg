@@ -14,6 +14,8 @@
 <title>Chain Prototype</title>
 <style>
   html, body { height: 100%; }
+  /* фон и за краем страницы: на iPhone браузер показывает его под вырезом и под своими панелями */
+  html { background: #0e0e10; }
   body { margin: 0; background: #0e0e10; color: #b9b9c0; font: 13px/1.4 monospace;
          display: flex; flex-direction: column; align-items: center;
          -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
@@ -28,8 +30,10 @@
   /* телефон (режим касаний): игра на весь экран, без полоски сверху, в обход выреза экрана */
   body.touch { position: fixed; inset: 0; overflow: hidden; }
   body.touch #bar { display: none; }
-  body.touch #stage { position: fixed; top: env(safe-area-inset-top); bottom: env(safe-area-inset-bottom);
-                      left: env(safe-area-inset-left); right: env(safe-area-inset-right); touch-action: none; }
+  /* положение и размер сцены на телефоне задаёт core/screen.js — по видимой области экрана минус вырез */
+  body.touch #stage { position: fixed; left: 0; top: 0; touch-action: none; }
+  #safeProbe { position: fixed; left: 0; top: 0; visibility: hidden; pointer-events: none;
+               padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
   #rotate { display: none; position: fixed; inset: 0; z-index: 50; background: #0e0e10; color: #c8c8d2;
             flex-direction: column; align-items: center; justify-content: center; gap: 16px; font-size: 18px; text-align: center; }
   #rotate .phone { width: 34px; height: 60px; border: 3px solid #c8c8d2; border-radius: 6px; animation: turn 2s ease-in-out infinite; }
@@ -127,6 +131,7 @@
 </head>
 <body>
   <div id="debug"></div>
+  <div id="safeProbe"></div>
   <div id="rotate"><div class="phone"></div>Поверни телефон горизонтально</div>
   <div id="bar">
     <button id="restart">RESTART (R)</button>
@@ -204,7 +209,7 @@
         <p id="modeHint" class="touch-only"></p>
         <button id="backBtn">Назад</button>
       </div>
-      <div id="build">сборка 3</div>
+      <div id="build">сборка 4</div>
     </div>
   </div>
   <script src="src/core/debug.js"></script>

@@ -1,4 +1,4 @@
-// Отладка на телефоне, где нет консоли: по ?debug=1 в верху экрана — FPS и текст последней ошибки JS.
+// Отладка на телефоне, где нет консоли: по ?debug=1 в верху экрана — FPS, размеры экрана и вида, текст последней ошибки JS.
 // Подключается первым, чтобы ловить ошибки всех остальных файлов. Ни от кого не зависит.
 (function (G) {
 'use strict';
@@ -6,10 +6,11 @@
 const enabled = new URLSearchParams(location.search).get('debug') === '1';
 const el = document.getElementById('debug');
 let lastError = '';
+let info = '';
 let frames = 0, since = performance.now(), fps = 0;
 
 function show() {
-  if (enabled) el.textContent = `FPS ${fps}${lastError ? '  |  ' + lastError : ''}`;
+  if (enabled) el.textContent = `FPS ${fps}  |  ${info}${lastError ? '  |  ' + lastError : ''}`;
 }
 
 window.addEventListener('error', (ev) => {
@@ -30,7 +31,10 @@ function frame(now) {
   }
 }
 
+// постоянная строка рядом с FPS (размеры экрана и вида от core/screen.js)
+function note(text) { info = text; show(); }
+
 if (enabled) el.style.display = 'block';
 
-G.debug = { frame };
+G.debug = { frame, note };
 })(window.Game = window.Game || {});
