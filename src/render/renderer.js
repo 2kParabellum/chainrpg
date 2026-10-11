@@ -37,8 +37,9 @@ function drawWarning(w) {
   ctx.fillRect(w.x - 1.5, w.y + s * 0.42, 3, 3);
 }
 
-// тело врага рисует его запись в реестре, полоску HP — сцена
+// обычных врагов рисует render/foes.js (тёмная раса, graphics.md), остальных — их запись в реестре, полоску HP — сцена
 function drawEnemy(e) {
+  if (G.foes.has(e.type)) { G.foes.draw(e); return; }
   enemyTypes[e.type].draw(e, shapes);
   drawHpBar(e);
 }
@@ -444,6 +445,7 @@ function drawEnemies() {
     drawEnemy(e);
     drawBurn(e);
   }
+  G.foes.sweep();
 }
 
 function drawClouds() {

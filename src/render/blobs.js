@@ -58,7 +58,7 @@ function track(u) {
   const cx = Math.cos(f);
   if (cx > 0.25) a.face = 1; else if (cx < -0.25) a.face = -1;
   a.look = f;
-  if (u.hp < a.hp - 0.3) { a.hurtAt = t; burst(u, a.face); }
+  if (u.hp < a.hp - 0.3 && t - a.hurtAt > 0.4) { a.hurtAt = t; burst(u, a.face); }
   a.hp = u.hp;
   (u.gear || []).forEach((w, i) => {
     if (a.cds[i] !== undefined && w.cd > a.cds[i] + 0.05) a.atkAt = t;
@@ -79,11 +79,11 @@ function burst(u, face) {
       r: u.r * 0.16, col: i % 2 ? C.body : C.cream });
   }
 }
-function pop(u) {
+function pop(u, c1 = C.body, c2 = C.shade) {
   for (let i = 0; i < 10; i++) {
     const ang = i / 10 * TAU, sp = 90 + Math.random() * 60;
     bits.push({ x: u.x, y: u.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp * 0.8, life: 0.6, max: 0.6,
-      r: u.r * 0.25, col: i % 2 ? C.body : C.shade });
+      r: u.r * 0.25, col: i % 2 ? c1 : c2 });
   }
 }
 function drawBits() {
@@ -499,5 +499,5 @@ function drawLinks(pts) {
   }
 }
 
-G.blobs = { drawAlly, drawLinks, drawBits, sweep, BUFF_COL };
+G.blobs = { drawAlly, drawLinks, drawBits, sweep, pop, BUFF_COL };
 })(window.Game = window.Game || {});
