@@ -270,7 +270,11 @@ function heavyLinks() {
 }
 
 // масса цепочки для управления Героем: 1 — налегке, каждое тяжёлое звено добавляет linkMass
-function chainMass() { return 1 + CONFIG.CHAIN.heft.linkMass * heavyLinks(); }
+// (для торможения — brake: true — меньше, brakeLinkMass)
+function chainMass(brake = false) {
+  const h = CONFIG.CHAIN.heft;
+  return 1 + (brake ? h.brakeLinkMass : h.linkMass) * heavyLinks();
+}
 
 // множитель потолка скорости от длины цепочки: плавно падает к minSpeed и ниже не опускается; см. CHAIN.heft
 function chainSpeedMul() {
