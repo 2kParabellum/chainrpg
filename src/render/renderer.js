@@ -49,6 +49,7 @@ function drawEnemy(e) {
 // нить гарпуна тянется от Скорпиона к наконечнику, пока тот летит
 function drawHook(p) {
   if (!onScreen(p)) return;
+  if (G.foes.drawsHook(p.owner)) return; // лапу на пружине рисует сам Скорпион (render/foes.js)
   if (p.owner && state.enemies.includes(p.owner)) {
     ctx.strokeStyle = COLORS.scorpion;
     ctx.globalAlpha = 0.7;

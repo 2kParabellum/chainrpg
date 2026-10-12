@@ -19,7 +19,7 @@ const LOOK = {
   shooter: { col: '#9b1a0a', sh: '#550f0a', eye: C.gold, edge: 'wobble' },
   bull: { col: '#773421', sh: '#300f0a', eye: C.red, edge: 'wobble' },
   chariot: { col: '#773421', sh: '#300f0a', eye: C.red, edge: 'wobble' },
-  hunter: { col: '#550f0a', sh: '#300f0a', eye: C.gold, edge: 'spiky' },
+  hunter: { col: '#ef692f', sh: '#9b1a0a', eye: C.cream, edge: 'spiky' }, // мелкий — яркий, чтобы не терялся на полу
   zombie: { col: '#39571c', sh: '#1f240a', eye: C.gold, edge: 'drip' },
   scorpion: { col: '#724113', sh: '#36170c', eye: C.red, edge: 'wobble' }, // громила с большой лапой
 };
@@ -95,11 +95,51 @@ function hpBar(x, y, r, k) {
   ctx.fillStyle = C.red; ctx.beginPath(); ctx.roundRect(bx, y, w * Math.max(0.03, Math.min(1, k)), h, 2); ctx.fill();
 }
 
+// куда улетела лапа Скорпиона: летящий гарпун или пойманный и подтягиваемый союзник
+function armTarget(e) {
+  for (const p of state.projectiles) if (p.kind === 'hook' && p.owner === e) return { x: p.x, y: p.y };
+  for (const d of state.downed) if (d.drag === e) return { x: d.x, y: d.y };
+  return null;
+}
+
+// пружина между двумя точками: витки поперёк линии, тёмная обводка и металл
+function spring(x1, y1, x2, y2, w) {
+  const d = Math.hypot(x2 - x1, y2 - y1) || 1, nx = -(y2 - y1) / d, ny = (x2 - x1) / d;
+  const n = Math.max(6, Math.round(d / 7));
+  for (const [lw, col] of [[4.5, C.ink], [2.2, C.stone]]) {
+    ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(x1, y1);
+    for (let i = 1; i < n; i++) {
+      const q = i / n, o = (i % 2 ? 1 : -1) * w;
+      ctx.lineTo(x1 + (x2 - x1) * q + nx * o, y1 + (y2 - y1) * q + ny * o);
+    }
+    ctx.lineTo(x2, y2); ctx.stroke();
+  }
+}
+
+// огромная когтистая лапа Скорпиона
+function drawPaw(px, py, pr, face, L) {
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.fillStyle = C.cream;
+  for (let i = -1; i <= 1; i++) {
+    const cy = py + i * pr * 0.45;
+    ctx.beginPath(); ctx.moveTo(px + face * pr * 0.7, cy - pr * 0.14); ctx.lineTo(px + face * pr * 1.35, cy + i * pr * 0.12);
+    ctx.lineTo(px + face * pr * 0.7, cy + pr * 0.14); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  ctx.fillStyle = L.col; ell(px, py, pr, pr * 0.9); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = L.sh;
+  for (const i of [-1, 1]) { ctx.beginPath(); ctx.moveTo(px + face * pr * 0.25, py + i * pr * 0.25); ctx.lineTo(px + face * pr * 0.75, py + i * pr * 0.25); ctx.stroke(); }
+  ctx.fillStyle = hexA(L.eye, 0.35); ell(px - face * pr * 0.3, py - pr * 0.35, pr * 0.3, pr * 0.18); ctx.fill();
+}
+
+function drawsHook(owner) { return owner && owner.type === 'scorpion' && state.enemies.includes(owner); }
+
 function has(type) { return !!LOOK[type] || !!SPECIAL[type]; }
 
 function draw(e) {
   if (SPECIAL[e.type]) { drawSpecial(e); return; }
-  const L = LOOK[e.type], a = track(e), t = state.time + a.seed, r = e.r, face = a.face, type = e.type;
+  // Зомби и Хантер рисуются крупнее своего тела (столкновения те же): Зомби — громадина, Хантера видно издалека
+  const L = LOOK[e.type], a = track(e), t = state.time + a.seed, face = a.face, type = e.type;
+  const r = e.r * (type === 'zombie' ? 1.35 : type === 'hunter' ? 1.15 : 1);
   const w = Math.sin(t * 4);
   let sx = 1 + 0.045 * w, sy = 1 - 0.045 * w, dx = 0, flash = 0;
   const sa = state.time - a.atkAt;
@@ -114,6 +154,7 @@ function draw(e) {
     if (ha < 0.1) flash = 1 - ha / 0.1;
   }
   const telegraph = (type === 'bull' || type === 'chariot') && e.state === 'telegraph';
+  const armOut = type === 'scorpion' ? armTarget(e) : null;
   if (telegraph) { const k = Math.sin(state.time * 30) * 0.5 + 0.5; sx *= 1.08 + 0.04 * k; sy *= 0.92; dx -= face * r * 0.12; }
   const x = e.x + dx, y = e.y, rx = r * sx, ry = r * 0.92 * sy;
 
@@ -189,21 +230,20 @@ function draw(e) {
     for (const s of [-1, 1]) glowEye(fx + s * r * 0.33, -r * 0.2, r * 0.16, telegraph ? C.gold : L.eye, s * face * 0.5, 0.45);
     ctx.fillStyle = L.sh; ell(fx + face * r * 0.2, r * 0.32, r * 0.42, r * 0.24); ctx.fill(); ctx.stroke();
     ctx.fillStyle = C.dark; for (const s of [-1, 1]) { ell(fx + face * r * 0.2 + s * r * 0.15, r * 0.32, r * 0.06, r * 0.08); ctx.fill(); }
-    // сигара в углу рта: коричневая, с пепельным кончиком и тлеющим огоньком, дым идёт от кончика
-    const cx0 = fx + face * r * 0.45, cy0 = r * 0.42, len = r * 0.75, ang = face > 0 ? 0.25 : Math.PI - 0.25;
+    // сигарета в углу рта: длинная белая, оранжевый фильтр у рта, тлеющий кончик, пепел и струйка дыма
+    const cx0 = fx + face * r * 0.4, cy0 = r * 0.42, len = r * 1.15, ang = face > 0 ? 0.2 : Math.PI - 0.2, th = r * 0.17;
     const tx = cx0 + Math.cos(ang) * len, ty = cy0 + Math.sin(ang) * len;
     ctx.save(); ctx.translate(cx0, cy0); ctx.rotate(ang);
-    ctx.fillStyle = C.brown; ctx.beginPath(); ctx.roundRect(0, -r * 0.1, len, r * 0.2, r * 0.08); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = C.gold; ctx.fillRect(len * 0.18, -r * 0.1, len * 0.12, r * 0.2);
-    ctx.fillStyle = C.stone; ctx.fillRect(len * 0.84, -r * 0.09, len * 0.12, r * 0.18);
-    ctx.fillStyle = telegraph ? C.gold : C.orange; ell(len, 0, r * 0.07, r * 0.09); ctx.fill();
+    ctx.fillStyle = '#fff4dc'; ctx.beginPath(); ctx.rect(0, -th / 2, len, th); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ab5c1c'; ctx.fillRect(0, -th / 2, len * 0.3, th); ctx.strokeRect(0, -th / 2, len * 0.3, th);
+    ctx.fillStyle = C.stone; ctx.fillRect(len * 0.9, -th / 2, len * 0.07, th);
+    ctx.fillStyle = telegraph ? C.gold : C.red; ctx.fillRect(len * 0.96, -th / 2, len * 0.06, th);
     ctx.restore();
-    for (let i = 0; i < 3; i++) {
-      const k = (t * (telegraph ? 1.6 : 0.6) + i / 3) % 1;
-      ctx.globalAlpha = (1 - k) * 0.5; ctx.fillStyle = C.stone;
-      ell(tx + face * k * r * 0.3 + Math.sin(k * 6 + i) * r * 0.12, ty - k * r * 1.3, r * (0.08 + k * 0.18), r * (0.08 + k * 0.18)); ctx.fill();
-    }
-    ctx.globalAlpha = 1;
+    ctx.strokeStyle = hexA(C.stone, 0.6); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(tx, ty);
+    for (let i = 1; i <= 6; i++) ctx.lineTo(tx + Math.sin(t * 3 + i) * r * 0.12 + face * i * r * 0.04, ty - i * r * 0.22);
+    ctx.stroke();
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
     ctx.fillStyle = C.cream;
     for (const s of [-1, 1]) {
       ctx.beginPath(); ctx.moveTo(s * r * 0.45, -r * 0.62); ctx.quadraticCurveTo(s * r * 1.35, -r * 0.75, s * r * 1.2, -r * 1.45);
@@ -218,7 +258,22 @@ function draw(e) {
       ctx.beginPath(); ctx.moveTo(tx, r * 0.2); ctx.lineTo(tx + r * 0.11, r * 0.4); ctx.lineTo(tx + r * 0.22, r * 0.2); ctx.closePath(); ctx.fill();
     }
   } else if (type === 'zombie') {
-    glowEye(fx - r * 0.3, -r * 0.2, r * 0.24, L.eye);
+    // при атаке (облако) жёлтый глаз раздувается и лопается брызгами; глазница пустая, потом глаз отрастает
+    const ex = fx - r * 0.3, ey = -r * 0.2, er = r * 0.24;
+    if (sa >= 0 && sa < 0.15) glowEye(ex, ey, er * (1 + 0.7 * sa / 0.15), L.eye);
+    else if (sa >= 0.15 && sa < 3.6) {
+      ctx.fillStyle = C.dark; ell(ex, ey, er * 1.1, er); ctx.fill(); ctx.stroke();
+      if (sa < 0.8) {
+        const k = (sa - 0.15) / 0.65;
+        for (let i = 0; i < 8; i++) {
+          const ang = i / 8 * TAU + 0.4, d = er * (1 + k * 4);
+          ctx.globalAlpha = 1 - k; ctx.fillStyle = i % 2 ? L.eye : C.olive;
+          ell(ex + Math.cos(ang) * d, ey + Math.sin(ang) * d + k * k * r * 0.8, er * 0.35 * (1 - k * 0.5), er * 0.35 * (1 - k * 0.5)); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      } else if (sa > 2.6) glowEye(ex, ey, er * (sa - 2.6), L.eye);
+      else { ctx.fillStyle = C.olive; ell(ex, ey + er * 0.9, er * 0.25, er * 0.35); ctx.fill(); }
+    } else glowEye(ex, ey, er, L.eye);
     ctx.fillStyle = C.dark; ell(fx + r * 0.33, -r * 0.15, r * 0.14, r * 0.12); ctx.fill(); ctx.stroke();
     ctx.fillStyle = C.red; ell(fx + r * 0.33, -r * 0.15, r * 0.05, r * 0.05); ctx.fill();
     ctx.fillStyle = C.dark; ell(fx, r * 0.33, r * 0.28, r * 0.18 + 0.04 * r * Math.sin(t * 2)); ctx.fill(); ctx.stroke();
@@ -231,31 +286,28 @@ function draw(e) {
     ctx.beginPath(); ctx.ellipse(fx, r * 0.22, r * 0.3, r * 0.14, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     ctx.fillStyle = C.cream;
     for (const sx2 of [-1, 1]) { ctx.beginPath(); ctx.moveTo(fx + sx2 * r * 0.2, r * 0.25); ctx.lineTo(fx + sx2 * r * 0.13, r * 0.05); ctx.lineTo(fx + sx2 * r * 0.06, r * 0.25); ctx.closePath(); ctx.fill(); }
-    let px = face * r * 1.1, py = r * 0.3 + Math.sin(t * 3) * r * 0.05, pk = 1;
-    if (e.pinchFx > 0) { const k = e.pinchFx / 0.2; px = face * r * (1.1 + 0.45 * k); py = r * (0.3 + 0.25 * k); pk = 1 + 0.15 * k; }
-    else if (sa >= 0 && sa < 0.4) {
-      if (sa < 0.15) { const k = sa / 0.15; px = face * r * (1.1 - 0.9 * k); py = r * (0.3 - 1.3 * k); }
-      else { const k = (sa - 0.15) / 0.25; px = face * r * (0.2 + 1.3 * k); py = r * (-1.0 + 1.3 * k); }
+    if (armOut) {
+      // лапа улетела на пружине: у плеча — только обрубок с креплением
+      ctx.fillStyle = C.stone; ell(face * r * 0.75, r * 0.1, r * 0.2, r * 0.2); ctx.fill(); ctx.stroke();
+    } else {
+      let px = face * r * 1.1, py = r * 0.3 + Math.sin(t * 3) * r * 0.05, pk = 1;
+      if (e.pinchFx > 0) { const k = e.pinchFx / 0.2; px = face * r * (1.1 + 0.45 * k); py = r * (0.3 + 0.25 * k); pk = 1 + 0.15 * k; }
+      for (const [lw, col] of [[r * 0.42, C.ink], [r * 0.28, L.sh]]) {
+        ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(face * r * 0.55, r * 0.1); ctx.lineTo(px, py); ctx.stroke();
+      }
+      drawPaw(px, py, r * 0.55 * pk, face, L);
+      if (e.pinchFx > 0.1) star(px + face * r * 0.75, py, r * 0.35, C.orange);
     }
-    for (const [lw, col] of [[r * 0.42, C.ink], [r * 0.28, L.sh]]) {
-      ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(face * r * 0.55, r * 0.1); ctx.lineTo(px, py); ctx.stroke();
-    }
-    const pr = r * 0.55 * pk;
-    ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
-    ctx.fillStyle = C.cream;
-    for (let i = -1; i <= 1; i++) {
-      const cyc = py + i * pr * 0.45;
-      ctx.beginPath(); ctx.moveTo(px + face * pr * 0.7, cyc - pr * 0.14); ctx.lineTo(px + face * pr * 1.35, cyc + i * pr * 0.12); ctx.lineTo(px + face * pr * 0.7, cyc + pr * 0.14); ctx.closePath(); ctx.fill(); ctx.stroke();
-    }
-    ctx.fillStyle = L.col; ell(px, py, pr, pr * 0.9); ctx.fill(); ctx.stroke();
-    ctx.strokeStyle = L.sh; ctx.lineWidth = 2;
-    for (const i of [-1, 1]) { ctx.beginPath(); ctx.moveTo(px + face * pr * 0.25, py + i * pr * 0.25); ctx.lineTo(px + face * pr * 0.75, py + i * pr * 0.25); ctx.stroke(); }
-    ctx.fillStyle = hexA(L.eye, 0.35); ell(px - face * pr * 0.3, py - pr * 0.35, pr * 0.3, pr * 0.18); ctx.fill();
-    if (e.pinchFx > 0.1) star(px + face * pr * 1.3, py, r * 0.35, C.orange);
   }
   ctx.restore();
   ctx.lineCap = 'butt';
+  // лапа Скорпиона летит на пружине к цели (гарпун) или тащит пойманного
+  if (armOut) {
+    const sx0 = x + face * r * 0.75, sy0 = y + r * 0.1, pf = armOut.x >= x ? 1 : -1;
+    spring(sx0, sy0, armOut.x - pf * r * 0.3, armOut.y, r * 0.22);
+    drawPaw(armOut.x - pf * r * 0.3, armOut.y, r * 0.5, pf, L);
+  }
 
   if (e.hp < e.maxHp) {
     const top = y - ry - r * (type === 'bull' || type === 'chariot' ? 0.75 : type === 'scorpion' ? 0.5 : 0.35);
@@ -273,52 +325,131 @@ function hurtFlash(a) {
   return ha >= 0 && ha < 0.1 ? 1 - ha / 0.1 : 0;
 }
 
-// катапульта (вид сбоку): деревянная станина на двух колёсах, А-образная стойка, рычаг с ковшом слизи и
-// противовесом. Бросает в сторону цели: рычаг резко перекидывается вперёд, ковш пустеет, потом рычаг возвращается
+// Неподвижный стрелок навесом вместо катапульты — демон, вросший в пол. Три варианта на выбор (artillery):
+// 'toad' — жаба-мортира, 'shroom' — гриб-плевун, 'volcano' — живой вулкан. Перед броском копит заряд (cd → 0),
+// при броске сплющивается и выбрасывает снаряд вверх
+let artillery = 'toad';
+function setArtillery(kind) { artillery = kind; }
+
 function drawCatapult(e, a) {
-  const r = e.r * 1.3, face = a.face, fl = hurtFlash(a);
+  const r = e.r * 1.25, t = state.time + a.seed, fl = hurtFlash(a), face = a.face;
   const since = state.time - a.atkAt;
-  // рычаг: k = 0 — заряжен (ковш сзади у земли), k = 1 — бросок (рычаг перекинут через верх вперёд)
-  let k = 0;
-  if (since >= 0 && since < 0.15) k = since / 0.15;
-  else if (since >= 0.15 && since < 1.2) k = 1 - (since - 0.15) / 1.05;
-  const loaded = !(since >= 0 && since < 0.9);
-  ctx.fillStyle = 'rgba(20,10,5,0.5)'; ell(e.x, e.y + r * 0.9, r * 1.3, r * 0.32); ctx.fill();
-  ctx.save(); ctx.translate(e.x, e.y); ctx.scale(face, 1);
-  ctx.strokeStyle = C.ink; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  const wood = '#ab5c1c', dark = '#724113';
-  // А-образная стойка
-  for (const [lw, col] of [[r * 0.26, C.ink], [r * 0.15, dark]]) {
-    ctx.strokeStyle = col; ctx.lineWidth = lw;
-    ctx.beginPath(); ctx.moveTo(-r * 0.7, r * 0.35); ctx.lineTo(-r * 0.1, -r * 0.45); ctx.lineTo(r * 0.5, r * 0.35); ctx.stroke();
-  }
-  // рычаг: короткий конец с противовесом, длинный — с ковшом
-  const ang = 2.75 + k * 2.4, px = -r * 0.1, py = -r * 0.45;
-  const ex = px + Math.cos(ang) * r * 1.35, ey = py + Math.sin(ang) * r * 1.35;
-  const cx2 = px - Math.cos(ang) * r * 0.45, cy2 = py - Math.sin(ang) * r * 0.45;
-  for (const [lw, col] of [[r * 0.24, C.ink], [r * 0.13, wood]]) {
-    ctx.strokeStyle = col; ctx.lineWidth = lw;
-    ctx.beginPath(); ctx.moveTo(cx2, cy2); ctx.lineTo(ex, ey); ctx.stroke();
+  const charge = e.cd !== undefined && e.cd < 0.8 ? 1 - Math.max(0, e.cd) / 0.8 : 0;
+  const shot = since >= 0 && since < 0.35 ? 1 - since / 0.35 : 0;
+  ctx.fillStyle = 'rgba(20,10,5,0.5)'; ell(e.x, e.y + r * 0.75, r * 1.3, r * 0.35); ctx.fill();
+  ctx.save(); ctx.translate(e.x, e.y);
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // корни в пол: неподвижен
+  for (let i = 0; i < 5; i++) {
+    const ang = Math.PI * (0.1 + i * 0.2), x2 = Math.cos(ang) * r * 1.35, y2 = r * 0.55 + Math.sin(ang) * r * 0.35;
+    for (const [lw, col] of [[6, C.ink], [3, '#36170c']]) {
+      ctx.strokeStyle = col; ctx.lineWidth = lw;
+      ctx.beginPath(); ctx.moveTo(Math.cos(ang) * r * 0.6, r * 0.4); ctx.quadraticCurveTo(Math.cos(ang) * r, r * 0.75, x2, y2); ctx.stroke();
+    }
   }
   ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
-  ctx.fillStyle = C.stone; ctx.beginPath(); ctx.roundRect(cx2 - r * 0.22, cy2 - r * 0.2, r * 0.44, r * 0.4, 3); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = dark; ell(ex, ey, r * 0.3, r * 0.22, ang); ctx.fill(); ctx.stroke();
-  if (loaded) {
-    ctx.fillStyle = '#550f0a'; ell(ex, ey - r * 0.12, r * 0.24, r * 0.22); ctx.fill(); ctx.stroke();
-    glowEye(ex + r * 0.04, ey - r * 0.14, r * 0.09, C.red);
-  }
-  ctx.fillStyle = C.mud; ell(px, py, r * 0.1, r * 0.1); ctx.fill(); ctx.stroke();
-  // станина и колёса
-  ctx.fillStyle = wood; ctx.beginPath(); ctx.roundRect(-r * 1.05, r * 0.25, r * 2.1, r * 0.32, 4); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = C.stone; ctx.fillRect(-r * 0.75, r * 0.25, r * 0.12, r * 0.32); ctx.fillRect(r * 0.6, r * 0.25, r * 0.12, r * 0.32);
-  for (const wx of [-0.7, 0.7]) {
-    ctx.fillStyle = '#45230d'; ell(wx * r, r * 0.68, r * 0.3, r * 0.3); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(wx * r - r * 0.22, r * 0.68); ctx.lineTo(wx * r + r * 0.22, r * 0.68);
-    ctx.moveTo(wx * r, r * 0.46); ctx.lineTo(wx * r, r * 0.9); ctx.stroke();
-    ctx.fillStyle = C.mud; ell(wx * r, r * 0.68, r * 0.08, r * 0.08); ctx.fill();
-  }
-  flashOver(r * 1.1, r * 0.9, fl);
+  const sq = 1 - 0.18 * shot + 0.06 * charge;
+  ctx.scale(1 + 0.12 * shot, sq);
+  if (artillery === 'toad') drawToad(r, t, face, charge, shot, a.seed);
+  else if (artillery === 'shroom') drawShroom(r, t, face, charge, shot, a.seed);
+  else drawVolcano(r, t, face, charge, shot, a.seed);
+  flashOver(r * 1.2, r, fl);
   ctx.restore(); ctx.lineCap = 'butt';
+}
+
+// жаба-мортира: широкий тёмный блоб, сверху огромный рот, под ним светящийся зоб раздувается перед плевком
+function drawToad(r, t, face, charge, shot, seed) {
+  const rx = r * 1.2, ry = r * 0.85;
+  edgePath(rx, ry, t, 'wobble', seed); ctx.fillStyle = '#300f0a'; ctx.fill();
+  ctx.save(); edgePath(rx, ry, t, 'wobble', seed); ctx.clip();
+  ctx.fillStyle = '#550f0a'; ell(-rx * 0.05, -ry * 0.15, rx * 0.9, ry * 0.8); ctx.fill();
+  ctx.fillStyle = '#773421'; for (const [bx, by] of [[-0.5, -0.3], [0.45, -0.45], [0.6, 0.2], [-0.35, 0.3]]) { ell(bx * rx, by * ry, rx * 0.1, ry * 0.08); ctx.fill(); }
+  ctx.restore();
+  edgePath(rx, ry, t, 'wobble', seed); ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.stroke();
+  // зоб
+  const sac = r * (0.32 + 0.3 * charge);
+  const g = ctx.createRadialGradient(0, r * 0.3, 0, 0, r * 0.3, sac * 1.8);
+  g.addColorStop(0, hexA(C.orange, 0.3 + 0.5 * charge)); g.addColorStop(1, hexA(C.orange, 0));
+  ctx.fillStyle = g; ell(0, r * 0.3, sac * 1.8, sac * 1.8); ctx.fill();
+  ctx.fillStyle = charge > 0 ? '#ab5c1c' : '#773421'; ell(0, r * 0.32, sac, sac * 0.8); ctx.fill(); ctx.stroke();
+  // глаза на макушке
+  for (const s of [-1, 1]) {
+    ctx.fillStyle = '#550f0a'; ell(s * r * 0.5, -ry * 0.8, r * 0.26, r * 0.22); ctx.fill(); ctx.stroke();
+    glowEye(s * r * 0.5, -ry * 0.82, r * 0.13, C.gold);
+  }
+  // рот: при броске широко раскрыт
+  const open = r * (0.06 + 0.35 * shot);
+  ctx.fillStyle = C.dark;
+  ctx.beginPath(); ctx.moveTo(-r * 0.75, -r * 0.2); ctx.quadraticCurveTo(0, -r * 0.2 + open * 2.2, r * 0.75, -r * 0.2); ctx.quadraticCurveTo(0, -r * 0.2 - open, -r * 0.75, -r * 0.2); ctx.closePath(); ctx.fill(); ctx.stroke();
+  if (shot > 0.4) { ctx.fillStyle = '#550f0a'; ell(0, -r * (0.5 + (1 - shot) * 1.6), r * 0.25, r * 0.25); ctx.fill(); ctx.stroke(); glowEye(0, -r * (0.5 + (1 - shot) * 1.6), r * 0.09, C.red); }
+}
+
+// гриб-плевун: ножка с лицом, сверху шляпка со светящимися пятнами; шляпка надувается и выпускает споровый ком
+function drawShroom(r, t, face, charge, shot, seed) {
+  // ножка
+  ctx.fillStyle = '#684c3c';
+  ctx.beginPath(); ctx.moveTo(-r * 0.5, r * 0.6); ctx.quadraticCurveTo(-r * 0.6, -r * 0.1, -r * 0.35, -r * 0.35);
+  ctx.lineTo(r * 0.35, -r * 0.35); ctx.quadraticCurveTo(r * 0.6, -r * 0.1, r * 0.5, r * 0.6); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#45230d'; ctx.beginPath(); ctx.ellipse(0, r * 0.6, r * 0.5, r * 0.15, 0, 0, Math.PI); ctx.fill();
+  const fx = face * r * 0.08;
+  for (const s of [-1, 1]) glowEye(fx + s * r * 0.2, r * 0.02, r * 0.11, C.gold, s * face * 0.4, 0.6);
+  ctx.fillStyle = C.dark; ctx.beginPath(); ctx.ellipse(fx, r * 0.32, r * 0.2, r * 0.1, 0, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+  // шляпка
+  const cap = 1 + 0.18 * charge;
+  ctx.save(); ctx.translate(0, -r * 0.35); ctx.scale(cap, cap);
+  ctx.fillStyle = '#300f0a'; ctx.beginPath(); ctx.ellipse(0, 0, r * 1.15, r * 0.3, 0, 0, Math.PI); ctx.fill();
+  ctx.fillStyle = '#9b1a0a';
+  ctx.beginPath(); ctx.moveTo(-r * 1.15, 0); ctx.quadraticCurveTo(-r * 1.1, -r * 1.05, 0, -r * 1.05); ctx.quadraticCurveTo(r * 1.1, -r * 1.05, r * 1.15, 0);
+  ctx.quadraticCurveTo(0, r * 0.25, -r * 1.15, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+  for (const [sx, sy, sr] of [[-0.55, -0.45, 0.16], [0.1, -0.75, 0.19], [0.6, -0.4, 0.14], [-0.15, -0.3, 0.1]]) {
+    ctx.fillStyle = charge > 0 ? hexA(C.cream, 0.6 + 0.4 * Math.sin(t * 20)) : C.cream; ell(sx * r, sy * r, sr * r, sr * r * 0.8); ctx.fill();
+  }
+  ctx.restore();
+  if (shot > 0) {
+    for (let i = 0; i < 7; i++) {
+      const k = 1 - shot, ang = -Math.PI / 2 + (i - 3) * 0.35, d = r * (0.9 + k * 1.4);
+      ctx.globalAlpha = shot; ctx.fillStyle = i % 2 ? C.cream : C.olive;
+      ell(Math.cos(ang) * d, -r * 0.9 + Math.sin(ang) * d * 0.6, r * 0.12, r * 0.12); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+// живой вулкан: каменный холм с лицом, в кратере лава; заряд — лава ярче и дымит, бросок — фонтан искр
+function drawVolcano(r, t, face, charge, shot, seed) {
+  ctx.fillStyle = '#684c3c';
+  ctx.beginPath(); ctx.moveTo(-r * 1.25, r * 0.6); ctx.lineTo(-r * 0.55, -r * 0.75); ctx.lineTo(r * 0.55, -r * 0.75); ctx.lineTo(r * 1.25, r * 0.6);
+  ctx.quadraticCurveTo(0, r * 0.85, -r * 1.25, r * 0.6); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#45230d';
+  ctx.beginPath(); ctx.moveTo(r * 0.2, -r * 0.75); ctx.lineTo(r * 0.55, -r * 0.75); ctx.lineTo(r * 1.25, r * 0.6); ctx.quadraticCurveTo(r * 0.7, r * 0.75, r * 0.45, r * 0.75); ctx.closePath(); ctx.fill();
+  // трещины с лавой
+  ctx.strokeStyle = hexA(C.orange, 0.5 + 0.5 * charge); ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-r * 0.35, -r * 0.7); ctx.lineTo(-r * 0.5, -r * 0.3); ctx.lineTo(-r * 0.75, 0); ctx.moveTo(r * 0.3, -r * 0.7); ctx.lineTo(r * 0.45, -r * 0.35); ctx.stroke();
+  ctx.strokeStyle = C.ink;
+  // кратер
+  const g = ctx.createRadialGradient(0, -r * 0.8, 0, 0, -r * 0.8, r * (0.9 + charge * 0.6));
+  g.addColorStop(0, hexA(C.orange, 0.5 + 0.4 * charge)); g.addColorStop(1, hexA(C.orange, 0));
+  ctx.fillStyle = g; ell(0, -r * 0.8, r * (0.9 + charge * 0.6), r * (0.9 + charge * 0.6)); ctx.fill();
+  ctx.fillStyle = '#300f0a'; ell(0, -r * 0.76, r * 0.55, r * 0.17); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = charge > 0.5 || shot > 0 ? C.gold : C.orange; ell(0, -r * 0.74, r * 0.42, r * 0.11); ctx.fill();
+  // лицо
+  const fx = face * r * 0.08;
+  for (const s of [-1, 1]) glowEye(fx + s * r * 0.3, -r * 0.15, r * 0.13, C.red, s * face * 0.5, 0.5);
+  ctx.fillStyle = C.dark; ctx.beginPath(); ctx.moveTo(fx - r * 0.35, r * 0.25);
+  for (let i = 1; i <= 6; i++) ctx.lineTo(fx - r * 0.35 + i * r * 0.117, r * (i % 2 ? 0.15 : 0.3));
+  ctx.lineTo(fx + r * 0.35, r * 0.4); ctx.lineTo(fx - r * 0.35, r * 0.4); ctx.closePath(); ctx.fill(); ctx.stroke();
+  // дым при заряде, искры при броске
+  if (charge > 0) for (let i = 0; i < 3; i++) {
+    const k = (t * 1.5 + i / 3) % 1;
+    ctx.globalAlpha = (1 - k) * 0.5 * charge; ctx.fillStyle = C.stone;
+    ell(Math.sin(t * 2 + i) * r * 0.2, -r * (0.9 + k * 1.2), r * (0.12 + k * 0.25), r * (0.12 + k * 0.25)); ctx.fill();
+  }
+  if (shot > 0) for (let i = 0; i < 8; i++) {
+    const k = 1 - shot, ang = -Math.PI / 2 + (i - 3.5) * 0.28, d = r * (0.4 + k * 1.6);
+    ctx.globalAlpha = shot; ctx.fillStyle = i % 2 ? C.gold : C.orange;
+    ell(Math.cos(ang) * d, -r * 0.8 + Math.sin(ang) * d, r * 0.09, r * 0.09); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
 }
 
 // мина: тёмный колючий комок, наполовину в земле, красный глаз часто мигает
@@ -518,5 +649,5 @@ function sweep() {
   lastDrawn = now;
 }
 
-G.foes = { has, draw, sweep, demon, kraken, swallowed, shieldRing };
+G.foes = { has, draw, drawsHook, setArtillery, sweep, demon, kraken, swallowed, shieldRing };
 })(window.Game = window.Game || {});
