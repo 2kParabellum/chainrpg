@@ -369,6 +369,7 @@ function drawCatapult(e, a) {
   ctx.save(); edgePath(rx, ry, t, 'wobble', a.seed); ctx.clip();
   ctx.fillStyle = '#9b1a0a'; ell(-rx * 0.05, -ry * 0.12, rx * 0.92, ry * 0.85); ctx.fill();
   ctx.strokeStyle = hexA(C.gold, 0.35); ctx.lineWidth = r * 0.2; ell(0, -r * 0.15, rx * 1.02, ry); ctx.stroke();
+  flashOver(rx, ry, fl);
   ctx.restore();
   edgePath(rx, ry, t, 'wobble', a.seed); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke();
   const ex = face * r * 0.12, ey = -r * 0.12, er = r * (0.34 + 0.06 * charge);
@@ -376,7 +377,6 @@ function drawCatapult(e, a) {
   ctx.fillStyle = C.ink; ell(ex + Math.cos(f) * er * 0.25, ey + Math.sin(f) * er * 0.2, er * 0.25, er * 0.75 * (1 - 0.45 * charge)); ctx.fill();
   if (charge > 0.3) { ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(ex - er * 1.1, ey - er * 1.1); ctx.lineTo(ex + er * 1.1, ey - er * 0.8); ctx.stroke(); }
   ctx.restore();
-  flashOver(r * 1.3, r * 1.3, fl);
   ctx.restore(); ctx.lineCap = 'butt';
 }
 
@@ -467,8 +467,8 @@ function drawTurret(e, a) {
   }
   if (shot) star(Math.cos(f) * r * 1.4, Math.sin(f) * r * 1.4, r * 0.3, C.orange);
   edgePath(r * 0.55, r * 0.5, state.time + a.seed, 'wobble', a.seed); ctx.fillStyle = '#550f0a'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.stroke();
+  if (fl > 0) { ctx.save(); edgePath(r * 0.55, r * 0.5, state.time + a.seed, 'wobble', a.seed); ctx.clip(); flashOver(r * 0.6, r * 0.6, fl); ctx.restore(); }
   glowEye(Math.cos(f) * r * 0.12, Math.sin(f) * r * 0.1 - r * 0.05, r * 0.2, C.gold);
-  flashOver(r * 0.6, r * 0.6, fl);
   ctx.restore(); ctx.lineCap = 'butt';
   if (e.shielded) shieldRing(e, e.cfg.shieldAuraExtra);
 }
