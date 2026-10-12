@@ -71,7 +71,8 @@ function track(u) {
   });
   if (a.kind !== u.kind) { if (a.kind === 'neutral' || a.kind === 'downed') a.happyAt = t; a.kind = u.kind; }
   const lvl = u.abilityLevel || 0;
-  if (lvl > a.lvl) a.happyAt = t;
+  // обрадуется, когда на голову прилетит шапка с подиума профессии (render/jobart.js)
+  if (lvl > a.lvl) a.happyAt = t + (G.jobArt ? G.jobArt.hatFlight(u) : 0);
   a.lvl = lvl;
   return a;
 }
@@ -121,7 +122,9 @@ function drawAlly(u, mode, alpha = 1) {
   ctx.globalAlpha = alpha;
   const a = track(u), t = state.time, T = allyTypes[u.type];
   const prof = u.ability ? PROF[u.ability] : null;
-  const hat = T.anchor ? 'crown' : prof ? prof.hat : null;
+  // новая профессия: пока её шапка летит с подиума, на голове пусто
+  const flying = !T.anchor && u.abilityLevel === 1 && G.jobArt && G.jobArt.hatFlight(u) > 0;
+  const hat = T.anchor ? 'crown' : prof && !flying ? prof.hat : null;
   const weapon = T.anchor ? null : prof ? prof.weapon : 'fist';
   const lvl = clamp(u.abilityLevel || 1, 1, 3);
   const isLead = mode === 'chain' && u === state.party[0];

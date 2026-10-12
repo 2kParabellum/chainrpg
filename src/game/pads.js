@@ -101,11 +101,10 @@ function markPadUsed(pad) {
   pad.life = Math.max(pad.life, pad.usedLeft); // пока по нему едут, по времени жизни он не пропадёт
 }
 
-// подиум профессии взят: исчезает сразу (его получает одно звено)
+// подиум профессии взят: исчезает сразу (его получает одно звено; шапку к нему уносит эффект jobGet)
 function consumePad(pad) {
   const i = state.pads.indexOf(pad);
   if (i >= 0) state.pads.splice(i, 1);
-  state.effects.push({ type: 'ring', x: pad.x + pad.w / 2, y: pad.y + pad.h / 2, r: pad.w * 0.6, life: 0.35, color: padColor(pad.ability) });
   respawnFixed(pad);
 }
 

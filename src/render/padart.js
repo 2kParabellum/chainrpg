@@ -23,10 +23,13 @@ function drawPad(pad, key, alpha, opt = {}) {
   ctx.save();
   ctx.globalAlpha = alpha;
   if (opt.sx) { ctx.translate(cx, y + h); ctx.scale(opt.sx, opt.sy); ctx.translate(-cx, -(y + h)); }
+  const dormant = opt.charge !== undefined;
   // свечение вокруг
+  if (!dormant) {
   const g = ctx.createRadialGradient(cx, cy, w * 0.3, cx, cy, w);
   g.addColorStop(0, hexA(col, 0.35 + 0.08 * wave)); g.addColorStop(1, hexA(col, 0));
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, w, 0, TAU); ctx.fill();
+  }
   // передняя грань с кладкой
   ctx.fillStyle = '#45230d'; ctx.fillRect(x + 2, y + topH, w - 4, face);
   ctx.strokeStyle = '#36170c'; ctx.lineWidth = 1.5;
@@ -36,11 +39,19 @@ function drawPad(pad, key, alpha, opt = {}) {
   tg.addColorStop(0, '#927e6a'); tg.addColorStop(1, '#684c3c');
   ctx.fillStyle = tg; ctx.fillRect(x + 2, y + 2, w - 4, topH - 2);
   // светящаяся вставка цвета усиления
+  if (dormant) { // погасла: тёмная вставка, снизу набирается цвет усиления
+    const ih = topH - 14, fh = ih * opt.charge;
+    ctx.fillStyle = hexA(INK, 0.75); ctx.fillRect(x + 9, y + 8, w - 18, ih);
+    ctx.fillStyle = hexA(col, 0.55); ctx.fillRect(x + 9, y + 8 + ih - fh, w - 18, fh);
+    ctx.fillStyle = hexA('#fff4dc', 0.5); ctx.fillRect(x + 9, y + 8 + ih - fh, w - 18, Math.min(2, fh));
+    ctx.strokeStyle = hexA(col, 0.5); ctx.lineWidth = 2.5; ctx.strokeRect(x + 8, y + 7, w - 16, topH - 12);
+  } else {
   ctx.fillStyle = hexA(col, 0.32 + 0.1 * wave); ctx.fillRect(x + 9, y + 8, w - 18, topH - 14);
   ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.strokeRect(x + 8, y + 7, w - 16, topH - 12);
+  }
   ctx.strokeStyle = hexA('#efd8a1', 0.35); ctx.lineWidth = 1; ctx.strokeRect(x + 5, y + 4.5, w - 10, topH - 7);
   // украшение вставки
-  decor(key, x + 9, y + 8, w - 18, topH - 14, col, t);
+  if (!dormant) decor(key, x + 9, y + 8, w - 18, topH - 14, col, t);
   // трещинки
   ctx.strokeStyle = hexA(INK, 0.6); ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(x + 3, y + topH * 0.3); ctx.lineTo(x + 7, y + topH * 0.38); ctx.lineTo(x + 5, y + topH * 0.5);
@@ -53,7 +64,7 @@ function drawPad(pad, key, alpha, opt = {}) {
   ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(x + 2, y + 2, w - 4, h - 4);
   ctx.beginPath(); ctx.moveTo(x + 2, y + topH); ctx.lineTo(x + w - 2, y + topH); ctx.stroke();
   // парящий значок со светлым пятном за ним
-  if (!opt.noIcon) {
+  if (!opt.noIcon && !dormant) {
     const fy = cy - 8 + Math.sin(t * 2.5) * 3 + (opt.iconDy || 0);
     ctx.globalAlpha = alpha * (opt.iconA === undefined ? 1 : opt.iconA);
     const ig = ctx.createRadialGradient(cx, fy, 2, cx, fy, w * 0.42);
@@ -63,7 +74,7 @@ function drawPad(pad, key, alpha, opt = {}) {
     else G.blobs.glyph(key, cx, fy, w * 0.26);
   }
   ctx.restore();
-  particles(key, cx, cy, w, col, t, alpha);
+  if (!dormant) particles(key, cx, cy, w, col, t, alpha);
 }
 
 // гравировка внутри вставки — у каждого усиления своя
@@ -210,5 +221,45 @@ function drawGone(pads) {
   for (const g of gone) drawVanish(g.pad, g.pad.ability, t - g.at);
 }
 
-G.padArt = { drawPad, drawLive, drawMark, drawGone };
+// постоянный подиум (pad.permanent): не исчезает. Взяли — значок улетает вверх и тает, вставка гаснет; пока он
+// на перезарядке, вставка снизу набирается цветом усиления, посередине секунды; загорелся — рамка-вспышка,
+// значок падает сверху с отскоком. Переходы замечаются по pad.cooldown (кэш рендера)
+const perm = new WeakMap();
+function drawPermanent(pad) {
+  const t = state.time, key = pad.ability, col = key === 'will' ? '#fff4dc' : G.buffs[key].color;
+  let s = perm.get(pad);
+  if (!s) { s = { cd: pad.cooldown, offAt: -9, onAt: -9 }; perm.set(pad, s); }
+  if (pad.cooldown > 0 && !(s.cd > 0)) s.offAt = t;
+  if (!(pad.cooldown > 0) && s.cd > 0) s.onAt = t;
+  s.cd = pad.cooldown;
+  const cx = pad.x + pad.w / 2, cy = pad.y + pad.h / 2;
+  if (pad.cooldown > 0) {
+    const e = t - s.offAt;
+    if (e < 0.5) {
+      drawPad(pad, key, 1, { charge: 1 - e / 0.5 });
+      ctx.globalAlpha = 1 - e / 0.5; G.blobs.glyph(key, cx, cy - 12 - e * 120, pad.w * 0.26); ctx.globalAlpha = 1;
+      return;
+    }
+    drawPad(pad, key, 1, { charge: 1 - pad.cooldown / (pad.cooldownTime || 1) });
+    ctx.save();
+    ctx.font = 'bold 18px "Trebuchet MS", "Segoe UI", system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round'; ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.globalAlpha = 0.95;
+    ctx.strokeText(String(Math.ceil(pad.cooldown)), cx, cy - 6); ctx.fillStyle = col; ctx.fillText(String(Math.ceil(pad.cooldown)), cx, cy - 6);
+    ctx.restore();
+    return;
+  }
+  const e = t - s.onAt;
+  if (e > 0.85) { drawPad(pad, key, 1); return; }
+  const dy = e < 0.35 ? -40 * (1 - e / 0.35) ** 2 : -Math.abs(Math.sin((e - 0.35) * 10)) * 6 * Math.max(0, 1 - (e - 0.35) / 0.5);
+  drawPad(pad, key, 1, { iconDy: dy });
+  if (e < 0.5) {
+    const k = e / 0.5;
+    ctx.globalAlpha = 1 - k; ctx.strokeStyle = col; ctx.lineWidth = 4;
+    ctx.strokeRect(pad.x - k * 14, pad.y - k * 14, pad.w + k * 28, pad.h + k * 28);
+    ctx.fillStyle = hexA('#fff4dc', 0.6 * (1 - k)); ctx.fillRect(pad.x + 2, pad.y + 2, pad.w - 4, pad.h - 15);
+    ctx.globalAlpha = 1;
+  }
+}
+
+G.padArt = { drawPad, drawLive, drawMark, drawGone, drawPermanent, MARK, FALL, SPAWN };
 })(window.Game = window.Game || {});

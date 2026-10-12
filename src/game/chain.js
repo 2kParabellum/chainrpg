@@ -180,9 +180,9 @@ function touchPads() {
     const def = G.abilities[pad.ability];
     setAbility(target, pad.ability, target.ability === pad.ability ? target.abilityLevel + 1 : 1);
     consumePad(pad);
-    // луч от подиума к получившему и вспышка вокруг него (у прокачки — шире)
-    state.effects.push({ type: 'beam', x1: pad.x + pad.w / 2, y1: pad.y + pad.h / 2, x2: target.x, y2: target.y, life: 0.35, color: def.color });
-    state.effects.push({ type: 'ring', x: target.x, y: target.y, r: target.r + (target.abilityLevel > 1 ? 14 : 8), life: 0.5, color: def.color });
+    // шапка слетает с подиума на голову получившего, над ним — ромбики уровня (render/jobart.js)
+    state.effects.push({ type: 'jobGet', unit: target, pad, key: pad.ability, lvl: target.abilityLevel,
+                         max: (def.levels || [{}]).length, life: 2.5, total: 2.5 });
   }
 }
 

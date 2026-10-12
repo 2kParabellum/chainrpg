@@ -538,7 +538,7 @@ function drawHourglass(x, y, s) {
 
 // яркость подиума: вырастает при появлении, перед исчезновением мигает всё чаще и гаснет
 function padAlpha(pad, warnTime) {
-  // постоянный подиум не появляется и не исчезает — горит всегда (погасший рисуется отдельно, см. drawPadCooldown)
+  // постоянный подиум не появляется и не исчезает — горит всегда (погасший рисуется отдельно, см. G.padArt.drawPermanent)
   if (pad.permanent) return 1;
   // взятый подиум тускнеет и гаснет, как только по нему проехал хвост
   if (pad.usedLeft !== undefined) {
@@ -547,78 +547,14 @@ function padAlpha(pad, warnTime) {
   return fadeAlpha(pad.life, pad.maxLife, warnTime);
 }
 
-// метка будущего подиума: тень, которая сужается от широкой до размера подиума и темнеет к его появлению
+// метка будущего подиума: пунктир на его месте и размытая тень, которая к появлению принимает его форму
+// (усиление — render/padart.js, профессия — render/jobart.js)
 function drawPadMarks() {
   for (const m of state.padMarks) {
     if (!visible(m)) continue;
     const k = 1 - clamp(m.left / m.total, 0, 1);     // 0 — только появилась, 1 — сейчас будет подиум
-    const cx = m.x + m.w / 2, cy = m.y + m.h / 2;
-    const half = (m.w / 2) * (2.2 - 1.2 * k);
-    // у будущей профессии тень круглая, как сам подиум, у усиления — квадратная
-    const round = G.pads.padKind(m.ability) === 'jobs';
-    // будущее усиление: размытая тень и прорисовка контура квадрата (render/padart.js)
-    if (!round) { G.padArt.drawMark(m, k); continue; }
-    ctx.fillStyle = '#000';
-    ctx.globalAlpha = 0.2 + 0.45 * k;
-    ctx.beginPath();
-    if (round) ctx.arc(cx, cy, half, 0, Math.PI * 2); else ctx.rect(cx - half, cy - half, half * 2, half * 2);
-    ctx.fill();
-    ctx.globalAlpha = 0.35 + 0.4 * k;
-    ctx.strokeStyle = '#927e6a';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([6, 5]);
-    ctx.beginPath();
-    if (round) ctx.arc(cx, cy, m.w / 2 - 1, 0, Math.PI * 2); else ctx.rect(m.x + 1, m.y + 1, m.w - 2, m.h - 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
+    if (G.pads.padKind(m.ability) === 'jobs') G.jobArt.drawMark(m, k); else G.padArt.drawMark(m, k);
   }
-}
-
-// подиум профессии — круглый каменный постамент с ободком цвета профессии, над ним парит её шапка (graphics.md):
-// сразу видно, каким станет звено, которое его получит. Снизу — подпись. Пока отдать его некому
-// (в цепочке нет дружочка без профессии и нет звена этой профессии ниже 3-го уровня) — он серый и тусклый
-function drawJobPad(pad, def, alpha, wave) {
-  const r = pad.w / 2, cx = pad.x + r, cy = pad.y + r;
-  const active = !!G.chain.jobTarget(pad.ability);
-  const color = active ? def.color : COLORS.neutral;
-  const rx = r * 0.9, ry = r * 0.45, top = cy + r * 0.15, h = r * 0.28;
-  if (active) {
-    const g = ctx.createRadialGradient(cx, top, r * 0.3, cx, top, r * 1.4);
-    g.addColorStop(0, color);
-    g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g;
-    ctx.globalAlpha = (0.3 + 0.08 * wave) * alpha;
-    ctx.beginPath(); ctx.arc(cx, top, r * 1.4, 0, Math.PI * 2); ctx.fill();
-  }
-  ctx.globalAlpha = (active ? 1 : 0.55) * alpha;
-  ctx.strokeStyle = COLORS.floorLine;
-  ctx.lineWidth = 2;
-  // боковина постамента
-  ctx.fillStyle = COLORS.wallSide;
-  ctx.beginPath();
-  ctx.ellipse(cx, top + h, rx, ry, 0, 0, Math.PI);
-  ctx.lineTo(cx - rx, top);
-  ctx.ellipse(cx, top, rx, ry, 0, Math.PI, 0, true);
-  ctx.closePath(); ctx.fill(); ctx.stroke();
-  // верх и ободок цвета профессии
-  ctx.fillStyle = COLORS.wall;
-  ctx.beginPath(); ctx.ellipse(cx, top, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = color; ctx.lineWidth = 4;
-  ctx.beginPath(); ctx.ellipse(cx, top, rx - 3, ry - 2, 0, 0, Math.PI * 2); ctx.stroke();
-  ctx.strokeStyle = COLORS.floorLine; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.ellipse(cx, top, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
-  // парящая шапка и её тень на постаменте
-  const float = active ? Math.sin(state.time * 2.5) * 3 : 0;
-  ctx.fillStyle = 'rgba(20,10,5,0.35)';
-  ctx.beginPath(); ctx.ellipse(cx, top, rx * 0.45, ry * 0.4, 0, 0, Math.PI * 2); ctx.fill();
-  G.blobs.hatIcon(pad.ability, cx, top - r * 0.2 + float, r * 0.55);
-  ctx.fillStyle = color;
-  ctx.globalAlpha = (active ? 0.95 : 0.7) * alpha;
-  ctx.font = 'bold 12px "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(def.name, cx, pad.y + pad.h + 16);
-  ctx.globalAlpha = 1;
 }
 
 // постоянный подиум (никогда не исчезает): вокруг него небольшая рамка его цвета с уголками — сразу видно, что он особенный
@@ -638,7 +574,7 @@ function drawPermanentFrame(pad, def) {
   ctx.globalAlpha = 1;
 }
 
-// погасший на перезарядку постоянный подиум: тёмный квадрат в тусклой рамке, по кругу — сколько осталось (сектор
+// погасший на перезарядку постоянный подиум профессии (у усиления — G.padArt.drawPermanent): тёмный квадрат в тусклой рамке, по кругу — сколько осталось (сектор
 // цвета усиления убывает), посередине горят секунды до того, как он загорится снова
 function drawPadCooldown(pad, def) {
   const cx = pad.x + pad.w / 2, cy = pad.y + pad.h / 2, k = clamp(pad.cooldown / pad.cooldownTime, 0, 1);
@@ -667,27 +603,28 @@ function drawPadCooldown(pad, def) {
   ctx.globalAlpha = 1;
 }
 
-// подиумы: профессии — большие дружочки (см. drawJobPad), усиления — светящийся квадрат на полу
-// в широком мягком свечении; у постоянного — ещё и рамка вокруг
+// подиумы: профессии — постаменты с шапкой (render/jobart.js), усиления — каменные плиты (render/padart.js);
+// у постоянного — ещё и рамка вокруг
 function drawPads() {
-  const { pulse } = CONFIG.PADS;
   const warnTime = G.pads.settings().warnTime;
-  const wave = Math.sin((state.time / pulse) * Math.PI * 2);
   for (const pad of state.pads) {
     if (!visible(pad)) continue;
     const alpha = padAlpha(pad, warnTime);
     const buff = G.buffs[pad.ability];
     const def = buff || abilities[pad.ability];
     if (pad.permanent) drawPermanentFrame(pad, def);
+    if (pad.permanent && buff) { G.padArt.drawPermanent(pad); continue; }
     if (pad.cooldown > 0) { drawPadCooldown(pad, def); continue; }
     if (!buff) {
-      drawJobPad(pad, def, alpha, wave);
+      G.jobArt.drawLive(pad, alpha, !G.chain.jobTarget(pad.ability));
       if (pad.life <= warnTime) drawHourglass(pad.x + pad.w, pad.y - 4, 7);
       continue;
     }
-    if (pad.permanent) G.padArt.drawPad(pad, pad.ability, 1); else G.padArt.drawLive(pad, alpha);
+    G.padArt.drawLive(pad, alpha);
     if (pad.life <= warnTime && pad.usedLeft === undefined) drawHourglass(pad.x + pad.w, pad.y - 4, 7);
-  }  G.padArt.drawGone(state.pads); // взятые и истёкшие подиумы усилений рассыпаются
+  }
+  G.padArt.drawGone(state.pads); // взятые и истёкшие подиумы рассыпаются
+  G.jobArt.drawGone(state.pads);
 }
 
 // ядра пушек-ловушек рисуются последним слоем сцены, поверх всего
@@ -1038,6 +975,8 @@ function drawEffects() {
         drawImpact(fx.x2, fx.y2, fx.color, k, 14);
       }
       ctx.globalAlpha = 1;
+    } else if (fx.type === 'jobGet') {
+      G.jobArt.drawGet(fx);
     } else if (fx.type === 'ring') {
       ctx.globalAlpha = clamp(fx.life * 5, 0, 0.8);
       ctx.strokeStyle = fx.color;
