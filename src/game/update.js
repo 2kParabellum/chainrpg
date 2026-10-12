@@ -84,12 +84,38 @@ function updateLeader(dt) {
   }
 }
 
-// улучшение «таран»: Герой, врезавшись во врага, ранит его — тем сильнее, чем быстрее сближался (на полной
-// скорости хода — dmg); одного врага — не чаще раза в cooldown. Тела у края касаются после расталкивания прошлого кадра
+// масса тарана: Герой (heroMass) плюс звенья подряд за ним, которые едут примерно туда же, куда Герой.
+// Звено едет по следу к тому, кто впереди, поэтому его направление — отрезок до соседа спереди; первое
+// звено, отклонившееся больше alignAngle, обрывает счёт
+function ramMass(lead, up) {
+  const sp = Math.hypot(lead.vx, lead.vy);
+  const dx = sp > 1 ? lead.vx / sp : Math.cos(lead.heading), dy = sp > 1 ? lead.vy / sp : Math.sin(lead.heading);
+  const minCos = Math.cos(up.alignAngle);
+  let mass = up.heroMass;
+  for (let i = 1; i < state.party.length; i++) {
+    const a = state.party[i], ahead = state.party[i - 1];
+    if (a.absorbed) break;
+    const sx = ahead.x - a.x, sy = ahead.y - a.y, len = Math.hypot(sx, sy);
+    if (len > 1 && (sx * dx + sy * dy) / len < minCos) break;
+    mass++;
+  }
+  return mass;
+}
+
+// урон тарана без силы: скорость (в долях полной скорости хода, не больше speedCap) × масса, не больше maxDmg
+function ramDamage(up, speed, mass) {
+  return Math.min(up.maxDmg, up.dmgPerMass * Math.min(up.speedCap, speed / CONFIG.LEADER.speed) * mass);
+}
+
+// улучшение «таран»: Герой, врезавшись во врага, ранит его — скорость сближения × масса цепочки (ramDamage);
+// одного врага — не чаще раза в cooldown. Тела у края касаются после расталкивания прошлого кадра.
+// lead.ramPower (0..1) — сколько сейчас дал бы таран на текущей скорости от потолка: по нему светится дуга
 function applyHeroRam() {
   const up = upgrade('ram');
-  if (!up) return;
   const lead = leader();
+  if (!up) { lead.ramPower = 0; return; }
+  const mass = ramMass(lead, up);
+  lead.ramPower = ramDamage(up, Math.hypot(lead.vx, lead.vy), mass) / up.maxDmg;
   for (const e of state.enemies.slice()) {
     if (!meleeHittable(e)) continue;
     const d = dist(lead, e);
@@ -97,8 +123,8 @@ function applyHeroRam() {
     const closing = (lead.vx * (e.x - lead.x) + lead.vy * (e.y - lead.y)) / (d || 1);
     if (closing < up.minSpeed) continue;
     e.rammedAt = state.time;
-    combat.damageUnit(e, up.dmg * Math.min(1.3, closing / CONFIG.LEADER.speed) * (lead.dmgMul || 1));
-    state.effects.push({ type: 'ring', x: (lead.x + e.x) / 2, y: (lead.y + e.y) / 2, r: 16, life: 0.25, color: COLORS.speed });
+    combat.damageUnit(e, ramDamage(up, closing, mass) * (lead.dmgMul || 1));
+    state.effects.push({ type: 'ring', x: (lead.x + e.x) / 2, y: (lead.y + e.y) / 2, r: 12 + 10 * lead.ramPower, life: 0.25, color: COLORS.power });
   }
 }
 

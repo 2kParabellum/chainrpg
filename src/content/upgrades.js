@@ -154,8 +154,16 @@ const accumulate = {
 const ram = {
   name: 'Ram',
   who: 'hero',
-  desc: 'The Hero damages enemies by ramming them',
-  dmg: 30,           // урон на полной скорости хода; медленнее — меньше
+  desc: 'The Hero rams enemies: the faster and the straighter the chain, the harder',
+  // урон = dmgPerMass × скорость × масса, не больше maxDmg (сила усиливает сверху).
+  // скорость — скорость сближения в долях полной скорости хода, не больше speedCap;
+  // масса — Герой (heroMass) плюс звенья подряд за ним, идущие примерно туда же, куда едет Герой
+  // (отклонение не больше alignAngle); на повороте цепочка гнётся, и масса падает
+  dmgPerMass: 6,     // 6 на единицу массы: Герой один — 12, Герой и 4 звена по прямой — 36
+  heroMass: 2,
+  alignAngle: 0.52,  // рад (~30°)
+  speedCap: 1.3,     // с усилением скорости
+  maxDmg: 40,        // потолок урона
   minSpeed: 40,      // медленнее этого (скорость сближения) не бьёт
   cooldown: 0.5,     // одного врага — не чаще
   art(ctx, k) {

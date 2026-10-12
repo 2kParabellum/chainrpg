@@ -889,6 +889,21 @@ function drawChain() {
   ctx.lineTo(lead.x + Math.cos(h) * tip, lead.y + Math.sin(h) * tip);
   ctx.lineTo(lead.x + Math.cos(h + 0.45) * back, lead.y + Math.sin(h + 0.45) * back);
   ctx.stroke();
+  // дуга тарана впереди Героя: чем сильнее сейчас был бы удар (скорость × прямая цепочка), тем ярче и толще
+  const ram = lead.ramPower;
+  if (ram !== undefined && G.session.upgrade('ram')) {
+    const rr = lead.r + 21, span = 0.75 + 0.25 * ram;
+    ctx.strokeStyle = COLORS.power;
+    ctx.lineCap = 'round';
+    if (ram > 0.5) { // у потолка — мягкое свечение вокруг дуги
+      ctx.globalAlpha = (ram - 0.5) * 0.6;
+      ctx.lineWidth = 9;
+      ctx.beginPath(); ctx.arc(lead.x, lead.y, rr, h - span, h + span); ctx.stroke();
+    }
+    ctx.globalAlpha = 0.15 + 0.85 * ram;
+    ctx.lineWidth = 2 + 2.5 * ram;
+    ctx.beginPath(); ctx.arc(lead.x, lead.y, rr, h - span, h + span); ctx.stroke();
+  }
   ctx.lineCap = 'butt';
   ctx.globalAlpha = 1;
 }
