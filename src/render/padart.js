@@ -1,6 +1,6 @@
 // Подиум усиления (graphics.md): каменная плита с болтами, гравировкой и трещинками, своё украшение и частицы
-// у каждого усиления, над плитой парит значок (у «воли» — крылья с нимбом). Появление: размытая тень и контур
-// квадрата (пока подиум только обещан, padMarks), затем плита падает сверху и поднимает пыль. Исчезновение:
+// у каждого усиления, над плитой парит значок (у «воли» — крылья с нимбом). Появление: тёмный пунктирный квадрат и размытая
+// тень, которая из круга становится квадратом (пока подиум только обещан, padMarks), затем плита падает сверху и поднимает пыль. Исчезновение:
 // значок взлетает, по плите бегут трещины, она уходит в пол и рассыпается пылью — и когда подиум взяли, и когда
 // его время вышло. Исчезнувшие из state.pads подиумы досматривают анимацию в своём списке (это не состояние игры).
 (function (G) {
@@ -107,30 +107,37 @@ function particles(key, cx, cy, w, col, t, alpha) {
   ctx.globalAlpha = 1;
 }
 
-// Появление (сек от начала): 0–0.6 размытая тень растёт и темнеет; 0.45–0.9 проступает контур квадрата;
-// 0.9–1.15 плита падает сверху; удар — сплющивание и пыль в стороны
-const SPAWN = 1.15;
+// Появление (сек от начала), пока подиум обещан (метка, MARK с): сразу — тёмный пунктирный квадрат на месте плиты;
+// под ним размытая круглая тень растёт, темнеет, становится резче и постепенно принимает форму квадрата.
+// MARK..MARK+FALL — плита падает сверху; удар — сплющивание и пыль в стороны
+const MARK = 3, FALL = 0.25, SPAWN = MARK + FALL;
+function rrect(x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
 function drawSpawn(pad, key, s) {
-  const cx = pad.x + pad.w / 2, base = pad.y + pad.h, col = key === 'will' ? '#fff4dc' : G.buffs[key].color;
-  // тень
-  const sh = Math.min(1, s / 0.6), fall = s < 0.9 ? 0 : Math.min(1, (s - 0.9) / 0.25);
-  const rr = pad.w * (0.9 - 0.25 * fall);
-  const g = ctx.createRadialGradient(cx, base - pad.h * 0.45, rr * 0.2, cx, base - pad.h * 0.45, rr);
-  g.addColorStop(0, `rgba(20,10,5,${0.55 * sh})`); g.addColorStop(1, 'rgba(20,10,5,0)');
-  ctx.fillStyle = g; ell(cx, base - pad.h * 0.45, rr, rr * 0.8); ctx.fill();
-  // контур квадрата прорисовывается по периметру
-  if (s > 0.45) {
-    const k = Math.min(1, (s - 0.45) / 0.45), per = (pad.w + pad.h) * 2;
-    ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.globalAlpha = s < 1.15 ? 0.9 : 0;
-    ctx.setLineDash([per * k, per]); ctx.lineDashOffset = 0;
-    ctx.strokeRect(pad.x + 2, pad.y + 2, pad.w - 4, pad.h - 4);
-    ctx.setLineDash([]); ctx.globalAlpha = 1;
+  const cx = pad.x + pad.w / 2, cy = pad.y + pad.h / 2;
+  const lin = Math.min(1, s / MARK), m = lin * lin * (3 - 2 * lin), fall = s < MARK ? 0 : Math.min(1, (s - MARK) / FALL);
+  // тень: круг → скруглённый квадрат → квадрат по размеру плиты; края мягкие (слои), к концу резче и темнее
+  const sw = pad.w * (0.4 + 0.5 * m), sh = pad.h * (0.4 + 0.5 * m);
+  const rad = sw / 2 + (3 - sw / 2) * Math.pow(m, 1.6);
+  const blur = 16 - 13 * m - 2 * fall, a = 0.12 + 0.45 * m + 0.15 * fall, N = 7;
+  ctx.fillStyle = 'rgb(20,10,5)';
+  for (let i = 0; i < N; i++) {
+    const e = blur * (1 - i / (N - 1));
+    ctx.globalAlpha = a / N * 1.6;
+    rrect(cx - sw / 2 - e, cy - sh / 2 - e, sw + e * 2, sh + e * 2, rad + e); ctx.fill();
   }
+  ctx.globalAlpha = 1;
+  // тёмный пунктир на месте будущей плиты — сразу квадратный, медленно бежит по кругу
+  ctx.strokeStyle = INK; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+  ctx.globalAlpha = Math.min(1, s / 0.15) * 0.9 * (1 - fall);
+  ctx.setLineDash([7, 6]); ctx.lineDashOffset = -state.time * 10;
+  ctx.strokeRect(pad.x + 1, pad.y + 1, pad.w - 2, pad.h - 2);
+  ctx.setLineDash([]); ctx.lineCap = 'butt'; ctx.globalAlpha = 1;
   // падение
-  if (s >= 0.9 && s < SPAWN) {
-    const k = (s - 0.9) / 0.25;
-    drawPad(pad, key, 1, { dy: -140 * (1 - k * k), noIcon: true });
-  }
+  if (s >= MARK && s < SPAWN) drawPad(pad, key, 1, { dy: -140 * (1 - fall * fall), noIcon: true });
 }
 // приземление: 0–0.35 сплющивание, пыль 0–0.6
 function drawLanding(pad, key, s) {
@@ -185,12 +192,12 @@ function drawLive(pad, alpha) {
   if (pad.usedLeft !== undefined && s.vAt === null && !pad.permanent) s.vAt = t;
   if (s.vAt !== null) { drawVanish(pad, pad.ability, t - s.vAt); return; }
   const age = t - s.at;
-  if (age < 0.25) drawSpawn(pad, pad.ability, 0.9 + age);
-  else if (age < 0.85) drawLanding(pad, pad.ability, age - 0.25);
+  if (age < FALL) drawSpawn(pad, pad.ability, MARK + age);
+  else if (age < FALL + 0.6) drawLanding(pad, pad.ability, age - FALL);
   else drawPad(pad, pad.ability, alpha);
 }
-// обещанный подиум (метка): k 0..1 — тень и контур квадрата
-function drawMark(m, k) { drawSpawn(m, m.ability, Math.min(0.9, k * 0.9)); }
+// обещанный подиум (метка): k 0..1 — пунктир и тень, которая из круга становится квадратом
+function drawMark(m, k) { drawSpawn(m, m.ability, Math.min(MARK, k * MARK)); }
 // после основного прохода: подиумы, которые пропали из state.pads, рассыпаются ещё VANISH + 0.6 с
 function drawGone(pads) {
   const t = state.time, now = new Set(pads);
