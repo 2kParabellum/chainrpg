@@ -60,7 +60,7 @@ function aimSteer(lead, aim, maxTurn) {
 function updateLeader(dt) {
   const lead = leader();
   const mv = lead.moveMul || 1;   // усиление подиума скорости: быстрее ход, разгон и разворот
-  const speedMul = leaderSpeedMul(); // длинная цепочка едет медленнее (не ниже 80%), но под «скоростью» — не ниже базовой
+  const speedMul = leaderSpeedMul(); // длинная цепочка едет медленнее (не ниже 70%), но под «скоростью» — не ниже базовой
   const mass = chainMass();
   const cfg = CONFIG.LEADER;
   const v = Math.hypot(lead.vx, lead.vy);
