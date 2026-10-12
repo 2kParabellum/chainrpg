@@ -325,37 +325,59 @@ function hurtFlash(a) {
   return ha >= 0 && ha < 0.1 ? 1 - ha / 0.1 : 0;
 }
 
-// Неподвижный стрелок навесом вместо катапульты — демон, который сам не ходит. Варианты на выбор (artillery):
-// 'eye' — глаз-башня, 'mortar' — мортира на спине, 'cauldron' — котёл с бесёнком, 'sling' — пращник.
-// Перед броском копит заряд (cd → 0, charge 0..1), при броске (shot 1..0) отдача и снаряд вылетает
-let artillery = 'mortar';
-function setArtillery(kind) { artillery = kind; }
-
+// Миномётчик (вместо катапульты, тип tower): красный одноглазый стрелок сидит на каменной платформе, из платформы
+// сзади торчит мортира. Сам не ходит. Перед броском копит заряд (cd → 0): глаз разгорается и щурится, жерло светится;
+// при броске — клуб дыма, отдача ствола, ком слизи уходит вверх
 function drawCatapult(e, a) {
-  const r = e.r * 1.25, t = state.time + a.seed, fl = hurtFlash(a), face = a.face;
+  const r = e.r * 1.2, t = state.time + a.seed, fl = hurtFlash(a), face = a.face, f = e.facing || 0;
   const since = state.time - a.atkAt;
   const charge = e.cd !== undefined && e.cd < 1 ? 1 - Math.max(0, e.cd) : 0;
   const shot = since >= 0 && since < 0.4 ? 1 - since / 0.4 : 0;
-  ctx.fillStyle = 'rgba(20,10,5,0.5)'; ell(e.x, e.y + r * 0.75, r * 1.3, r * 0.35); ctx.fill();
+  ctx.fillStyle = 'rgba(20,10,5,0.5)'; ell(e.x, e.y + r * 0.85, r * 1.45, r * 0.38); ctx.fill();
   ctx.save(); ctx.translate(e.x, e.y);
   ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  if (artillery === 'eye') drawEyeTower(r, t, face, charge, shot, a.seed);
-  else if (artillery === 'cauldron') drawCauldron(r, t, face, charge, shot, a.seed);
-  else if (artillery === 'sling') drawSlinger(r, t, face, charge, shot, a.seed);
-  else drawMortarBack(r, t, face, charge, shot, a.seed);
+
+  // мортира за платформой: ствол вверх-назад, железные обручи, отдача при выстреле
+  const rec = shot * r * 0.18;
+  ctx.save(); ctx.translate(-face * r * 0.55, r * 0.05); ctx.rotate(-face * 0.5);
+  ctx.fillStyle = '#45230d'; ctx.beginPath(); ctx.roundRect(-r * 0.36, -r * 1.25 + rec, r * 0.72, r * 1.3, 6); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = C.stone;
+  for (const k of [-0.95, -0.45]) { ctx.fillRect(-r * 0.38, k * r + rec, r * 0.76, r * 0.13); ctx.strokeRect(-r * 0.38, k * r + rec, r * 0.76, r * 0.13); }
+  ell(0, -r * 1.25 + rec, r * 0.42, r * 0.15); ctx.fill(); ctx.stroke();
+  const hot = Math.max(charge, shot);
+  ctx.fillStyle = hot > 0 ? hexA(C.orange, 0.45 + 0.55 * hot) : C.dark; ell(0, -r * 1.25 + rec, r * 0.28, r * 0.09); ctx.fill();
+  if (shot > 0) for (let i = 0; i < 5; i++) {
+    const k = 1 - shot; ctx.globalAlpha = shot * 0.75; ctx.fillStyle = i % 2 ? C.stone : '#684c3c';
+    ell((i - 2) * r * 0.22 * (1 + k), -r * (1.45 + k * 0.9) - (i % 2) * r * 0.15, r * (0.2 + k * 0.3), r * (0.17 + k * 0.25)); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  launchGlob(0, -r * 1.3, r, shot);
+  ctx.restore();
+
+  // каменная платформа: светлый верх, тёмная передняя грань, заклёпки
+  ctx.fillStyle = '#684c3c';
+  ctx.beginPath(); ctx.ellipse(0, r * 0.62, r * 1.25, r * 0.4, 0, 0, Math.PI); ctx.lineTo(-r * 1.25, r * 0.35);
+  ctx.ellipse(0, r * 0.35, r * 1.25, r * 0.4, 0, Math.PI, 0, true); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = C.stone; ell(0, r * 0.35, r * 1.25, r * 0.4); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#684c3c'; for (const k of [-0.8, 0, 0.8]) { ell(k * r, r * 0.68 + Math.abs(k) * -r * 0.08, r * 0.06, r * 0.06); ctx.fill(); }
+
+  // сам стрелок: тёмно-красный слизистый блоб с одним большим глазом, сидит на платформе
+  const w = Math.sin(t * 4), bx = 0, by = -r * 0.05;
+  const rx = r * 0.78 * (1 + 0.04 * w + 0.12 * shot), ry = r * 0.72 * (1 - 0.04 * w - 0.12 * shot + 0.06 * charge);
+  ctx.save(); ctx.translate(bx, by);
+  edgePath(rx, ry, t, 'wobble', a.seed); ctx.fillStyle = '#550f0a'; ctx.fill();
+  ctx.save(); edgePath(rx, ry, t, 'wobble', a.seed); ctx.clip();
+  ctx.fillStyle = '#9b1a0a'; ell(-rx * 0.05, -ry * 0.12, rx * 0.92, ry * 0.85); ctx.fill();
+  ctx.strokeStyle = hexA(C.gold, 0.35); ctx.lineWidth = r * 0.2; ell(0, -r * 0.15, rx * 1.02, ry); ctx.stroke();
+  ctx.restore();
+  edgePath(rx, ry, t, 'wobble', a.seed); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke();
+  const ex = face * r * 0.12, ey = -r * 0.12, er = r * (0.34 + 0.06 * charge);
+  glowEye(ex, ey, er, charge > 0.4 ? C.cream : C.gold, 0, 1 - 0.45 * charge);
+  ctx.fillStyle = C.ink; ell(ex + Math.cos(f) * er * 0.25, ey + Math.sin(f) * er * 0.2, er * 0.25, er * 0.75 * (1 - 0.45 * charge)); ctx.fill();
+  if (charge > 0.3) { ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(ex - er * 1.1, ey - er * 1.1); ctx.lineTo(ex + er * 1.1, ey - er * 0.8); ctx.stroke(); }
+  ctx.restore();
   flashOver(r * 1.3, r * 1.3, fl);
   ctx.restore(); ctx.lineCap = 'butt';
-}
-
-function rootsAt(r, n) {
-  for (let i = 0; i < n; i++) {
-    const ang = Math.PI * (0.1 + i * 0.8 / (n - 1)), x2 = Math.cos(ang) * r * 1.3, y2 = r * 0.55 + Math.sin(ang) * r * 0.3;
-    for (const [lw, col] of [[6, C.ink], [3, '#36170c']]) {
-      ctx.strokeStyle = col; ctx.lineWidth = lw;
-      ctx.beginPath(); ctx.moveTo(Math.cos(ang) * r * 0.5, r * 0.4); ctx.quadraticCurveTo(Math.cos(ang) * r * 0.9, r * 0.7, x2, y2); ctx.stroke();
-    }
-  }
-  ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
 }
 
 // летящий снаряд в момент броска: ком слизи с глазом уходит вверх из точки (x, y)
@@ -364,133 +386,6 @@ function launchGlob(x, y, r, shot) {
   const k = 1 - shot, gy = y - k * r * 2.2;
   ctx.fillStyle = '#550f0a'; ell(x, gy, r * 0.24, r * 0.24); ctx.fill(); ctx.stroke();
   glowEye(x, gy, r * 0.09, C.red);
-}
-
-// глаз-башня: мясистый стебель с кольцами, вросший корнями, наверху огромный глаз; заряд — радужка разгорается,
-// бросок — глаз прищуривается и выплёвывает ком
-function drawEyeTower(r, t, face, charge, shot, seed) {
-  rootsAt(r, 5);
-  const sw = Math.sin(t * 1.8) * r * 0.08, top = -r * 1.05;
-  ctx.fillStyle = '#550f0a';
-  ctx.beginPath(); ctx.moveTo(-r * 0.45, r * 0.5); ctx.quadraticCurveTo(-r * 0.35, -r * 0.2, -r * 0.2 + sw, top);
-  ctx.lineTo(r * 0.2 + sw, top); ctx.quadraticCurveTo(r * 0.35, -r * 0.2, r * 0.45, r * 0.5); ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.strokeStyle = '#300f0a'; ctx.lineWidth = 2;
-  for (const k of [0.25, -0.15, -0.55]) { ctx.beginPath(); ctx.moveTo(-r * (0.38 - k * 0.1), k * r); ctx.quadraticCurveTo(sw * 0.5, k * r + r * 0.08, r * (0.38 - k * 0.1), k * r); ctx.stroke(); }
-  ctx.strokeStyle = C.ink;
-  const ex = sw, ey = top - r * 0.35, er = r * (0.62 + 0.06 * charge);
-  const g = ctx.createRadialGradient(ex, ey, er * 0.3, ex, ey, er * 1.8);
-  g.addColorStop(0, hexA(C.gold, 0.25 + 0.45 * charge)); g.addColorStop(1, hexA(C.gold, 0));
-  ctx.fillStyle = g; ell(ex, ey, er * 1.8, er * 1.8); ctx.fill();
-  ctx.fillStyle = '#9b1a0a'; ell(ex, ey, er, er); ctx.fill(); ctx.lineWidth = 2.5; ctx.stroke();
-  ctx.strokeStyle = '#550f0a'; ctx.lineWidth = 1.5;
-  for (let i = 0; i < 5; i++) { const ang = i * 1.3 + 0.4; ctx.beginPath(); ctx.moveTo(ex + Math.cos(ang) * er * 0.95, ey + Math.sin(ang) * er * 0.95); ctx.lineTo(ex + Math.cos(ang + 0.2) * er * 0.6, ey + Math.sin(ang + 0.2) * er * 0.6); ctx.stroke(); }
-  ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
-  const ix = ex + face * er * 0.25, ir = er * (0.48 + 0.12 * charge);
-  ctx.fillStyle = charge > 0.5 ? C.gold : C.orange; ell(ix, ey, ir, ir); ctx.fill();
-  ctx.fillStyle = C.ink; ell(ix, ey, ir * 0.22, ir * 0.8); ctx.fill();
-  ctx.fillStyle = C.cream; ell(ix - ir * 0.35, ey - ir * 0.35, ir * 0.22, ir * 0.22); ctx.fill();
-  // веко: при броске прищур
-  const lid = 0.25 + 0.5 * shot;
-  ctx.fillStyle = '#550f0a';
-  ctx.beginPath(); ctx.ellipse(ex, ey, er, er, 0, Math.PI, 0); ctx.lineTo(ex + er, ey - er * (1 - 2 * lid));
-  ctx.ellipse(ex, ey - er * (1 - 2 * lid), er, er * 0.25, 0, 0, Math.PI); ctx.closePath(); ctx.fill(); ctx.stroke();
-  launchGlob(ex, ey - er, r, shot);
-}
-
-// мортира на спине: толстый тёмный блоб, из спины торчит каменный ствол вверх-назад; заряд — тужится, жерло светится,
-// бросок — облако дыма, ствол отдаёт назад
-function drawMortarBack(r, t, face, charge, shot, seed) {
-  rootsAt(r, 4);
-  const rx = r * 1.1, ry = r * 0.85, rec = shot * r * 0.15;
-  // ствол за телом
-  ctx.save(); ctx.translate(-face * r * 0.35, -r * 0.4); ctx.rotate(-face * 0.45);
-  ctx.fillStyle = '#684c3c'; ctx.beginPath(); ctx.roundRect(-r * 0.32, -r * 1.05 + rec, r * 0.64, r * 1.1, 5); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#927e6a'; ctx.fillRect(-r * 0.32, -r * 0.55 + rec, r * 0.64, r * 0.13); ctx.strokeRect(-r * 0.32, -r * 0.55 + rec, r * 0.64, r * 0.13);
-  ctx.fillStyle = '#927e6a'; ell(0, -r * 1.05 + rec, r * 0.4, r * 0.15); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = charge > 0 || shot > 0 ? hexA(C.orange, 0.5 + 0.5 * Math.max(charge, shot)) : C.dark; ell(0, -r * 1.05 + rec, r * 0.26, r * 0.09); ctx.fill();
-  if (shot > 0) for (let i = 0; i < 4; i++) {
-    const k = 1 - shot; ctx.globalAlpha = shot * 0.7; ctx.fillStyle = C.stone;
-    ell((i - 1.5) * r * 0.25 * (1 + k), -r * (1.25 + k * 0.9) - i % 2 * r * 0.15, r * (0.22 + k * 0.3), r * (0.18 + k * 0.25)); ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-  launchGlob(0, -r * 1.1, r, shot);
-  ctx.restore();
-  // тело
-  edgePath(rx, ry, t, 'wobble', seed); ctx.fillStyle = '#300f0a'; ctx.fill();
-  ctx.save(); edgePath(rx, ry, t, 'wobble', seed); ctx.clip();
-  ctx.fillStyle = '#773421'; ell(-rx * 0.05, -ry * 0.12, rx * 0.92, ry * 0.85); ctx.fill();
-  ctx.strokeStyle = hexA(C.orange, 0.35); ctx.lineWidth = r * 0.22; ell(0, -r * 0.18, rx * 1.02, ry); ctx.stroke();
-  ctx.restore();
-  edgePath(rx, ry, t, 'wobble', seed); ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.stroke();
-  const fx = face * r * 0.25, sq = 1 - 0.5 * charge;
-  for (const s of [-1, 1]) glowEye(fx + s * r * 0.28, -r * 0.15, r * 0.14, C.gold, 0, sq);
-  ctx.fillStyle = C.dark; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.ellipse(fx, r * 0.3, r * 0.32, r * (0.08 + 0.1 * shot), 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  if (charge > 0.3) { ctx.fillStyle = C.teal; ell(fx + face * r * 0.6, -r * 0.4, r * 0.07, r * 0.11); ctx.fill(); }
-}
-
-// котёл с бесёнком: чугунный котёл на огне, внутри бурлит лава, бесёнок с поварёшкой зачерпывает и швыряет
-function drawCauldron(r, t, face, charge, shot, seed) {
-  // огонь под котлом
-  for (let i = 0; i < 3; i++) {
-    const fx = (i - 1) * r * 0.45, fh = r * (0.35 + 0.1 * Math.sin(t * 12 + i * 2));
-    ctx.fillStyle = C.orange; ctx.beginPath(); ctx.moveTo(fx - r * 0.15, r * 0.7); ctx.quadraticCurveTo(fx, r * 0.7 - fh * 1.6, fx + r * 0.15, r * 0.7); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = C.gold; ctx.beginPath(); ctx.moveTo(fx - r * 0.07, r * 0.7); ctx.quadraticCurveTo(fx, r * 0.7 - fh, fx + r * 0.07, r * 0.7); ctx.closePath(); ctx.fill();
-  }
-  // бесёнок за краем котла
-  const bob = Math.sin(t * 4) * r * 0.05, ix = -face * r * 0.15, iy = -r * 0.55 + bob;
-  ctx.fillStyle = '#9b1a0a'; ell(ix, iy, r * 0.42, r * 0.38); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = C.cream;
-  for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(ix + s * r * 0.15, iy - r * 0.3); ctx.lineTo(ix + s * r * 0.32, iy - r * 0.62); ctx.lineTo(ix + s * r * 0.3, iy - r * 0.25); ctx.closePath(); ctx.fill(); ctx.stroke(); }
-  for (const s of [-1, 1]) glowEye(ix + face * r * 0.08 + s * r * 0.15, iy - r * 0.05, r * 0.08, C.gold);
-  ctx.strokeStyle = C.cream; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ix + face * r * 0.08, iy + r * 0.12, r * 0.12, 0.2, Math.PI - 0.2); ctx.stroke();
-  ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
-  // поварёшка: заряд — поднимается назад с комом, бросок — махом вперёд
-  const ang = -Math.PI / 2 - face * (0.3 + 1.0 * charge) + face * 2.0 * shot;
-  const hx = ix + face * r * 0.35, hy = iy + r * 0.1, lx = hx + Math.cos(ang) * r * 0.95, ly = hy + Math.sin(ang) * r * 0.95;
-  for (const [lw, col] of [[5, C.ink], [2.5, C.stone]]) { ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(lx, ly); ctx.stroke(); }
-  ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
-  ctx.fillStyle = C.stone; ell(lx, ly, r * 0.18, r * 0.13); ctx.fill(); ctx.stroke();
-  if (charge > 0.2) { ctx.fillStyle = C.red; ell(lx, ly - r * 0.08, r * 0.14, r * 0.12); ctx.fill(); ctx.stroke(); }
-  ctx.fillStyle = '#9b1a0a'; ell(hx, hy, r * 0.12, r * 0.12); ctx.fill(); ctx.stroke();
-  // котёл
-  ctx.fillStyle = '#2a1d0d';
-  ctx.beginPath(); ctx.moveTo(-r * 0.95, -r * 0.2); ctx.quadraticCurveTo(-r * 1.05, r * 0.75, 0, r * 0.75); ctx.quadraticCurveTo(r * 1.05, r * 0.75, r * 0.95, -r * 0.2); ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#45230d'; ctx.beginPath(); ctx.ellipse(-r * 0.4, r * 0.25, r * 0.18, r * 0.3, -0.3, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#684c3c'; ell(0, -r * 0.2, r * 1.0, r * 0.28); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = C.red; ell(0, -r * 0.2, r * 0.82, r * 0.18); ctx.fill();
-  for (let i = 0; i < 3; i++) { const k = (t * 1.3 + i / 3) % 1; ctx.fillStyle = C.orange; ell((i - 1) * r * 0.4, -r * 0.2 - k * r * 0.15, r * 0.08 * (1 - k) + 1, r * 0.06 * (1 - k) + 1); ctx.fill(); }
-  if (shot > 0.25) launchGlob(lx, ly, r, shot);
-}
-
-// пращник: тяжёлый сидячий демон крутит над головой пращу с комом слизи; заряд — крутит быстрее, бросок — праща
-// вытягивается вперёд и ком улетает
-function drawSlinger(r, t, face, charge, shot, seed) {
-  const rx = r * 1.1, ry = r * 0.9;
-  edgePath(rx, ry, t, 'wobble', seed); ctx.fillStyle = '#36170c'; ctx.fill();
-  ctx.save(); edgePath(rx, ry, t, 'wobble', seed); ctx.clip();
-  ctx.fillStyle = '#724113'; ell(-rx * 0.05, -ry * 0.12, rx * 0.92, ry * 0.85); ctx.fill();
-  ctx.strokeStyle = hexA(C.red, 0.35); ctx.lineWidth = r * 0.22; ell(0, -r * 0.18, rx * 1.02, ry); ctx.stroke();
-  ctx.fillStyle = '#ab5c1c'; ell(0, r * 0.3, rx * 0.55, ry * 0.4); ctx.fill();
-  ctx.restore();
-  edgePath(rx, ry, t, 'wobble', seed); ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.stroke();
-  const fx = face * r * 0.2;
-  for (const s of [-1, 1]) glowEye(fx + s * r * 0.28, -r * 0.3, r * 0.13, C.red, s * face * 0.4, 0.6);
-  ctx.fillStyle = C.dark; ctx.beginPath(); ctx.ellipse(fx, r * 0.05, r * 0.35, r * 0.16, 0, 0, Math.PI); ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = C.cream; for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(fx + s * r * 0.25, r * 0.06); ctx.lineTo(fx + s * r * 0.18, -r * 0.14); ctx.lineTo(fx + s * r * 0.11, r * 0.06); ctx.closePath(); ctx.fill(); }
-  // рука вверх и праща по кругу над головой
-  const hx = face * r * 0.55, hy = -r * 1.15;
-  for (const [lw, col] of [[r * 0.36, C.ink], [r * 0.24, '#36170c']]) { ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(face * r * 0.7, -r * 0.3); ctx.lineTo(hx, hy); ctx.stroke(); }
-  ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
-  ctx.fillStyle = '#724113'; ell(hx, hy, r * 0.2, r * 0.2); ctx.fill(); ctx.stroke();
-  let bx, by;
-  if (shot > 0) { bx = hx + face * r * 1.1; by = hy - r * 0.2; }
-  else { const ang = t * (5 + 10 * charge); bx = hx + Math.cos(ang) * r * 0.9; by = hy - r * 0.15 + Math.sin(ang) * r * 0.3; }
-  ctx.strokeStyle = C.stone; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(bx, by); ctx.stroke();
-  if (charge > 0) { ctx.strokeStyle = hexA(C.cream, 0.3 * charge); ctx.lineWidth = 3; ell(hx, hy - r * 0.15, r * 0.9, r * 0.3); ctx.stroke(); }
-  ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
-  if (shot > 0) launchGlob(bx + face * (1 - shot) * r, by, r, Math.min(1, shot + 0.3));
-  else { ctx.fillStyle = '#550f0a'; ell(bx, by, r * 0.22, r * 0.22); ctx.fill(); ctx.stroke(); glowEye(bx, by, r * 0.08, C.red); }
 }
 
 // мина: тёмный колючий комок, наполовину в земле, красный глаз часто мигает
@@ -690,5 +585,5 @@ function sweep() {
   lastDrawn = now;
 }
 
-G.foes = { has, draw, drawsHook, setArtillery, sweep, demon, kraken, swallowed, shieldRing };
+G.foes = { has, draw, drawsHook, sweep, demon, kraken, swallowed, shieldRing };
 })(window.Game = window.Game || {});
