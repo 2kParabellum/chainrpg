@@ -7,7 +7,7 @@ const { CONFIG, COLORS, state } = G;
 const { clamp, dist, removeFrom, pickWeighted, angleDiff } = G.math;
 const { moveAndCollide, slideAlongWall, circleRectOverlap } = G.collision;
 const { world, setDoorsOpen } = G.world;
-const { leader, leaderSpeedMul, currentRoom, chainUnits, enemyTargets, isSpotted, spawnEnemy, upgrade, cameraTarget } = G.session;
+const { leader, leaderSpeedMul, chainMass, currentRoom, chainUnits, enemyTargets, isSpotted, spawnEnemy, upgrade, cameraTarget } = G.session;
 const { freeSpotNear } = G.world;
 const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly, displaceAlly, cutChain, canBeDisplaced } = G.chain;
 const { updatePads, updateAllySpawns } = G.pads;
@@ -53,18 +53,24 @@ function aimSteer(lead, aim, maxTurn) {
 // Заднего хода нет: Герой ездит только вперёд, S (или джойстик вниз в «Танке») — просто без газа.
 // Скорость тянется к желаемой с разгоном, без газа — накат и торможение.
 // heading отдельно от facing: оружие поворачивает facing к цели, но не должно разворачивать Героя.
-// Джойстик в режиме «Направление» задаёт угол aim, из которого получаются те же газ и поворот (aimSteer)
+// Джойстик в режиме «Направление» задаёт угол aim, из которого получаются те же газ и поворот (aimSteer).
+// Длинная цепочка тяжелее (масса M, см. CHAIN.heft): разгон и торможение делятся на M, а поворот на ходу упирается
+// в предел сцепления — боковое ускорение v·ω не больше, чем у Героя налегке на полной скорости:
+// ω ≤ turnSpeed·mv·min(1, speed·mv / (M·v)). Медленно тяжёлая цепочка поворачивает круто, на полном ходу — дугой
 function updateLeader(dt) {
   const lead = leader();
-  const mv = lead.moveMul || 1;   // усиление подиума скорости: быстрее ход и разворот
-  const speedMul = leaderSpeedMul(); // длинная цепочка едет медленнее (разворот не замедляется), но под «скоростью» — не ниже базовой
+  const mv = lead.moveMul || 1;   // усиление подиума скорости: быстрее ход, разгон и разворот
+  const speedMul = leaderSpeedMul(); // длинная цепочка едет медленнее (не ниже 80%), но под «скоростью» — не ниже базовой
+  const mass = chainMass();
   const cfg = CONFIG.LEADER;
+  const v = Math.hypot(lead.vx, lead.vy);
+  const turnSpeed = cfg.turnSpeed * mv * Math.min(1, (cfg.speed * mv) / (mass * Math.max(v, 1)));
   let { throttle, turn } = state.moveInput;
   const aim = state.moveInput.aim;
-  if (aim !== null && aim !== undefined) ({ throttle, turn } = aimSteer(lead, aim, cfg.turnSpeed * mv * dt));
+  if (aim !== null && aim !== undefined) ({ throttle, turn } = aimSteer(lead, aim, turnSpeed * dt));
 
   // в экранных координатах (y вниз) уменьшение угла — поворот налево
-  lead.heading += turn * cfg.turnSpeed * mv * dt;
+  lead.heading += turn * turnSpeed * dt;
   lead.facing = lead.heading;
 
   const k = throttle > 0 ? 1 : 0;
@@ -72,7 +78,7 @@ function updateLeader(dt) {
   const wantY = Math.sin(lead.heading) * cfg.speed * speedMul * k;
   const dx = wantX - lead.vx, dy = wantY - lead.vy;
   const gap = Math.hypot(dx, dy);
-  const step = (k ? cfg.accel : cfg.brake) * mv * dt;
+  const step = ((k ? cfg.accel : cfg.brake) * mv / mass) * dt;
   if (gap <= step) { lead.vx = wantX; lead.vy = wantY; }
   else { lead.vx += (dx / gap) * step; lead.vy += (dy / gap) * step; }
 

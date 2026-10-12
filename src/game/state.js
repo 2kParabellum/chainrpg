@@ -263,13 +263,19 @@ function enemyTargets() {
 // враг, которого уже можно видеть, целить и рубить: скрытые типы (мина) — только после обнаружения
 function isSpotted(e) { return !enemyTypes[e.type].hiddenUntilRevealed || e.revealed; }
 
-// множитель скорости Героя от длины цепочки: замедление — сумма первых k членов арифметической прогрессии
-// (first, first + step, ...), k — сколько звеньев сверх fromLink; см. CHAIN.slowdown
+// сколько дружочков утяжеляют цепочку: сверх CHAIN.heft.freeLinks («Марш» добавляет бесплатных)
+function heavyLinks() {
+  const m = upgrade('march');
+  return Math.max(0, state.party.length - 1 - CONFIG.CHAIN.heft.freeLinks - (m ? m.links : 0));
+}
+
+// масса цепочки для управления Героем: 1 — налегке, каждое тяжёлое звено добавляет linkMass
+function chainMass() { return 1 + CONFIG.CHAIN.heft.linkMass * heavyLinks(); }
+
+// множитель потолка скорости от длины цепочки: плавно падает к minSpeed и ниже не опускается; см. CHAIN.heft
 function chainSpeedMul() {
-  const { fromLink, first, step, max } = CONFIG.CHAIN.slowdown;
-  const m = upgrade('march'); // «Марш»: замедление начинается позже
-  const k = Math.max(0, state.party.length - fromLink - (m ? m.links : 0));
-  return 1 - Math.min(max, k * first + (step * k * (k - 1)) / 2);
+  const { minSpeed, fade } = CONFIG.CHAIN.heft;
+  return minSpeed + (1 - minSpeed) * Math.exp(-heavyLinks() / fade);
 }
 
 // итоговый множитель скорости хода Героя: усиление «скорость» на замедление от длины цепочки; пока «скорость»
@@ -282,5 +288,5 @@ function leaderSpeedMul() {
 function currentRoom() { return roomIndexAt(leader().x, leader().y); }
 
 G.state = state;
-G.session = { makeUnit, makeAlly, setAbility, recalcStats, spawnEnemy, resetGame, startRun, upgrade, leader, chainUnits, enemyTargets, isSpotted, currentRoom, chainSpeedMul, leaderSpeedMul, cameraTarget };
+G.session = { makeUnit, makeAlly, setAbility, recalcStats, spawnEnemy, resetGame, startRun, upgrade, leader, chainUnits, enemyTargets, isSpotted, currentRoom, chainMass, chainSpeedMul, leaderSpeedMul, cameraTarget };
 })(window.Game = window.Game || {});

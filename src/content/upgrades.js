@@ -128,8 +128,8 @@ const cover = {
 const march = {
   name: 'March',
   who: 'hero',
-  desc: 'A long chain slows you down less',
-  links: 1,          // замедление начинается на столько звеньев позже
+  desc: 'A long chain is lighter to drive',
+  links: 1,          // столько звеньев сверх обычного не утяжеляют цепочку
   art(ctx, k) {
     for (let i = 5; i >= 1; i--) k.ally(150 - i * 24, 64, null, 0);
     k.hero(150, 64, 0);
