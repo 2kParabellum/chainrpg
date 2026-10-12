@@ -10,7 +10,7 @@ const { padUnder } = G.pads;
 const { isSpotted } = G.session;
 const { allyTypes, enemyTypes, weapons, abilities } = G;
 const shapes = G.shapes;
-const { canvas, ctx, screenTransform, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor } = shapes;
+const { canvas, ctx, screenTransform, visible, drawHpBar, drawUnitBody, drawMark, allyColor } = shapes;
 
 // точка (с запасом pad) попадает в кадр: рисовать то, что за экраном, незачем
 function onScreen(p, pad = 0) {
@@ -162,13 +162,8 @@ function drawFirewall(f) {
 function drawDoors() {
   for (const d of world.doors) {
     if (!visible(d)) continue;
-    if (!d.open) {
-      ctx.fillStyle = COLORS.door;
-      ctx.fillRect(d.x, d.y, d.w, d.h);
-      ctx.strokeStyle = COLORS.doorEdge;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(d.x + 1, d.y + 1, d.w - 2, d.h - 2);
-    } else {
+    // закрытая дверь — высокая, как стена (render/terrain.js); здесь — только контур открытой
+    if (d.open) {
       ctx.strokeStyle = COLORS.doorEdge;
       ctx.globalAlpha = 0.35;
       ctx.lineWidth = 2;
@@ -303,22 +298,6 @@ function drawSpikes(r) {
   }
 }
 
-// стена и колонна объёмные: светлый верх и тёмная передняя грань внизу, тёмная обводка
-function drawBlocks(list, top, side) {
-  ctx.strokeStyle = COLORS.floorLine;
-  ctx.lineWidth = 2;
-  for (const r of list) {
-    if (!visible(r)) continue;
-    const face = Math.min(12, r.h * 0.4);
-    ctx.fillStyle = side;
-    ctx.fillRect(r.x, r.y, r.w, r.h);
-    ctx.fillStyle = top;
-    ctx.fillRect(r.x, r.y, r.w, r.h - face);
-    ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
-    ctx.beginPath(); ctx.moveTo(r.x, r.y + r.h - face); ctx.lineTo(r.x + r.w, r.y + r.h - face); ctx.stroke();
-  }
-}
-
 function drawTerrain() {
   for (const f of world.floors) drawFloor(f);
   // зоны поля подсвечены по степени опасности
@@ -328,22 +307,14 @@ function drawTerrain() {
     ctx.fillRect(f.x, f.y, f.w, f.h);
   }
 
-  ctx.fillStyle = COLORS.pit;
-  ctx.strokeStyle = COLORS.pitEdge;
-  ctx.lineWidth = 2;
-  for (const r of world.pits) {
-    if (!visible(r)) continue;
-    ctx.fillRect(r.x, r.y, r.w, r.h);
-    // пропасть комнаты-пропасти собрана из многих прямоугольников: швы между ними не рисуем
-    if (!r.seamless) ctx.strokeRect(r.x, r.y, r.w, r.h);
-  }
-  // тропы и островки над пропастью — чуть светлее пола, чтобы мостки читались
-  drawRects(world.bridges, COLORS.bridge);
+  G.terrain.drawDecor();
+  // пропасти-колодцы, тропы и островки над ними (render/terrain.js)
+  G.terrain.drawPits();
 
   for (const r of world.spikes) if (visible(r)) drawSpikes(r);
 
-  drawBlocks(world.walls, COLORS.wall, COLORS.wallSide);
-  drawBlocks(world.pillars, COLORS.pillar, COLORS.pillarSide);
+  // высокие стены и колонны (render/terrain.js); кто за ними — см. drawOccluders в drawScene
+  G.terrain.drawWalls();
 }
 
 // база уровня «Оборона»: здание с толстой рамкой и знаком-короной, над ним длинная полоска HP;
@@ -1058,6 +1029,7 @@ function drawScene() {
   drawWarnings();
   drawEnemies();
   drawChain();
+  G.terrain.drawOccluders();   // стена поверх спрятанных за ней: полупрозрачная, с окошком вокруг каждого
   drawWeapons();
   drawProjectiles();
   drawEffects();
