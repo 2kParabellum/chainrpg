@@ -28,6 +28,7 @@ const HAT = 1.35;      // шапки крупнее, чтобы професси
 // цвета значков усилений и шапок профессий — из палитры игры (G.COLORS), чтобы подиумы и интерфейс совпадали
 const BUFF_COL = {};
 for (const k of Object.keys(G.buffs)) BUFF_COL[k] = G.buffs[k].color;
+BUFF_COL.will = C.gold; // значок «воли» — золотой нимб
 
 const anim = new WeakMap();
 const bits = [];       // кусочки от ударов и лопнувших тел: { x, y, vx, vy, life, max, r, col }
@@ -231,6 +232,7 @@ function drawAlly(u, mode, alpha = 1) {
   drawEyes(eyes, r, face, lx, ly, t, a.seed);
   drawHat(hat, rx, ry, r, face, t);
   if (buffs.includes('will')) drawHalo(ry, r, t);
+  else if (mode === 'chain' && state.party[0] && state.party[0].buffs && state.party[0].buffs.will > 0) drawMiniHalo(ry, r, t, a.seed);
   const hx = face * (r * 0.95 + handFx), hy = r * 0.22 + swing * r * 0.12;
   drawWeapon(weapon, lvl, hx, hy, r, face, t, sa >= 0 && sa < 0.15);
   drawHand(hx, hy, r, weapon);
@@ -274,22 +276,28 @@ function drawAlly(u, mode, alpha = 1) {
   ctx.globalAlpha = 1;
 }
 
-// «воля»: ангельские крылья за спиной (машут) и сияющий нимб над головой
+// «воля»: ангельские крылья за спиной — веер из пяти перьев от плеча и пушистое плечо сверху; машут
+function feather(a, L, w) {
+  const cx = Math.cos(a) * L / 2, cy = Math.sin(a) * L / 2;
+  ctx.beginPath(); ctx.ellipse(cx, cy, L / 2, w, a, 0, TAU);
+  ctx.fillStyle = C.eye; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.3; ctx.stroke();
+  ctx.strokeStyle = 'rgba(146,126,106,0.85)'; ctx.lineWidth = 0.9; ctx.beginPath();
+  ctx.moveTo(Math.cos(a) * L * 0.2, Math.sin(a) * L * 0.2); ctx.lineTo(Math.cos(a) * L * 0.85, Math.sin(a) * L * 0.85); ctx.stroke();
+}
 function drawWings(rx, ry, r, t) {
-  const flap = Math.sin(t * 6) * 0.25;
-  ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.fillStyle = C.eye;
+  const flap = Math.sin(t * 6) * 0.22;
   for (const s of [-1, 1]) {
-    ctx.save(); ctx.translate(s * rx * 0.7, -ry * 0.15); ctx.rotate(s * (-0.35 + flap)); ctx.scale(s, 1);
-    ctx.beginPath(); ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(r * 0.6, -r * 1.0, r * 1.35, -r * 0.75);
-    ctx.quadraticCurveTo(r * 1.1, -r * 0.45, r * 1.25, -r * 0.3);
-    ctx.quadraticCurveTo(r * 0.95, -r * 0.1, r * 1.05, r * 0.08);
-    ctx.quadraticCurveTo(r * 0.6, r * 0.05, r * 0.6, r * 0.3);
-    ctx.quadraticCurveTo(r * 0.3, r * 0.15, 0, r * 0.15);
-    ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(r * 0.35, -r * 0.3); ctx.lineTo(r * 0.95, -r * 0.45); ctx.moveTo(r * 0.3, 0); ctx.lineTo(r * 0.8, -r * 0.05); ctx.stroke();
+    ctx.save(); ctx.translate(s * rx * 0.62, -ry * 0.12); ctx.rotate(s * (-0.2 + flap)); ctx.scale(s, 1);
+    for (let i = 5; i >= 0; i--) feather(-1.15 + i * 0.27, r * (1.45 - i * 0.12), r * 0.17);
+    ell(r * 0.32, -r * 0.18, r * 0.38, r * 0.27, -0.4); ctx.fillStyle = C.eye; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.3; ctx.stroke();
     ctx.restore();
   }
+}
+// мини-нимб над звеном цепочки, пока у Героя «воля» (она действует на всю цепочку)
+function drawMiniHalo(ry, r, t, seed) {
+  const y = -ry * 1.45 + Math.sin(t * 3 + seed) * 1.2;
+  ctx.strokeStyle = C.ink; ctx.lineWidth = r * 0.17; ell(0, y, r * 0.42, r * 0.13); ctx.stroke();
+  ctx.strokeStyle = C.gold; ctx.lineWidth = r * 0.09; ell(0, y, r * 0.42, r * 0.13); ctx.stroke();
 }
 function drawHalo(ry, r, t) {
   const y = -ry * 1.75 + Math.sin(t * 2.5) * 1.5;
@@ -529,8 +537,8 @@ function glyph(b, x, y, s) {
       ctx.closePath(); ctx.lineWidth = pass ? 1 : 4; ctx.fill(); ctx.stroke();
     }
     if (b === 'will') {
-      ctx.moveTo(x, y - s); ctx.quadraticCurveTo(x + s, y + s * 0.2, x, y + s); ctx.quadraticCurveTo(x - s, y + s * 0.2, x, y - s);
-      ctx.lineWidth = pass ? 1 : 4; ctx.fill(); ctx.stroke();
+      // нимб: золотое кольцо в перспективе
+      ctx.lineWidth = pass ? 2.6 : 6; ell(x, y, s * 1.05, s * 0.42); ctx.stroke();
     }
   }
 }
@@ -550,5 +558,12 @@ function drawLinks(pts) {
   }
 }
 
-G.blobs = { drawAlly, drawLinks, drawBits, sweep, pop, hatIcon, glyph, BUFF_COL };
+// крылья с нимбом отдельно, без тела (подиум «воли»): x, y — где была бы середина тела радиуса r
+function drawWingsAt(x, y, r, t) {
+  ctx.save(); ctx.translate(x, y);
+  drawWings(r, r * 0.95, r, t); drawHalo(r * 0.95, r, t);
+  ctx.restore();
+}
+
+G.blobs = { drawWingsAt, drawAlly, drawLinks, drawBits, sweep, pop, hatIcon, glyph, BUFF_COL };
 })(window.Game = window.Game || {});
