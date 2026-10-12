@@ -1074,6 +1074,20 @@ function drawEffects() {
       ctx.arc(fx.x, fx.y, fx.r, 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
+    } else if (fx.type === 'dmgText') {
+      // цифра урона (мишень тестового уровня): всплывает и гаснет; таран — крупнее и цветом силы
+      const t = 1 - fx.life / fx.maxLife;
+      ctx.globalAlpha = clamp(fx.life * 3, 0, 1);
+      ctx.font = `bold ${fx.big ? 26 : 15}px "Trebuchet MS", "Segoe UI", system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#2a1d0d';
+      const text = fx.value >= 10 ? fx.value.toFixed(0) : fx.value.toFixed(1), y = fx.y - t * 36;
+      ctx.strokeText(text, fx.x, y);
+      ctx.fillStyle = fx.big ? COLORS.power : COLORS.allyShot;
+      ctx.fillText(text, fx.x, y);
+      ctx.textAlign = 'left';
+      ctx.globalAlpha = 1;
     } else if (fx.type === 'spearHit') {
       drawSpearHit(fx);
     } else if (fx.type === 'blast') {

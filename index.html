@@ -56,8 +56,10 @@
   .panel h1 { margin: 0 0 14px; color: #efac28; text-shadow: 0 3px 0 #2a1d0d; font: bold 34px "Trebuchet MS", "Segoe UI", system-ui, sans-serif; letter-spacing: 4px; }
   .panel h2 { margin: 0 0 6px; font: 20px "Trebuchet MS", "Segoe UI", system-ui, sans-serif; color: #efd8a1; }
   .panel button { width: 240px; padding: 10px 12px; font-size: 16px; }
-  #levelList { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  #levelList, #testLevelList { display: flex; flex-direction: column; align-items: center; gap: 14px; }
   .panel button.level { width: 420px; text-align: left; }
+  #testLevelList { margin-top: 14px; }
+  .panel button.level.test { border-style: dashed; }
   .panel button.level small { display: block; margin-top: 4px; font-size: 12px; color: #927e6a; }
   #overlay { z-index: 10; }
   #overlay.win { background: #000; }
@@ -72,7 +74,7 @@
   body.touch .panel h2 { margin: 0; }
   body.touch .panel button { min-height: 48px; width: 260px; font-size: 17px; }
   body.touch .btnRow { flex-direction: row; gap: 12px; }
-  body.touch #levelList { display: grid; grid-template-columns: repeat(2, minmax(0, 330px)); gap: 10px; }
+  body.touch #levelList, body.touch #testLevelList { display: grid; grid-template-columns: repeat(2, minmax(0, 330px)); gap: 10px; }
   body.touch .panel button.level { width: auto; height: 100%; min-height: 64px; padding: 8px 12px; }
   body.touch #panelWin h1 { margin: 0; font-size: 22px; }
   body.touch #panelWin p { margin: 0; font-size: 14px; }
@@ -88,7 +90,7 @@
     .panel { gap: 10px; }
     .panel h1 { margin: 0 0 4px; font-size: 24px; }
     .btnRow { flex-direction: row; gap: 12px; }
-    #levelList { display: grid; grid-template-columns: repeat(2, minmax(0, 360px)); gap: 10px; }
+    #levelList, #testLevelList { display: grid; grid-template-columns: repeat(2, minmax(0, 360px)); gap: 10px; }
     .panel button.level { width: auto; height: 100%; }
     #panelWin p { margin: 0; }
   }
@@ -110,7 +112,7 @@
     #homeHint { margin: 0; max-width: 560px; font-size: 11px; }
   }
   /* телефон вертикально: узкий экран — список уровней в одну колонку, карточки в два ряда, кнопки друг под другом */
-  body.touch.portrait #levelList { grid-template-columns: minmax(0, 340px); }
+  body.touch.portrait #levelList, body.touch.portrait #testLevelList { grid-template-columns: minmax(0, 340px); }
   body.touch.portrait .panel button.level { width: min(340px, 90vw); }
   body.touch.portrait #cards { gap: 6px; max-width: 98vw; }
   body.touch.portrait .card { width: calc((98vw - 12px) / 3); padding: 4px 3px 6px; gap: 3px; }
@@ -204,6 +206,7 @@
       <div id="panelLevels" class="panel">
         <h2>Select Level</h2>
         <div id="levelList"></div>
+        <div id="testLevelList"></div>
         <button id="levelsBackBtn">Back</button>
       </div>
       <div id="panelWin" class="panel">
@@ -273,6 +276,7 @@
   <script src="src/levels/level3.js"></script>
   <script src="src/levels/level4.js"></script>
   <script src="src/levels/level5.js"></script>
+  <script src="src/levels/testRam.js"></script>
   <script src="src/levels/populate.js"></script>
   <script src="src/game/world.js"></script>
   <script src="src/game/state.js"></script>

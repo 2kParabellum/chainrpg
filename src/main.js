@@ -29,6 +29,8 @@ const screenInfo = G.screen;
 // уровни в порядке их показа в меню; за фоном меню при запуске стоит первый
 const LEVELS = [G.level1, G.level2, G.level3, G.level4, G.level5];
 const START_LEVEL = LEVELS[0];
+// тестовые уровни: только из меню выбора уровней, в прохождение не входят; стартуют с улучшениями level.upgrades
+const TEST_LEVELS = [G.levelTestRam];
 
 // --- ввод: намерения игрока ---
 
@@ -229,6 +231,23 @@ LEVELS.forEach((level, i) => {
   });
   levelList.append(btn);
 });
+
+const testLevelList = document.getElementById('testLevelList');
+for (const level of TEST_LEVELS) {
+  const btn = document.createElement('button');
+  btn.className = 'level test';
+  btn.append(`Test: ${level.name}`);
+  const blurb = document.createElement('small');
+  blurb.textContent = level.blurb;
+  btn.append(blurb);
+  btn.addEventListener('click', (ev) => {
+    ev.currentTarget.blur();
+    startRun();
+    state.upgrades.push(...(level.upgrades || []));
+    startLevel(level);
+  });
+  testLevelList.append(btn);
+}
 
 onClick('resumeBtn', () => { screenInfo.enterFullscreen(); resume(); });
 onClick('pauseRestartBtn', restart);

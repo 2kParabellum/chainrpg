@@ -45,7 +45,8 @@ function coverDefense(u, dmg) {
   return dmg * (1 - c.cut);
 }
 
-// hit — необязательно, откуда урон: { by: враг, melee: true } для ближних атак (укус, таран)
+// hit — необязательно, откуда урон: { by: враг, melee: true } для ближних атак (укус, таран);
+// таран Героя передаёт { ram: true, mass, speed } — для мишени тестового уровня
 function damageUnit(u, dmg, hit) {
   if (u.hp <= 0) return;
   if (state.leaving && u.kind === 'ally') return; // цепочка уже уходит в портал выхода
@@ -53,6 +54,8 @@ function damageUnit(u, dmg, hit) {
   dmg = coverDefense(u, dmg);
   u.hp -= dmg;
   u.regenTimer = 0;
+  const type = u.kind === 'enemy' && enemyTypes[u.type];
+  if (type && type.onDamage) type.onDamage(u, dmg, hit || {}, { state });
   if (u.hp <= 0) {
     // усиление «воля»: смертельный урон не убивает союзника (в цепочке или выбитого), он остаётся с 1 HP
     if ((u.kind === 'ally' || u.kind === 'downed') && Object.keys(u.buffs).some((k) => u.buffs[k] > 0 && G.buffs[k].revive)) { u.hp = 1; return; }

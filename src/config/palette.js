@@ -24,6 +24,8 @@ const COLORS = {
   // база и гнёзда врагов (уровень «Оборона»)
   base: '#276468', baseEdge: '#3c9f9c', baseHit: '#ef3a0c', nest: '#9b1a0a',
   // спрут «Логова»: тело, щупальца, тень удара тентакли, всасывание, злые мины и облака пука
+  // мишень-манекен тестового уровня: деревянный столб и соломенное тело
+  dummy: '#724113', dummyStraw: '#efb775',
   kraken: '#183f39', krakenEdge: '#3c9f9c', tentacle: '#276468', krakenSuck: '#efd8a1', krakenMine: '#ef3a0c', krakenFart: '#a58c27',
 };
 

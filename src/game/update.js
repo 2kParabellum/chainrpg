@@ -123,7 +123,8 @@ function applyHeroRam() {
     const closing = (lead.vx * (e.x - lead.x) + lead.vy * (e.y - lead.y)) / (d || 1);
     if (closing < up.minSpeed) continue;
     e.rammedAt = state.time;
-    combat.damageUnit(e, ramDamage(up, closing, mass) * (lead.dmgMul || 1));
+    combat.damageUnit(e, ramDamage(up, closing, mass) * (lead.dmgMul || 1),
+      { ram: true, mass, speed: closing / CONFIG.LEADER.speed });
     state.effects.push({ type: 'ring', x: (lead.x + e.x) / 2, y: (lead.y + e.y) / 2, r: 12 + 10 * lead.ramPower, life: 0.25, color: COLORS.power });
   }
 }
@@ -208,6 +209,7 @@ function updateDoors() {
 // условие победы задаёт уровень
 function isVictory() {
   const rule = state.level.victory;
+  if (rule.kind === 'none') return false; // тестовый уровень: играть, пока не надоест
   // продержаться заданное время (база цела — иначе партия уже проиграна)
   if (rule.kind === 'survive') return state.time >= rule.time;
   if (rule.kind === 'destroyType') return !state.enemies.some((e) => e.type === rule.type);

@@ -21,6 +21,7 @@
 //   noRegen      — не отлечивается сам (портал)
 //   alwaysActive — живёт и действует на любом расстоянии от игрока (портал)
 //   deathFlash   — радиус вспышки при гибели (только вид)
+//   onDamage     — (e, dmg, hit, game): после каждого урона по врагу, до проверки гибели (мишень-манекен: цифры урона)
 //   drawReach    — рисовать, даже если тело дальше стольких px за краем экрана (у спрута тени и мины далеко от тела)
 // В stats может быть keepClear — радиус вокруг громадины, где не появляются подиумы и дружочки.
 // Ближние атаки (укус, таран) передают в game.damageUnit третий параметр { by: e, melee: true } —
@@ -614,6 +615,61 @@ const doorTarget = {
       ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
       ctx.fill();
     }
+  },
+};
+
+// Мишень-манекен (тестовый уровень): соломенное чучело на столбе. Неподвижно, ничего не делает и не умирает —
+// после каждого удара HP снова полный. Над ней всплывают цифры урона (непрерывный урон — молния, огонь —
+// складывается в одну цифру за mergeTime), удар тараном — крупнее и цветом силы; под ней — последний таран:
+// урон, масса цепочки и скорость сближения в процентах от полной скорости хода
+const dummy = {
+  stats: { name: 'Dummy', hp: 100000, radius: 24, mass: Infinity, mergeTime: 0.25, numberLife: 1.1 },
+  noRegen: true,
+  init(e) { e.lastRam = null; e.lastNumber = null; },
+  onDamage(e, dmg, hit, game) {
+    e.hp = e.maxHp;
+    const fx = game.state.effects, cfg = e.cfg, n = e.lastNumber;
+    if (hit.ram) {
+      e.lastRam = { dmg, mass: hit.mass, speed: hit.speed };
+      e.lastNumber = null;
+      fx.push({ type: 'dmgText', x: e.x, y: e.y - e.r - 14, value: dmg, big: true, life: cfg.numberLife, maxLife: cfg.numberLife });
+      return;
+    }
+    if (n && fx.includes(n) && cfg.numberLife - n.life < cfg.mergeTime) { n.value += dmg; return; }
+    e.lastNumber = { type: 'dmgText', x: e.x + (Math.random() - 0.5) * 30, y: e.y - e.r - 6, value: dmg,
+                     big: false, life: cfg.numberLife, maxLife: cfg.numberLife };
+    fx.push(e.lastNumber);
+  },
+  draw(e, g) {
+    const { ctx } = g, r = e.r;
+    // столб и перекладина-руки
+    ctx.fillStyle = COLORS.dummy;
+    ctx.fillRect(e.x - 4, e.y - r * 0.2, 8, r * 1.3);
+    ctx.fillRect(e.x - r * 1.25, e.y - r * 0.55, r * 2.5, 7);
+    // соломенное тело с мишенью
+    ctx.fillStyle = COLORS.dummyStraw;
+    ctx.strokeStyle = '#2a1d0d';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(e.x, e.y, r * 0.85, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    for (const [k, color] of [[0.6, COLORS.enemy], [0.4, COLORS.dummyStraw], [0.2, COLORS.enemy]]) {
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(e.x, e.y, r * k, 0, Math.PI * 2); ctx.fill();
+    }
+    // голова
+    ctx.fillStyle = COLORS.dummyStraw;
+    ctx.beginPath(); ctx.arc(e.x, e.y - r * 1.15, r * 0.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    // последний таран
+    const last = e.lastRam;
+    ctx.font = 'bold 13px "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#2a1d0d';
+    const text = last ? `RAM ${last.dmg.toFixed(1)} · mass ${last.mass} · speed ${Math.round(last.speed * 100)}%`
+                      : 'Ram me!';
+    ctx.strokeText(text, e.x, e.y + r + 22);
+    ctx.fillStyle = '#efd8a1';
+    ctx.fillText(text, e.x, e.y + r + 22);
+    ctx.textAlign = 'left';
   },
 };
 
@@ -1358,6 +1414,6 @@ const kraken = {
   },
 };
 
-const TYPES = { shooter, bull, tower, scorpion, zombie, hunter, chariot, mine, portal, boss, doorTarget, turret, kraken };
+const TYPES = { shooter, bull, tower, scorpion, zombie, hunter, chariot, mine, portal, boss, doorTarget, turret, kraken, dummy };
 G.enemyTypes = TYPES;
 })(window.Game = window.Game || {});
