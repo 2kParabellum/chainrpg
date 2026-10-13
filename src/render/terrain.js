@@ -1,11 +1,13 @@
-// Объёмное окружение (graphics.md): пропасть-колодец в перспективе, высокие стены и колонны, которые
-// становятся полупрозрачными с мягким окошком вокруг того, кто за ними спрятался, и декор на полу.
+// Объёмное окружение (graphics.md): тёмная скала за пределами уровня, стены уровня (верх — та же скала, кирпичная
+// грань только над полом), высокие колонны и двери, полупрозрачное окошко в стене вокруг спрятанного за ней,
+// пропасть-колодец в перспективе и декор на полу.
 // Всё только рисуется: столкновения и проходимость — по прямоугольникам мира, как раньше.
 (function (G) {
 'use strict';
 
 const { CONFIG, COLORS, state } = G;
-const { ctx, visible } = G.shapes;
+let { ctx } = G.shapes;
+const { visible } = G.shapes;
 const { world } = G.world;
 const TAU = Math.PI * 2, INK = '#2a1d0d';
 const WALL_H = 48;               // на сколько рисунок стены поднят над её основанием — выше дружочка
@@ -121,6 +123,104 @@ function drawPits() {
   }
 }
 
+// ===================== НЕИГРАБЕЛЬНАЯ ЗОНА =====================
+// всё вне пола — очень тёмная скала (рисунок привязан к миру); ею же покрыт верх стен уровня
+const VOID = {
+  // тёмная скала: неровные камни с бликом, сверху всё сильно притемнено — рисунок едва читается
+  rock(r) {
+    ctx.fillStyle = '#2a1d0d'; ctx.fillRect(r.x, r.y, r.w, r.h);
+    const s = 56;
+    for (let ty = Math.floor(r.y / s) - 1; ty * s < r.y + r.h + s; ty++) for (let tx = Math.floor(r.x / s) - 1; tx * s < r.x + r.w + s; tx++) {
+      const cx = tx * s + s / 2 + (h2(tx, ty) - 0.5) * 20, cy = ty * s + s / 2 + (h2(tx, ty, 1) - 0.5) * 20, rad = 22 + h2(tx, ty, 2) * 12;
+      ctx.fillStyle = h2(tx, ty, 3) > 0.5 ? '#300f0a' : '#36170c'; ctx.globalAlpha = 0.8;
+      ell(ctx, cx, cy, rad, rad * 0.8, h2(tx, ty, 4) * 3); ctx.fill();
+      ctx.globalAlpha = 0.15; ctx.fillStyle = '#684c3c'; ell(ctx, cx - rad * 0.3, cy - rad * 0.35, rad * 0.4, rad * 0.16, -0.3); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(8,5,2,0.62)'; ctx.fillRect(r.x, r.y, r.w, r.h);
+  },
+};
+// поверх тёмной скалы — тихое разнообразие без узнаваемых предметов: всё на 1–2 тона светлее или темнее основы
+const VX = {
+  // пятна: крупные размытые области чуть светлее и чуть темнее (ломают ровный ритм камней)
+  patches(r) {
+    const s = 220;
+    for (let ty = Math.floor(r.y / s) - 1; ty * s < r.y + r.h + s; ty++) for (let tx = Math.floor(r.x / s) - 1; tx * s < r.x + r.w + s; tx++) {
+      const x = tx * s + h2(tx, ty, 81) * s, y = ty * s + h2(tx, ty, 82) * s, rad = 70 + h2(tx, ty, 83) * 70, light = h2(tx, ty, 84) > 0.5;
+      const g = ctx.createRadialGradient(x, y, 4, x, y, rad);
+      g.addColorStop(0, light ? 'rgba(104,76,60,0.10)' : 'rgba(5,3,1,0.35)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ell(ctx, x, y, rad, rad * 0.7, h2(tx, ty, 85) * 3); ctx.fill();
+    }
+  },
+  // обломки плит: угловатые тёмные куски с еле заметной светлой гранью
+  slabsBroken(r) {
+    const s = 90;
+    for (let ty = Math.floor(r.y / s) - 1; ty * s < r.y + r.h + s; ty++) for (let tx = Math.floor(r.x / s) - 1; tx * s < r.x + r.w + s; tx++) {
+      if (h2(tx, ty, 91) > 0.6) continue;
+      const x = tx * s + h2(tx, ty, 92) * s, y = ty * s + h2(tx, ty, 93) * s, n = 2 + Math.floor(h2(tx, ty, 94) * 3);
+      for (let i = 0; i < n; i++) {
+        const px = x + (h2(i, tx, 95) - 0.5) * 34, py = y + (h2(i, ty, 96) - 0.5) * 20, w = 8 + h2(i, tx + ty, 97) * 14, hh = 5 + h2(i, 98) * 8;
+        ctx.save(); ctx.translate(px, py); ctx.rotate((h2(i, tx, 99) - 0.5) * 0.9);
+        ctx.beginPath(); ctx.moveTo(-w / 2, -hh / 2); ctx.lineTo(w / 2 - 2, -hh / 2 + 1); ctx.lineTo(w / 2, hh / 2); ctx.lineTo(-w / 2 + 3, hh / 2); ctx.closePath();
+        ctx.fillStyle = 'rgba(54,23,12,0.75)'; ctx.fill();
+        ctx.strokeStyle = 'rgba(104,76,60,0.18)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-w / 2, -hh / 2); ctx.lineTo(w / 2 - 2, -hh / 2 + 1); ctx.stroke();
+        ctx.fillStyle = 'rgba(5,3,1,0.4)'; ctx.fillRect(-w / 2 + 2, hh / 2, w - 2, 2);
+        ctx.restore();
+      }
+    }
+  },
+  // щебень: россыпи мелких камешков чуть светлее основы
+  gravel(r) {
+    const s = 55;
+    for (let ty = Math.floor(r.y / s) - 1; ty * s < r.y + r.h + s; ty++) for (let tx = Math.floor(r.x / s) - 1; tx * s < r.x + r.w + s; tx++) {
+      if (h2(tx, ty, 101) > 0.55) continue;
+      const x = tx * s + h2(tx, ty, 102) * s, y = ty * s + h2(tx, ty, 103) * s;
+      for (let i = 0; i < 7; i++) { ctx.fillStyle = i % 3 ? 'rgba(54,23,12,0.8)' : 'rgba(104,76,60,0.16)'; ell(ctx, x + (h2(i, tx, 104) - 0.5) * 30, y + (h2(i, ty, 105) - 0.5) * 16, 1.5 + h2(i, 106) * 2.2, 1.2 + h2(i, 107) * 1.4); ctx.fill(); }
+    }
+  },
+  // трещины: тонкие ветвящиеся тёмные линии и сколы
+  cracks(r) {
+    const s = 130;
+    ctx.lineCap = 'round';
+    for (let ty = Math.floor(r.y / s) - 1; ty * s < r.y + r.h + s; ty++) for (let tx = Math.floor(r.x / s) - 1; tx * s < r.x + r.w + s; tx++) {
+      if (h2(tx, ty, 111) > 0.65) continue;
+      const x = tx * s + h2(tx, ty, 112) * s, y = ty * s + h2(tx, ty, 113) * s;
+      let a = h2(tx, ty, 114) * TAU, px = x, py = y;
+      ctx.strokeStyle = 'rgba(5,3,1,0.7)'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(px, py);
+      const pts = [];
+      for (let i = 0; i < 6; i++) { a += (h2(tx + i, ty, 115) - 0.5) * 1.4; px += Math.cos(a) * 14; py += Math.sin(a) * 14; ctx.lineTo(px, py); pts.push([px, py, a]); }
+      ctx.stroke();
+      const [bx, by, ba] = pts[2]; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(ba + 1.1) * 12, by + Math.sin(ba + 1.1) * 12); ctx.stroke();
+      ctx.strokeStyle = 'rgba(104,76,60,0.12)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + 1, y + 1.5); pts.slice(0, 4).forEach(([qx, qy]) => ctx.lineTo(qx + 1, qy + 1.5)); ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+  },
+  // серые вкрапления: мелкие угловатые камешки светлее основы, по одному и кучками
+  flecks(r) {
+    const s = 34;
+    for (let ty = Math.floor(r.y / s) - 1; ty * s < r.y + r.h + s; ty++) for (let tx = Math.floor(r.x / s) - 1; tx * s < r.x + r.w + s; tx++) {
+      const v = h2(tx, ty, 121); if (v > 0.42) continue;
+      const x = tx * s + h2(tx, ty, 122) * s, y = ty * s + h2(tx, ty, 123) * s, n = v < 0.1 ? 3 : 1;
+      for (let i = 0; i < n; i++) {
+        const px = x + (i ? (h2(i, tx, 124) - 0.5) * 12 : 0), py = y + (i ? (h2(i, ty, 125) - 0.5) * 8 : 0), w = 2 + h2(tx + i, ty, 126) * 3.5, hh = 1.5 + h2(tx, ty + i, 127) * 2;
+        ctx.save(); ctx.translate(px, py); ctx.rotate(h2(tx, ty, 128 + i) * 3);
+        ctx.fillStyle = h2(tx, ty, 130 + i) > 0.5 ? 'rgba(146,126,106,0.38)' : 'rgba(104,76,60,0.5)';
+        ctx.beginPath(); ctx.moveTo(-w, 0); ctx.lineTo(-w * 0.3, -hh); ctx.lineTo(w, -hh * 0.4); ctx.lineTo(w * 0.6, hh); ctx.lineTo(-w * 0.5, hh * 0.8); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = 'rgba(5,3,1,0.45)'; ctx.fillRect(-w * 0.5, hh * 0.8, w, 1.2);
+        ctx.restore();
+      }
+    }
+  },
+};
+function paintVoid(r) {
+  ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+  VOID.rock(r); VX.patches(r); VX.slabsBroken(r); VX.cracks(r); VX.gravel(r); VX.flecks(r);
+  ctx.restore();
+}
+function drawVoid() {
+  paintVoid({ x: state.camera.x - 60, y: state.camera.y - 60, w: CONFIG.VIEW.w + 120, h: CONFIG.VIEW.h + 120 });
+}
+
 // ===================== СТЕНЫ И КОЛОННЫ =====================
 // Рисунок поднят на WALL_H вверх: верх — (x, y - H, w, h), передняя грань высотой H с кладкой кончается ровно
 // по низу прямоугольника; у подножия тень на полу
@@ -153,52 +253,114 @@ function drawBlock(c, r, top, face, line, planks) {
   c.beginPath(); c.moveTo(r.x, fy); c.lineTo(r.x + r.w, fy); c.stroke();
 }
 const lifted = (r) => ({ x: r.x, y: r.y - WALL_H, w: r.w, h: r.h + WALL_H });
+
+// Стена уровня: верх — тёмная плитка «нигде» (поднят на WALL_H), кирпичная грань — только там, где прямо под стеной
+// пол (а не другая стена), светлая кромка — по краям верха, которые выходят на пол. Так край уровня читается как
+// стенка, над которой уже тёмная плитка, а лесенка из многих прямоугольников (круглая арена) — как уступы.
+// Открытые куски краёв считаются один раз на мир (и заново, когда открылась дверь)
+let edgeCache = { key: '', map: new Map() };
+function inFloor(x, y) { return world.floors.some((f) => x > f.x && x < f.x + f.w && y > f.y && y < f.y + f.h); }
+// куски отрезка [a, b], не закрытые интервалами cut
+function subtract(a, b, cut) {
+  let segs = [[a, b]];
+  for (const [c0, c1] of cut) segs = segs.flatMap(([s0, s1]) => (c1 <= s0 || c0 >= s1) ? [[s0, s1]] : [[s0, Math.max(s0, c0)], [Math.min(s1, c1), s1]].filter(([u, v]) => v - u > 1));
+  return segs;
+}
+function wallEdges() {
+  const solid = world.walls.concat((world.doors || []).filter((d) => !d.open));
+  const key = world.walls.length + ':' + solid.length + ':' + (world.floors[0] && world.floors[0].x);
+  if (edgeCache.src === world.walls && edgeCache.key === key) return edgeCache.map;
+  const map = new Map(), e = 0.5;
+  for (const r of world.walls) {
+    const others = solid.filter((o) => o !== r);
+    const xs = (y) => others.filter((o) => o.y < y && o.y + o.h > y).map((o) => [o.x, o.x + o.w]);
+    const ys = (x) => others.filter((o) => o.x < x && o.x + o.w > x).map((o) => [o.y, o.y + o.h]);
+    const S = subtract(r.x, r.x + r.w, xs(r.y + r.h + e)), N = subtract(r.x, r.x + r.w, xs(r.y - e));
+    const W = subtract(r.y, r.y + r.h, ys(r.x - e)), E = subtract(r.y, r.y + r.h, ys(r.x + r.w + e));
+    const floorS = (g) => inFloor((g[0] + g[1]) / 2, r.y + r.h + 4);
+    map.set(r, { face: S.filter(floorS), S: S.filter(floorS), N: N.filter((g) => inFloor((g[0] + g[1]) / 2, r.y - 4)),
+      W: W.filter((g) => inFloor(r.x - 4, (g[0] + g[1]) / 2)), E: E.filter((g) => inFloor(r.x + r.w + 4, (g[0] + g[1]) / 2)) });
+  }
+  edgeCache = { src: world.walls, key, map };
+  return map;
+}
+// c — холст (основной или временный для окошка)
+function drawLevelWall(c, r) {
+  const H = WALL_H, ed = wallEdges().get(r) || { face: [], S: [], N: [], W: [], E: [] };
+  const keep = ctx; ctx = c;
+  paintVoid({ x: r.x, y: r.y - H, w: r.w, h: r.h + H });   // верх и всё под ним до основания
+  // кирпичные грани над полом
+  for (const [x0, x1] of ed.face) {
+    const fy = r.y + r.h - H, w = x1 - x0;
+    const g = c.createLinearGradient(0, r.y + r.h, 0, r.y + r.h + 14);
+    g.addColorStop(0, 'rgba(20,10,5,0.45)'); g.addColorStop(1, 'rgba(20,10,5,0)');
+    c.fillStyle = g; c.fillRect(x0, r.y + r.h, w, 14);
+    c.fillStyle = COLORS.wallSide; c.fillRect(x0, fy, w, H);
+    c.save(); c.beginPath(); c.rect(x0, fy, w, H); c.clip();
+    c.strokeStyle = '#36170c'; c.lineWidth = 2; c.beginPath();
+    for (let y = fy + 12; y < fy + H; y += 12) { c.moveTo(x0, y); c.lineTo(x1, y); }
+    for (let row = 0; row * 12 < H; row++) for (let x = Math.floor(x0 / 24) * 24 + (row & 1) * 12; x < x1; x += 24) { c.moveTo(x, fy + row * 12); c.lineTo(x, fy + row * 12 + 12); }
+    c.stroke();
+    const sg = c.createLinearGradient(0, fy, 0, fy + H); sg.addColorStop(0, 'rgba(20,10,5,0)'); sg.addColorStop(1, 'rgba(20,10,5,0.35)');
+    c.fillStyle = sg; c.fillRect(x0, fy, w, H);
+    c.restore();
+    c.strokeStyle = INK; c.lineWidth = 2; c.strokeRect(x0, fy, w, H);
+  }
+  // светлая кромка верха там, где он выходит на пол
+  c.lineCap = 'square';
+  const rim = (x0, y0, x1, y1) => { c.strokeStyle = INK; c.lineWidth = 4; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); c.strokeStyle = '#684c3c'; c.lineWidth = 2; c.stroke(); };
+  const top = r.y - H, bot = r.y + r.h - H;
+  for (const [a, b] of ed.S) rim(a, bot, b, bot);
+  for (const [a, b] of ed.N) rim(a, top, b, top);
+  for (const [a, b] of ed.W) rim(r.x, a - H, r.x, b - H);
+  for (const [a, b] of ed.E) rim(r.x + r.w, a - H, r.x + r.w, b - H);
+  c.lineCap = 'butt';
+  ctx = keep;
+}
 // все стены, колонны и закрытые двери: от дальних к ближним, чтобы ближняя закрывала грань дальней
 function blocks() {
-  return world.walls.map((r) => ({ r, top: COLORS.wall, face: COLORS.wallSide, line: '#36170c' }))
+  return world.walls.map((r) => ({ r, level: true }))
     .concat(world.pillars.map((r) => ({ r, top: COLORS.pillar, face: COLORS.pillarSide, line: '#45230d' })))
     .concat((world.doors || []).filter((d) => !d.open).map((r) => ({ r, top: COLORS.doorEdge, face: COLORS.door, line: '#45230d', planks: true })))
     .sort((a, b) => a.r.y + a.r.h - (b.r.y + b.r.h));
 }
+function drawOne(c, b) { if (b.level) drawLevelWall(c, b.r); else drawBlock(c, b.r, b.top, b.face, b.line, b.planks); }
 function drawWalls() {
-  for (const b of blocks()) if (visible(lifted(b.r))) drawBlock(ctx, b.r, b.top, b.face, b.line, b.planks);
+  for (const b of blocks()) if (visible(lifted(b.r))) drawOne(ctx, b);
 }
 
 // Спрятанные за стеной. Стены нарисованы до тел, поэтому тела за стеной оказались поверх неё; здесь, после тел,
-// такая стена рисуется ещё раз поверх: во временном холсте у спрятанных мягкие окошки, у стоящих перед стеной
-// (их головы заходят на её грань) и у ближних стен — сквозные дыры, и вся она бледнеет (плавно, кэш рендера)
-const fade = new WeakMap();
-let lastT = 0, osc = null, octx = null;
+// такая стена рисуется ещё раз поверх: во временном холсте вокруг каждого спрятанного (Герой, дружочки, враги)
+// небольшое мягкое пятно, где стена прозрачна наполовину — его видно сквозь стену; у стоящих перед стеной
+// (их головы заходят на её грань) и у ближних стен — сквозные дыры
+let osc = null, octx = null;
 function bodies() {
   const out = [];
   for (const u of state.party) out.push(u);
   for (const u of state.downed) out.push(u);
   for (const u of state.neutrals) out.push(u);
-  for (const e of state.enemies) if (e.hp > 0 && e.r < 40) out.push(e);
+  for (const e of state.enemies) if (e.hp > 0) out.push(e);
   return out;
 }
 function drawOccluders() {
-  const list = bodies(), all = blocks(), dt = Math.min(0.1, Math.max(0, state.time - lastT)); lastT = state.time;
+  const list = bodies(), all = blocks();
   for (const b of all) {
     const r = b.r, L = lifted(r);
     if (!visible(L)) continue;
     const bottom = r.y + r.h, inX = (u) => u.x + u.r > r.x && u.x - u.r < r.x + r.w;
     const hidden = list.filter((u) => inX(u) && u.y < bottom && u.y + u.r > L.y);
-    let f = fade.get(r) || 0;
-    f = Math.max(0, Math.min(1, f + (hidden.length ? 6 : -4) * dt));
-    fade.set(r, f);
-    if (!hidden.length && f <= 0) continue;
+    if (!hidden.length) continue;
     const front = list.filter((u) => inX(u) && u.y >= bottom && u.y - u.r * 3 < bottom);
     if (!osc || osc.width !== ctx.canvas.width || osc.height !== ctx.canvas.height) {
       osc = document.createElement('canvas'); osc.width = ctx.canvas.width; osc.height = ctx.canvas.height; octx = osc.getContext('2d');
     }
     octx.setTransform(1, 0, 0, 1, 0, 0); octx.clearRect(0, 0, osc.width, osc.height);
     octx.setTransform(ctx.getTransform());
-    drawBlock(octx, r, b.top, b.face, b.line, b.planks);
+    drawOne(octx, b);
     octx.globalCompositeOperation = 'destination-out';
     for (const u of hidden) {
-      const R = u.r * 2.6 + 6, g = octx.createRadialGradient(u.x, u.y - u.r * 0.6, R * 0.3, u.x, u.y - u.r * 0.6, R);
-      g.addColorStop(0, 'rgba(0,0,0,0.85)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      const R = Math.min(90, u.r * 2.2 + 6), g = octx.createRadialGradient(u.x, u.y - u.r * 0.6, R * 0.45, u.x, u.y - u.r * 0.6, R);
+      g.addColorStop(0, 'rgba(0,0,0,0.5)'); g.addColorStop(1, 'rgba(0,0,0,0)');
       octx.fillStyle = g; octx.fillRect(u.x - R, u.y - u.r * 0.6 - R, R * 2, R * 2);
     }
     octx.fillStyle = '#000';
@@ -210,7 +372,7 @@ function drawOccluders() {
       if (M.x < L.x + L.w && M.x + M.w > L.x && M.y < L.y + L.h && M.y + M.h > L.y) octx.fillRect(M.x, M.y, M.w, M.h);
     }
     octx.globalCompositeOperation = 'source-over';
-    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1 - 0.35 * f; ctx.drawImage(osc, 0, 0); ctx.restore();
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(osc, 0, 0); ctx.restore();
   }
 }
 
@@ -268,5 +430,5 @@ function drawDecor() {
   }
 }
 
-G.terrain = { drawPits, drawWalls, drawOccluders, drawDecor, WALL_H };
+G.terrain = { drawVoid, drawPits, drawWalls, drawOccluders, drawDecor, WALL_H };
 })(window.Game = window.Game || {});

@@ -299,6 +299,7 @@ function drawSpikes(r) {
 }
 
 function drawTerrain() {
+  G.terrain.drawVoid();
   for (const f of world.floors) drawFloor(f);
   // зоны поля подсвечены по степени опасности
   for (const f of world.floors) {
