@@ -324,33 +324,12 @@ function drawTerrain() {
 function drawBase() {
   const b = world.base, s = state.base;
   if (!b || !s || !visible(b)) return;
-  const hit = s.regenTimer < 0.15;
-  ctx.fillStyle = hit ? COLORS.baseHit : COLORS.base;
-  ctx.fillRect(b.x, b.y, b.w, b.h);
-  ctx.strokeStyle = COLORS.baseEdge;
-  ctx.lineWidth = 4;
-  ctx.strokeRect(b.x + 2, b.y + 2, b.w - 4, b.h - 4);
-  ctx.lineWidth = 2;
-  ctx.strokeRect(b.x + 16, b.y + 16, b.w - 32, b.h - 32);
-  // корона в центре
-  const cx = b.x + b.w / 2, cy = b.y + b.h / 2, k = Math.min(b.w, b.h) * 0.22;
-  ctx.fillStyle = COLORS.baseEdge;
-  ctx.beginPath();
-  ctx.moveTo(cx - k, cy + k * 0.6);
-  ctx.lineTo(cx - k, cy - k * 0.5);
-  ctx.lineTo(cx - k * 0.5, cy);
-  ctx.lineTo(cx, cy - k * 0.8);
-  ctx.lineTo(cx + k * 0.5, cy);
-  ctx.lineTo(cx + k, cy - k * 0.5);
-  ctx.lineTo(cx + k, cy + k * 0.6);
-  ctx.closePath();
-  ctx.fill();
-  // полоска HP во всю ширину здания
-  const w = b.w, h = 8, x = b.x, y = b.y - 16;
+  // сама избушка рисуется в слое стен (render/terrain.js → render/baseart.js); здесь — полоска HP над крышей
+  const w = b.w * 0.7, h = 8, x = b.x + (b.w - w) / 2, y = b.y - 58;
   ctx.fillStyle = COLORS.hpBack;
-  ctx.fillRect(x, y, w, h);
+  ctx.beginPath(); ctx.roundRect(x - 2, y - 2, w + 4, h + 4, 4); ctx.fill();
   ctx.fillStyle = COLORS.hpAlly;
-  ctx.fillRect(x, y, w * clamp(s.hp / s.maxHp, 0, 1), h);
+  ctx.beginPath(); ctx.roundRect(x, y, w * clamp(s.hp / s.maxHp, 0, 1), h, 3); ctx.fill();
 }
 
 // гнёзда врагов — норы в полу с зоной выхода волны и плашкой «сколько и когда» (render/nestart.js)

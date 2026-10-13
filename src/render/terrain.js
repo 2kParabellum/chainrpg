@@ -322,9 +322,14 @@ function blocks() {
   return world.walls.map((r) => ({ r, level: true }))
     .concat(world.pillars.map((r) => ({ r, top: COLORS.pillar, face: COLORS.pillarSide, line: '#45230d' })))
     .concat((world.doors || []).filter((d) => !d.open).map((r) => ({ r, top: COLORS.doorEdge, face: COLORS.door, line: '#45230d', planks: true })))
+    .concat(world.base && state.base ? [{ r: world.base, house: true }] : [])
     .sort((a, b) => a.r.y + a.r.h - (b.r.y + b.r.h));
 }
-function drawOne(c, b) { if (b.level) drawLevelWall(c, b.r); else drawBlock(c, b.r, b.top, b.face, b.line, b.planks); }
+function drawOne(c, b) {
+  if (b.house) G.baseArt.draw(c, b.r);   // база «Обороны» — избушка (render/baseart.js)
+  else if (b.level) drawLevelWall(c, b.r);
+  else drawBlock(c, b.r, b.top, b.face, b.line, b.planks);
+}
 function drawWalls() {
   for (const b of blocks()) if (visible(lifted(b.r))) drawOne(ctx, b);
 }
