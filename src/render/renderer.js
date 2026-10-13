@@ -920,6 +920,7 @@ function drawEffects() {
 
 // взрыв: светлая вспышка в центре, оранжевые клубы и тёмный дым, расходятся и гаснут (life 0.35 → 0)
 function drawBlast(fx) {
+  if (fx.look === 'slime') { drawSlimeBlast(fx); return; }
   const t = 1 - clamp(fx.life / 0.35, 0, 1), r = fx.r;
   ctx.globalAlpha = 0.25 * (1 - t);
   ctx.fillStyle = COLORS.blast;
@@ -939,6 +940,53 @@ function drawBlast(fx) {
   ctx.strokeStyle = COLORS.blast;
   ctx.lineWidth = 4;
   ctx.beginPath(); ctx.arc(fx.x, fx.y, r * (0.85 + 0.3 * t), 0, Math.PI * 2); ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+// взрыв слизи спрута (life 0.6 → 0): бирюзовая вспышка, столб брызг вверх, капли разлетаются по дуге и шлёпаются,
+// на полу остаётся клякса с потёками и лопающимися пузырями
+function drawSlimeBlast(fx) {
+  const t = 1 - clamp(fx.life / 0.6, 0, 1), r = fx.r, TAU = Math.PI * 2;
+  const rnd = (i, k) => { const v = Math.sin(i * 12.9898 + k * 78.233 + fx.x * 0.37) * 43758.5453; return v - Math.floor(v); };
+  // клякса на полу: разбегается и подсыхает
+  const sp = Math.min(1, t * 4), fade = 1 - Math.max(0, (t - 0.55) / 0.45);
+  ctx.globalAlpha = 0.85 * fade;
+  ctx.fillStyle = COLORS.kraken;
+  ctx.beginPath();
+  for (let i = 0; i <= 20; i++) {
+    const a = i / 20 * TAU, k = 0.55 + 0.25 * rnd(i % 20, 1) + (i % 4 === 0 ? 0.25 * rnd(i, 2) : 0);
+    ctx.lineTo(fx.x + Math.cos(a) * r * k * sp, fx.y + Math.sin(a) * r * k * sp * 0.6);
+  }
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = COLORS.krakenEdge; ctx.lineWidth = 3; ctx.stroke();
+  // вспышка в центре
+  ctx.globalAlpha = Math.max(0, 1 - t * 3);
+  ctx.fillStyle = COLORS.krakenSuck;
+  ctx.beginPath(); ctx.ellipse(fx.x, fx.y - 6, r * 0.45 * (1 + t), r * 0.32 * (1 + t), 0, 0, TAU); ctx.fill();
+  ctx.globalAlpha = 0.8 * Math.max(0, 1 - t * 2);
+  ctx.strokeStyle = COLORS.krakenEdge; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.ellipse(fx.x, fx.y, r * (0.5 + 0.7 * t), r * (0.3 + 0.42 * t), 0, 0, TAU); ctx.stroke();
+  // капли: вылетают по дуге и шлёпаются кляксами
+  for (let i = 0; i < 12; i++) {
+    const a = i / 12 * TAU + rnd(i, 3), d = r * (0.7 + 0.6 * rnd(i, 4)), up = r * (0.6 + 0.8 * rnd(i, 5));
+    const fl = Math.min(1, t / 0.5), x = fx.x + Math.cos(a) * d * fl, y = fx.y + Math.sin(a) * d * fl * 0.6 - Math.sin(fl * Math.PI) * up;
+    const s = 3 + 4 * rnd(i, 6);
+    if (fl < 1) {
+      ctx.globalAlpha = 1; ctx.fillStyle = i % 3 ? COLORS.krakenEdge : COLORS.tentacle; ctx.strokeStyle = '#2a1d0d'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(x, y, s, s * 1.2, a, 0, TAU); ctx.fill(); ctx.stroke();
+    } else {
+      ctx.globalAlpha = 0.8 * fade; ctx.fillStyle = COLORS.kraken;
+      ctx.beginPath(); ctx.ellipse(x, y, s * 1.6, s, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = COLORS.krakenEdge; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+  }
+  // пузыри в кляксе лопаются
+  ctx.fillStyle = COLORS.krakenEdge;
+  for (let k = 0; k < 5; k++) {
+    const ph = (t * 2 + k * 0.23) % 1, a = k * 2.4 + fx.x, d = r * 0.12 * (k + 1);
+    ctx.globalAlpha = 0.6 * fade * Math.sin(ph * Math.PI);
+    ctx.beginPath(); ctx.arc(fx.x + Math.cos(a) * d, fx.y + Math.sin(a) * d * 0.6, 2 + 4 * ph, 0, TAU); ctx.fill();
+  }
   ctx.globalAlpha = 1;
 }
 

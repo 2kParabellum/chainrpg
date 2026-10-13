@@ -1138,7 +1138,7 @@ function globLand(e, b, game) {
 // взрыв слизи: только урон по площади (от mineDmg в центре до mineEdgeDmg на краю) — никого не раскидывает
 function mineBlast(e, m, game) {
   const cfg = e.cfg, st = game.state;
-  game.blast(m, cfg.mineBlast, cfg.mineDmg, st.party.concat(st.downed), m, cfg.mineEdgeDmg);
+  game.blast(m, cfg.mineBlast, cfg.mineDmg, st.party.concat(st.downed), m, cfg.mineEdgeDmg, 'slime');
 }
 
 function krakenMines(e, dt, game) {

@@ -79,9 +79,9 @@ function damageUnit(u, dmg, hit) {
 
 // урон по площади: центр взрыва, радиус, урон и список тех, кого он может задеть;
 // вспышка рисуется в fxAt (по умолчанию — в центре). Если задан edgeDmg, урон линейно
-// падает от dmg в эпицентре до edgeDmg на краю радиуса
-function blast(center, radius, dmg, victims, fxAt = center, edgeDmg = dmg) {
-  state.effects.push({ type: 'blast', x: fxAt.x, y: fxAt.y, r: radius, life: 0.35 });
+// падает от dmg в эпицентре до edgeDmg на краю радиуса; look — вид вспышки ('slime' — брызги слизи спрута)
+function blast(center, radius, dmg, victims, fxAt = center, edgeDmg = dmg, look) {
+  state.effects.push({ type: 'blast', x: fxAt.x, y: fxAt.y, r: radius, life: look === 'slime' ? 0.6 : 0.35, look });
   for (const u of victims) {
     const d = dist(center, u);
     if (d >= radius + u.r) continue;
