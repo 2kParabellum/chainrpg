@@ -352,74 +352,11 @@ function drawBase() {
   ctx.fillRect(x, y, w * clamp(s.hp / s.maxHp, 0, 1), h);
 }
 
-// гнёзда врагов: на полу — красноватая зона, где появляются враги волны (с пунктирной кромкой), посреди —
-// тёмная пасть с зубцами по кругу и пульсирующим ядром. Перед волной всё разгорается, при выходе — вспышка.
-// Над гнездом подпись, под ним — сколько врагов в следующей волне и через сколько секунд
+// гнёзда врагов — норы в полу с зоной выхода волны и плашкой «сколько и когда» (render/nestart.js)
 function drawNests() {
   const cfg = state.level.waves;
   if (!cfg) return;
-  for (const n of state.nests) {
-    const zone = cfg.spawnRadius + 24;
-    if (!onScreen({ x: n.x, y: n.y, r: zone }, 30)) continue;
-    const soon = clamp(1 - n.nextIn / cfg.telegraph, 0, 1);
-    const just = clamp(1 - (state.time - n.releasedAt) / 1.2, 0, 1);
-    const pulse = 0.5 + 0.5 * Math.sin(state.time * (3 + 9 * soon));
-
-    // зона выхода
-    ctx.fillStyle = COLORS.nest;
-    ctx.globalAlpha = 0.07 + 0.1 * soon + 0.2 * just;
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, zone, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = COLORS.nest;
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.35 + 0.45 * soon + 0.2 * just;
-    ctx.setLineDash([12, 9]);
-    ctx.lineDashOffset = -state.time * (15 + 60 * soon);
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, zone, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.lineDashOffset = 0;
-
-    // пасть с зубцами
-    const r = 50;
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = '#300f0a';
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = COLORS.nest;
-    ctx.globalAlpha = 0.75 + 0.25 * soon;
-    const teeth = 12, turn = state.time * 0.3;
-    for (let i = 0; i < teeth; i++) {
-      const t = turn + (i / teeth) * Math.PI * 2, w = Math.PI / teeth;
-      ctx.beginPath();
-      ctx.moveTo(n.x + Math.cos(t - w) * r, n.y + Math.sin(t - w) * r);
-      ctx.lineTo(n.x + Math.cos(t + w) * r, n.y + Math.sin(t + w) * r);
-      ctx.lineTo(n.x + Math.cos(t) * r * (0.62 - 0.12 * soon), n.y + Math.sin(t) * r * (0.62 - 0.12 * soon));
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = COLORS.nest;
-    ctx.globalAlpha = 1;
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-    ctx.stroke();
-    // ядро
-    ctx.globalAlpha = 0.3 + 0.5 * soon + 0.2 * pulse;
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, r * (0.18 + 0.22 * soon + 0.05 * pulse), 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 13px "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
-    ctx.fillText('NEST', n.x, n.y - r - 12);
-    ctx.font = '12px "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
-    ctx.fillText(`wave ×${G.waves.waveSize(cfg, n.wave)} in ${Math.max(0, Math.ceil(n.nextIn))}s`, n.x, n.y + r + 18);
-  }
+  for (const n of state.nests) if (onScreen({ x: n.x, y: n.y, r: cfg.spawnRadius + 24 }, 30)) G.nestArt.draw(n, cfg);
 }
 
 // яркость временного объекта с остатком жизни life (из maxLife): вырастает при появлении,

@@ -407,16 +407,32 @@ function drawMine(m, a) {
   ctx.restore();
 }
 
-// портал: тёмный водоворот с красными рукавами; перед выходом врага ядро разгорается и изнутри глядят глаза
-function drawPortal(e, a) {
-  const r = e.r, age = e.age || 0, t = state.time + a.seed, fl = hurtFlash(a);
-  const soon = e.spawnIn < 1.5 ? 1 - Math.max(0, e.spawnIn) / 1.5 : 0;
-  const g = ctx.createRadialGradient(e.x, e.y, r * 0.8, e.x, e.y, r * 1.6);
-  g.addColorStop(0, 'rgba(155,26,10,0.35)'); g.addColorStop(1, 'rgba(155,26,10,0)');
-  ctx.fillStyle = g; ell(e.x, e.y, r * 1.6, r * 1.6); ctx.fill();
-  ctx.save(); ctx.translate(e.x, e.y);
-  edgePath(r, r, t, 'wobble', a.seed); ctx.fillStyle = '#300f0a'; ctx.fill();
-  ctx.save(); edgePath(r, r, t, 'wobble', a.seed); ctx.clip();
+// портал: тёмный водоворот с красными рукавами стоит в каменной арке (колонны, свод из 9 камней, порог).
+// Перед выходом врага ядро разгорается, изнутри глядят глаза, руна на замковом камне светится.
+// Урон виден: из свода выпадают камни (до 5), их обломки лежат у порога; при попадании — вспышка и осколки
+const p2 = (x, y) => { const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453; return s - Math.floor(s); };
+function portalRune(x, y, s, soon) {
+  if (soon > 0) {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, s * 2.5);
+    g.addColorStop(0, hexA(C.red, 0.5 * soon)); g.addColorStop(1, hexA(C.red, 0));
+    ctx.fillStyle = g; ell(x, y, s * 2.5, s * 2.5); ctx.fill();
+  }
+  ctx.strokeStyle = soon > 0.1 ? C.orange : '#9b1a0a'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(x, y, s * 0.6, 0, TAU); ctx.moveTo(x, y - s); ctx.lineTo(x, y + s); ctx.stroke();
+  ctx.lineCap = 'butt';
+}
+function portalRubble(x, y, n, seed) {
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
+  for (let i = 0; i < n; i++) {
+    const px = x + (p2(i, seed) - 0.5) * 26, py = y + (p2(i, seed + 1) - 0.5) * 12, rx = 3.5 + p2(i, seed + 3) * 3, ry = 2.5 + p2(i, seed + 4) * 2;
+    ctx.fillStyle = p2(i, seed + 2) > 0.5 ? '#684c3c' : C.stone;
+    ctx.beginPath();
+    for (let k = 0; k < 6; k++) { const ang = k / 6 * TAU, q = 0.75 + 0.5 * p2(k, seed + i); ctx.lineTo(px + Math.cos(ang) * rx * q, py + Math.sin(ang) * ry * q); }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+}
+function portalSwirl(r, age, soon) {
+  ctx.fillStyle = '#300f0a'; ell(0, 0, r, r); ctx.fill();
   ctx.lineCap = 'round';
   for (let arm = 0; arm < 3; arm++) {
     for (const [lw, col] of [[r * 0.2, '#550f0a'], [r * 0.08, '#9b1a0a']]) {
@@ -428,20 +444,75 @@ function drawPortal(e, a) {
       ctx.stroke();
     }
   }
+  ctx.lineCap = 'butt';
   const core = r * (0.22 + 0.04 * Math.sin(age * 3) + soon * 0.15);
   const cg = ctx.createRadialGradient(0, 0, 0, 0, 0, core * 2);
   cg.addColorStop(0, `rgba(239,105,47,${0.6 + soon * 0.4})`); cg.addColorStop(1, 'rgba(239,58,12,0)');
   ctx.fillStyle = cg; ell(0, 0, core * 2, core * 2); ctx.fill();
-  if (soon > 0.2) for (let i = 0; i < 3; i++) {
-    const ang = i * 2.1 + 0.5, d = r * 0.55;
+}
+function drawPortal(e, a) {
+  const k = e.r / 46, age = e.age || 0, fl = hurtFlash(a), hp = Math.max(0, e.hp / e.maxHp);
+  const soon = e.spawnIn < 1.5 ? 1 - Math.max(0, e.spawnIn) / 1.5 : 0;
+  const g = ctx.createRadialGradient(e.x, e.y, e.r * 0.6, e.x, e.y, e.r * 2.4);
+  g.addColorStop(0, 'rgba(155,26,10,0.3)'); g.addColorStop(1, 'rgba(155,26,10,0)');
+  ctx.fillStyle = g; ell(e.x, e.y, e.r * 2.4, e.r * 2.4); ctx.fill();
+  ctx.save(); ctx.translate(e.x, e.y); ctx.scale(k, k);
+  const baseY = 16, colH = 56, R0 = 40, R1 = 58, cyA = baseY - colH;
+  // порог
+  ctx.fillStyle = 'rgba(20,10,5,0.45)'; ell(0, baseY + 4, 74, 18); ctx.fill();
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5;
+  ctx.fillStyle = '#45230d'; ctx.beginPath(); ctx.roundRect(-66, baseY - 8, 132, 14, 5); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = C.stone; ctx.beginPath(); ctx.roundRect(-66, baseY - 12, 132, 8, 4); ctx.fill(); ctx.stroke();
+  // проём с водоворотом
+  const inner = () => { ctx.beginPath(); ctx.moveTo(-R0, baseY - 10); ctx.lineTo(-R0, cyA); ctx.arc(0, cyA, R0, Math.PI, 0); ctx.lineTo(R0, baseY - 10); ctx.closePath(); };
+  ctx.save(); inner(); ctx.clip();
+  ctx.save(); ctx.translate(0, cyA + 10); ctx.scale(1, (colH + R0) * 0.62 / (R0 + 6)); portalSwirl(R0 + 6, age, soon); ctx.restore();
+  if (soon > 0.2) {
     ctx.globalAlpha = Math.min(1, (soon - 0.2) * 2);
-    for (const s of [-1, 1]) glowEye(Math.cos(ang) * d + s * r * 0.07, Math.sin(ang) * d, r * 0.045, C.gold);
+    for (let i = 0; i < 3; i++) {
+      const ang = i * 2.1 + 0.5;
+      for (const s of [-1, 1]) glowEye(Math.cos(ang) * 25 + s * 3.2, cyA + 10 + Math.sin(ang) * 33, 2.2, C.gold);
+    }
     ctx.globalAlpha = 1;
   }
-  flashOver(r, r, fl);
+  flashOver(R0 * 1.6, colH + R0, fl);
   ctx.restore();
-  edgePath(r, r, t, 'wobble', a.seed); ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.stroke();
-  ctx.restore(); ctx.lineCap = 'butt';
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; inner(); ctx.stroke();
+  // колонны
+  for (const sx of [-1, 1]) {
+    const cx = sx * (R0 + 9);
+    ctx.fillStyle = '#684c3c'; ctx.beginPath(); ctx.rect(cx - 9, cyA, 18, colH - 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(20,10,5,0.25)'; ctx.fillRect(cx + (sx > 0 ? 2 : -9), cyA, 7, colH - 2);
+    ctx.strokeStyle = hexA(C.ink, 0.5); ctx.lineWidth = 1.5;
+    for (let n = 1; n < 4; n++) { ctx.beginPath(); ctx.moveTo(cx - 9, cyA + n * 14); ctx.lineTo(cx + 9, cyA + n * 14); ctx.stroke(); }
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5;
+  }
+  // свод из 9 камней: с уроном выпадают по одному
+  const miss = new Set([3, 6, 1, 7, 2].slice(0, Math.round((1 - hp) * 5)));
+  for (let n = 0; n < 9; n++) {
+    if (miss.has(n)) continue;
+    const a0 = Math.PI + n / 9 * Math.PI, a1 = Math.PI + (n + 1) / 9 * Math.PI;
+    ctx.fillStyle = n === 4 ? '#45230d' : '#684c3c';
+    ctx.beginPath(); ctx.arc(0, cyA, R1, a0, a1); ctx.arc(0, cyA, R0, a1, a0, true); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.stone;
+    ctx.beginPath(); ctx.arc(0, cyA, R1, a0, a1); ctx.arc(0, cyA - 5, R1, a1, a0, true); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  portalRune(0, cyA - (R0 + R1) / 2, 5, soon);
+  [...miss].forEach((n, i) => portalRubble((i % 2 ? 1 : -1) * (60 + i * 6), baseY + 10, 5, n * 13));
+  // осколки от попадания
+  const ha = state.time - a.hurtAt;
+  if (ha >= 0 && ha < 0.6) {
+    const q = ha / 0.6;
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
+    for (let i = 0; i < 5; i++) {
+      const ang = i / 5 * TAU + a.seed, d = 40 * (0.5 + 0.8 * p2(i, a.seed)) * q;
+      ctx.fillStyle = i % 2 ? C.stone : '#684c3c';
+      ctx.save(); ctx.translate(Math.cos(ang) * d, cyA + Math.sin(ang) * d * 0.6 - Math.sin(q * Math.PI) * 18); ctx.rotate(q * 6 + i);
+      ctx.beginPath(); ctx.moveTo(-4, -3); ctx.lineTo(4, -4); ctx.lineTo(5, 3); ctx.lineTo(-3, 4); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+  }
+  ctx.restore();
 }
 
 // кольцо щита (турель, Демон): пульсирует, пока щит включён
@@ -478,7 +549,7 @@ const SPECIAL = { tower: drawCatapult, mine: drawMine, portal: drawPortal, turre
 function drawSpecial(e) {
   const a = track(e);
   SPECIAL[e.type](e, a);
-  if (e.type !== 'mine' && e.hp < e.maxHp) hpBar(e.x, e.y - e.r * (e.type === 'portal' ? 1.15 : 1.3) - 8, Math.min(e.r, 40), e.hp / e.maxHp);
+  if (e.type !== 'mine' && e.hp < e.maxHp) hpBar(e.x, e.y - e.r * (e.type === 'portal' ? 2.4 : 1.3) - 8, Math.min(e.r, 40), e.hp / e.maxHp);
 }
 
 // тело Демона: громадный тёмный блоб с рогами, светящимися глазами, зубастой пастью и когтистыми лапами.
