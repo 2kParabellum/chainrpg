@@ -718,12 +718,10 @@ turret.update = function (e, dt, chain, game) {
 // Демон: единственный враг боссовой арены. Медленно идёт к игроку и держит дистанцию, а раз
 // в несколько секунд бьёт одной из четырёх атак: обстрел множеством снарядов по случайным точкам
 // арены, один огромный снаряд, который вышибает задетых союзников из цепочки, луч, оставляющий
-// стенку огня, и вызов подкрепления. Между атаками — короткий замах (see TELEGRAPH), по цвету
-// тела видно, что сейчас готовится.
+// стенку огня, и вызов подкрепления. Между атаками — короткий замах (see TELEGRAPH), по телу
+// (шипы, щёки, пасть — render/foes.js) видно, что сейчас готовится.
 const BOSS_ATTACKS = ['barrage', 'mega', 'beam', 'summon'];
 const BOSS_TELEGRAPH = { barrage: 0.6, mega: 1.1, summon: 0.5 };
-const BOSS_ATTACK_COLOR = { barrage: COLORS.blast, mega: COLORS.bossGlow, beam: COLORS.fire, summon: COLORS.portal,
-                            ram: COLORS.bossRam };
 
 function pickBossAttack(e) {
   const options = BOSS_ATTACKS.filter((a) => a !== e.lastAttack);
@@ -941,9 +939,6 @@ const boss = {
   },
   draw(e, g) {
     const { ctx } = g;
-    const glowing = e.state === 'telegraph' || e.state === 'beamAim' || e.state === 'beamFire'
-      || e.state === 'ramAim' || e.state === 'ram';
-    const angry = e.state === 'ramAim' || e.state === 'ram';
     // таран: прицел — коридор шириной в тело на всю длину броска, к концу прицела ярче; зафиксирован — сплошной
     if (e.state === 'ramAim') {
       const fa = e.facing, k = 1 - e.timer / e.cfg.ramAim, locked = e.timer <= e.cfg.ramLock;
@@ -984,8 +979,11 @@ const boss = {
       }
       ctx.globalAlpha = 1;
     }
-    // тело — тёмная раса (render/foes.js): при замахе — цвет атаки, перед тараном — злобный взгляд
-    g.foe.demon(e, glowing ? BOSS_ATTACK_COLOR[e.attack] : COLORS.boss, angry, glowing);
+    // тело — Пасть (render/foes.js); k — доля замаха текущей атаки, по ней тело показывает, что готовится
+    const k = e.state === 'telegraph' ? 1 - e.timer / BOSS_TELEGRAPH[e.attack]
+      : e.state === 'beamAim' ? 1 - e.timer / e.cfg.beamAimTime
+      : e.state === 'ramAim' ? 1 - e.timer / e.cfg.ramAim : 0;
+    g.foe.maw(e, Math.max(0, Math.min(1, k)));
     const f = e.facing || -Math.PI / 2;
     // прицел луча: пока целится, видно линию, куда он выстрелит
     if (e.state === 'beamAim') {

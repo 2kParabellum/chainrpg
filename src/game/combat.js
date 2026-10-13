@@ -106,7 +106,7 @@ function spawnProjectile(from, tx, ty, speed, dmg, team, radius, extra) {
 function spawnMortar(from, tx, ty, stats) {
   const s = stats || from.cfg;
   state.projectiles.push({
-    kind: 'mortar', team: 'enemy', r: 5,
+    kind: 'mortar', team: 'enemy', r: 5, owner: from,
     sx: from.x, sy: from.y, x: from.x, y: from.y,
     tx, ty, t: 0, flight: s.flightTime,
     dmg: s.dmg, edgeDmg: s.edgeDmg, blast: s.blastRadius,
@@ -118,7 +118,7 @@ function spawnMortar(from, tx, ty, stats) {
 function spawnBigMortar(from, tx, ty, stats) {
   const s = stats || from.cfg;
   state.projectiles.push({
-    kind: 'bigMortar', team: 'enemy', r: 9, color: COLORS.bossGlow,
+    kind: 'bigMortar', team: 'enemy', r: 9, color: COLORS.bossGlow, owner: from,
     sx: from.x, sy: from.y, x: from.x, y: from.y,
     tx, ty, t: 0, flight: s.flightTime,
     dmg: s.dmg, edgeDmg: s.edgeDmg, blast: s.blastRadius, knockback: s.knockback,

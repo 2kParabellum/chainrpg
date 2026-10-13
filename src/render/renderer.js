@@ -123,6 +123,7 @@ function drawMortar(p) {
 
   if (!onScreen(p)) return;
   const height = Math.sin(k * Math.PI) * 55;
+  if (p.owner && p.owner.type === 'boss') { drawBossShot(p, k, height); return; }
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.beginPath();
   ctx.ellipse(p.x, p.y, p.r * 1.2, p.r * 0.6, 0, 0, Math.PI * 2);
@@ -136,25 +137,25 @@ function drawMortar(p) {
   ctx.beginPath(); ctx.arc(p.x - r * 0.25, p.y - height - r * 0.25, r * 0.45, 0, Math.PI * 2); ctx.fill();
 }
 
-// стенка огня: толстая тускнеющая полоса вдоль отрезка, горит, пока не истечёт срок
-function drawFirewall(f) {
-  const mx = (f.x1 + f.x2) / 2, my = (f.y1 + f.y2) / 2;
-  if (!onScreen({ x: mx, y: my, r: 0 }, f.r + Math.hypot(f.x2 - f.x1, f.y2 - f.y1) / 2)) return;
-  const fade = clamp(f.life / f.maxLife, 0.15, 1);
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = COLORS.fire;
-  ctx.globalAlpha = 0.22 * fade;
-  ctx.lineWidth = f.r * 2;
-  ctx.beginPath();
-  ctx.moveTo(f.x1, f.y1); ctx.lineTo(f.x2, f.y2);
-  ctx.stroke();
-  ctx.globalAlpha = 0.8 * fade;
-  ctx.lineWidth = f.r * 0.7;
-  ctx.beginPath();
-  ctx.moveTo(f.x1, f.y1); ctx.lineTo(f.x2, f.y2);
-  ctx.stroke();
-  ctx.lineCap = 'butt';
-  ctx.globalAlpha = 1;
+// снаряды Демона: обстрел — шип со спины, летит остриём по ходу; большой — огненный ком из пасти
+function drawBossShot(p, k, height) {
+  ctx.fillStyle = 'rgba(20,10,5,0.35)';
+  ctx.beginPath(); ctx.ellipse(p.x, p.y + 4, p.r * 1.4, p.r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+  const y = p.y - height;
+  if (p.kind === 'mortar') {
+    // направление по дуге: сдвиг по земле плюс производная высоты
+    const dx = (p.tx - p.sx) / p.flight, dy = (p.ty - p.sy) / p.flight - Math.cos(k * Math.PI) * Math.PI * 55 / p.flight;
+    G.foes.mawSpikeShot(p.x, y, Math.atan2(dy, dx), 9);
+    return;
+  }
+  const s = p.r + 7;
+  const g = ctx.createRadialGradient(p.x, y, 0, p.x, y, s * 2.4);
+  g.addColorStop(0, 'rgba(239,172,40,0.55)'); g.addColorStop(1, 'rgba(239,172,40,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, y, s * 2.4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#9b1a0a'; ctx.strokeStyle = COLORS.floorLine; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(p.x, y, s, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#efac28'; ctx.beginPath(); ctx.arc(p.x, y, s * 0.55, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#efd8a1'; ctx.beginPath(); ctx.arc(p.x - s * 0.15, y - s * 0.15, s * 0.25, 0, Math.PI * 2); ctx.fill();
 }
 
 // двери: закрытая — сплошная плашка (как колонна), открытая — только тонкий контур на полу,
@@ -426,8 +427,9 @@ function drawClouds() {
   for (const c of state.clouds) drawCloud(c);
 }
 
+// стенки огня и их тлеющие следы — render/fireart.js
 function drawFirewalls() {
-  for (const f of state.firewalls) drawFirewall(f);
+  G.fireArt.draw(state.firewalls);
 }
 
 // песочные часы над подиумом: он скоро исчезнет

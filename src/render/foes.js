@@ -552,52 +552,172 @@ function drawSpecial(e) {
   if (e.type !== 'mine' && e.hp < e.maxHp) hpBar(e.x, e.y - e.r * (e.type === 'portal' ? 2.4 : 1.3) - 8, Math.min(e.r, 40), e.hp / e.maxHp);
 }
 
-// тело Демона: громадный тёмный блоб с рогами, светящимися глазами, зубастой пастью и когтистыми лапами.
-// color — цвет тела (при замахе — цвет атаки), angry — злобный взгляд перед тараном
-function demon(e, color, angry, glowing) {
-  const a = track(e), r = e.r, t = state.time + a.seed, face = a.face, f = e.facing || -Math.PI / 2, fl = hurtFlash(a);
-  const w = Math.sin(t * 2.5);
-  const rx = r * (1 + 0.03 * w), ry = r * 0.92 * (1 - 0.03 * w);
-  ctx.fillStyle = 'rgba(20,10,5,0.5)'; ell(e.x, e.y + r * 0.85, r * 1.1, r * 0.33); ctx.fill();
-  ctx.save(); ctx.translate(e.x, e.y);
-  ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  // рога
-  ctx.fillStyle = C.cream;
-  for (const s of [-1, 1]) {
-    ctx.beginPath(); ctx.moveTo(s * r * 0.35, -r * 0.7); ctx.quadraticCurveTo(s * r * 1.1, -r * 0.9, s * r * 0.95, -r * 1.55);
-    ctx.quadraticCurveTo(s * r * 0.75, -r * 1.05, s * r * 0.1, -r * 0.85); ctx.closePath(); ctx.fill(); ctx.stroke();
+// Демон — Пасть: тёмно-красная голова парит над полом (под ней тёмный дым), почти вся — пасть с клыками,
+// над пастью россыпь глаз, на спине гребень шипов. Глаза моргают каждый в своём ритме; урон выбивает их
+// по одному (тёмная глазница с трещинками и потёком). Замах виден по телу (k — доля замаха 0..1):
+//  обстрел — шипы топорщатся, дрожат и раскаляются, при выстреле улетают (снаряды-шипы рисует сцена) и отрастают;
+//  большой снаряд — надувается, щёки светятся, потом разевает пасть; луч — пасть открывается и светится,
+//  пока растёт огонь — изо рта бьёт струя; подкрепление — пасть открывается; таран — глаза красные и щурятся,
+//  пасть разинута, в конце броска захлопывается.
+const MAW_EYES = [[-0.6, -0.42, 0.1], [-0.3, -0.6, 0.13], [0.05, -0.66, 0.16], [0.4, -0.55, 0.12], [0.66, -0.34, 0.08], [-0.78, -0.18, 0.07], [0.22, -0.32, 0.07]];
+const MAW_KNOCK = [4, 1, 6, 3, 0, 5];                       // порядок, в котором урон выбивает глаза
+const MAW_SPIKES = [-2.75, -2.45, -2.15, -1.85, -1.55, -1.25, -0.95, -0.65].map((ang, i) => [ang, 0.42 + 0.16 * Math.sin(i / 7 * Math.PI)]);
+const MAW_SHOT = [3, 4, 2, 5, 1, 6, 0, 7];                  // какие шипы улетают первыми
+const p01 = (x, y) => { const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453; return s - Math.floor(s); };
+function mawBlink(t, i) {
+  const per = 2.6 + p01(i, 7) * 2.4, ph = (t + p01(i, 8) * per) % per;
+  return ph < 0.16 ? Math.abs(Math.cos(ph / 0.16 * Math.PI)) : 1;
+}
+function mawSocket(x, y, rr) {
+  ctx.fillStyle = C.dark; ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ell(x, y, rr * 1.25, rr * 1.1); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = 'rgba(8,5,2,0.8)'; ell(x + rr * 0.15, y + rr * 0.15, rr * 0.8, rr * 0.7); ctx.fill();
+  ctx.lineWidth = 1.5; ctx.beginPath();
+  ctx.moveTo(x - rr * 1.2, y - rr * 0.5); ctx.lineTo(x - rr * 1.8, y - rr * 0.9);
+  ctx.moveTo(x + rr * 1.1, y - rr * 0.7); ctx.lineTo(x + rr * 1.6, y - rr * 1.3); ctx.lineTo(x + rr * 1.9, y - rr * 1.2); ctx.stroke();
+  ctx.fillStyle = '#9b1a0a'; ctx.beginPath(); ctx.moveTo(x - rr * 0.35, y + rr * 0.9); ctx.quadraticCurveTo(x - rr * 0.4, y + rr * 2.2, x - rr * 0.1, y + rr * 2.4);
+  ctx.quadraticCurveTo(x + rr * 0.2, y + rr * 2.2, x + rr * 0.15, y + rr * 0.9); ctx.closePath(); ctx.fill();
+}
+// шип: основание в (0, 0), остриё вверх на len; glow — раскалённый кончик
+function mawSpike(len, w, glow) {
+  ctx.fillStyle = '#300f0a'; ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(-w, 0); ctx.quadraticCurveTo(-w * 0.4, -len * 0.5, 0, -len); ctx.quadraticCurveTo(w * 0.5, -len * 0.5, w, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#550f0a'; ctx.beginPath(); ctx.moveTo(w * 0.2, -len * 0.1); ctx.quadraticCurveTo(w * 0.45, -len * 0.5, 0, -len * 0.95);
+  ctx.quadraticCurveTo(w * 0.15, -len * 0.5, w * 0.6, -len * 0.05); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = glow > 0.1 ? (glow > 0.6 ? C.gold : C.orange) : C.cream;
+  ctx.beginPath(); ctx.moveTo(-w * 0.32, -len * 0.68); ctx.lineTo(0, -len); ctx.lineTo(w * 0.32, -len * 0.68); ctx.closePath(); ctx.fill();
+  if (glow > 0.1) {
+    const g = ctx.createRadialGradient(0, -len, 0, 0, -len, w * 3);
+    g.addColorStop(0, hexA(C.red, 0.5 * glow)); g.addColorStop(1, hexA(C.red, 0));
+    ctx.fillStyle = g; ell(0, -len, w * 3, w * 3); ctx.fill();
   }
-  // лапы с когтями по бокам
-  for (const s of [-1, 1]) {
-    const px = s * r * 1.02, py = r * 0.25 + Math.sin(t * 3 + s) * r * 0.05;
-    ctx.fillStyle = '#300f0a'; ell(px, py, r * 0.26, r * 0.22); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = C.cream;
-    for (let k = -1; k <= 1; k++) { ctx.beginPath(); ctx.moveTo(px + s * r * 0.15, py + k * r * 0.1 - r * 0.04); ctx.lineTo(px + s * r * 0.36, py + k * r * 0.12); ctx.lineTo(px + s * r * 0.15, py + k * r * 0.1 + r * 0.04); ctx.closePath(); ctx.fill(); }
+}
+function mawFang(x, y, w, h, dir) { ctx.beginPath(); ctx.moveTo(x - w / 2, y); ctx.lineTo(x, y + h * dir); ctx.lineTo(x + w / 2, y); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+// e — Демон, k — доля замаха текущей атаки (0..1)
+function maw(e, k) {
+  const a = track(e), r = e.r, now = state.time, t = now + a.seed, fl = hurtFlash(a);
+  // переходы между состояниями: когда что выстрелило (свой кэш, состояние игры только читается)
+  if (a.mState !== e.state) {
+    if (a.mState === 'telegraph') {
+      if (a.mAttack === 'barrage') { a.shotAt = now; a.shotN = state.projectiles.filter((p) => p.kind === 'mortar' && p.owner === e && p.t < 0.15).length; }
+      if (a.mAttack === 'mega') a.megaAt = now;
+      if (a.mAttack === 'summon') a.summonAt = now;
+    }
+    if (a.mState === 'beamFire') a.beamEndAt = now;
+    if (a.mState === 'ram') a.snapAt = now;
+    a.mState = e.state;
   }
-  edgePath(rx, ry, t, 'wobble', a.seed); ctx.fillStyle = '#300f0a'; ctx.fill();
-  ctx.save(); edgePath(rx, ry, t, 'wobble', a.seed); ctx.clip();
-  ctx.fillStyle = color; ell(-rx * 0.05, -ry * 0.12, rx * 0.92, ry * 0.85); ctx.fill();
-  ctx.strokeStyle = hexA(glowing ? C.gold : C.orange, glowing ? 0.6 : 0.35); ctx.lineWidth = r * 0.22; ell(0, -r * 0.18, rx * 1.02, ry); ctx.stroke();
-  flashOver(rx, ry, fl);
+  a.mAttack = e.attack;
+  const st = e.state, att = e.attack, since = (at) => (at === undefined ? 99 : now - at);
+  const angry = st === 'ramAim' || st === 'ram';
+  // насколько открыта пасть
+  let open = 0.14 + 0.04 * Math.sin(t * 1.5), swell = 1;
+  if (st === 'telegraph' && att === 'barrage') open = 0.14 + 0.12 * k;
+  if (st === 'telegraph' && att === 'mega') { open = 0.04; swell = 1 + 0.16 * k; }
+  if (st === 'telegraph' && att === 'summon') open = 0.14 + 0.6 * k;
+  if (st === 'beamAim') open = 0.15 + 0.45 * k;
+  if (st === 'beamFire') open = 0.62;
+  if (st === 'ramAim') open = 0.25 + 0.55 * k;
+  if (st === 'ram') open = 0.85;
+  if (st === 'idle') {
+    const m = since(a.megaAt), su = since(a.summonAt), be = since(a.beamEndAt), sn = since(a.snapAt);
+    if (m < 1) open = Math.max(open, m < 0.35 ? 0.85 : 0.85 - (m - 0.35) * 1.2);
+    if (su < 1.4) open = Math.max(open, su < 0.6 ? 0.75 : 0.75 - (su - 0.6));
+    if (be < 0.6) open = Math.max(open, 0.62 - be);
+    if (sn < 0.35) open = 0.04;
+  }
+  const bob = Math.sin(t * 2) * 5;
+  // тень на полу и тёмный дым снизу
+  ctx.fillStyle = 'rgba(20,10,5,0.45)'; ell(e.x, e.y + r * 1.0, r * 0.9 - bob, r * 0.24); ctx.fill();
+  for (let i = 0; i < 4; i++) {
+    const q = (t * 0.7 + i / 4) % 1;
+    ctx.globalAlpha = 0.5 * (1 - q); ctx.fillStyle = '#300f0a';
+    ell(e.x + (i - 1.5) * r * 0.3, e.y + r * (0.65 + q * 0.3) + bob, r * 0.2 * (1 - q * 0.5), r * 0.12); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.save(); ctx.translate(e.x, e.y + bob); ctx.scale(swell, swell);
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+  const cy = open * r * 0.28, ry = r * (0.86 + open * 0.32);
+  // шипы на спине
+  const fired = new Set(MAW_SHOT.slice(0, Math.min(8, a.shotN || 0))), ss = since(a.shotAt);
+  MAW_SPIKES.forEach(([ang, L], i) => {
+    let len = 1, glow = 0, jit = 0;
+    if (st === 'telegraph' && att === 'barrage') { len = 1 + 0.3 * k; glow = k; jit = Math.sin(t * 60 + i * 2) * 0.05 * k; }
+    else if (fired.has(i) && ss < 2) len = ss < 1.3 ? 0 : (ss - 1.3) / 0.7;
+    const bx = Math.cos(ang) * r * 1.02, by = cy + Math.sin(ang) * ry * 0.98;
+    if (len <= 0.02) { ctx.fillStyle = C.dark; ell(bx, by, r * 0.07, r * 0.05, ang); ctx.fill(); return; }
+    ctx.save(); ctx.translate(bx, by); ctx.rotate(ang + Math.PI / 2 + jit); mawSpike(r * L * len, r * 0.11, glow); ctx.restore();
+  });
+  // голова: при открытой пасти вытягивается вниз
+  ctx.save(); ctx.translate(0, cy);
+  edgePath(r * 1.12, ry, t, 'wobble', a.seed); ctx.fillStyle = '#300f0a'; ctx.fill();
+  ctx.save(); edgePath(r * 1.12, ry, t, 'wobble', a.seed); ctx.clip();
+  ctx.fillStyle = '#550f0a'; ell(-r * 0.09, -ry * 0.12, r * 1.0, ry * 0.84); ctx.fill();
+  ctx.fillStyle = 'rgba(239,216,161,0.12)'; ell(-r * 0.4, -ry * 0.45, r * 0.4, ry * 0.2, -0.4); ctx.fill();
+  if (swell > 1) { ctx.fillStyle = hexA(C.orange, 0.3 * k); ctx.fillRect(-r * 1.5, -ry * 1.5, r * 3, ry * 3); }
+  flashOver(r * 1.12, ry, fl);
   ctx.restore();
-  edgePath(rx, ry, t, 'wobble', a.seed); ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.stroke();
-  // глаза: перед тараном больше и с бровями
-  const fx = face * r * 0.15, er = r * (angry ? 0.17 : 0.13), ec = glowing ? C.cream : C.orange;
-  for (const s of [-1, 1]) {
-    glowEye(fx + s * r * 0.32, -r * 0.22, er, ec, 0, 0.8);
-    ctx.fillStyle = C.ink; ell(fx + s * r * 0.32 + Math.cos(f) * er * 0.35, -r * 0.22 + Math.sin(f) * er * 0.3, er * 0.25, er * 0.7); ctx.fill();
+  edgePath(r * 1.12, ry, t, 'wobble', a.seed); ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.stroke();
+  ctx.restore();
+  // щёки светятся перед большим снарядом
+  if (swell > 1) for (const s of [-1, 1]) { ctx.fillStyle = hexA(C.orange, 0.35 * k); ell(s * r * 0.7, r * 0.15, r * 0.25 * k + 1, r * 0.2 * k + 1); ctx.fill(); }
+  // пасть
+  const ty = r * 0.05, by = ty + open * r * 1.25, mw = r * 0.88;
+  const mouth = () => {
+    ctx.beginPath(); ctx.moveTo(-mw, ty - r * 0.06); ctx.quadraticCurveTo(0, ty + r * 0.2, mw, ty - r * 0.06);
+    ctx.quadraticCurveTo(mw * 0.6, by + r * 0.1, 0, by + r * 0.12); ctx.quadraticCurveTo(-mw * 0.6, by + r * 0.1, -mw, ty - r * 0.06); ctx.closePath();
+  };
+  ctx.fillStyle = C.dark; mouth(); ctx.fill();
+  ctx.save(); mouth(); ctx.clip();
+  const hot = st === 'beamAim' ? k : st === 'beamFire' ? 1 : st === 'idle' && since(a.megaAt) < 0.5 ? 1 : 0;
+  if (hot > 0) {
+    const g = ctx.createRadialGradient(0, (ty + by) / 2, 0, 0, (ty + by) / 2, r * 0.8);
+    g.addColorStop(0, hexA(C.gold, 0.85 * hot)); g.addColorStop(1, hexA(C.red, 0));
+    ctx.fillStyle = g; ctx.fillRect(-mw, ty - r * 0.2, mw * 2, by - ty + r * 0.5);
   }
-  if (angry) {
-    ctx.strokeStyle = C.ink; ctx.lineWidth = 5;
-    for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(fx + s * r * 0.55, -r * 0.5); ctx.lineTo(fx + s * r * 0.12, -r * 0.36); ctx.stroke(); }
+  ctx.fillStyle = '#9b1a0a'; ell(r * 0.1, by + r * 0.05, r * 0.42, r * 0.2 + open * r * 0.1); ctx.fill(); ctx.lineWidth = 2; ctx.stroke();
+  ctx.restore();
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; mouth(); ctx.stroke();
+  ctx.fillStyle = C.cream; ctx.lineWidth = 1.5;
+  for (let i = 0; i < 9; i++) {
+    const q = (i + 0.5) / 9, big = i === 2 || i === 6;
+    mawFang(-mw + q * mw * 2, ty - r * 0.06 + Math.sin(q * Math.PI) * r * 0.13, r * (big ? 0.2 : 0.16), r * (big ? 0.32 : 0.18), 1);
   }
-  // пасть с зубами
-  const mw = r * 0.5, my = r * 0.22, open = angry ? r * 0.28 : r * 0.18;
-  ctx.fillStyle = C.dark; ctx.beginPath(); ctx.moveTo(fx - mw, my); ctx.quadraticCurveTo(fx, my + open * 2, fx + mw, my); ctx.closePath(); ctx.fill();
-  ctx.lineWidth = 2.5; ctx.stroke();
-  ctx.fillStyle = C.cream;
-  for (let i = 0; i < 6; i++) { const tx = fx - mw + (i + 0.5) * (mw * 2 / 6); ctx.beginPath(); ctx.moveTo(tx - mw / 7, my); ctx.lineTo(tx, my + open * 0.6); ctx.lineTo(tx + mw / 7, my); ctx.closePath(); ctx.fill(); }
-  ctx.restore(); ctx.lineCap = 'butt';
+  for (let i = 0; i < 8; i++) {
+    const q = (i + 0.5) / 8, yy = by + r * 0.12 - Math.sin(q * Math.PI) * r * 0.02 - (1 - Math.sin(q * Math.PI)) * r * 0.08;
+    mawFang(-mw * 0.85 + q * mw * 1.7, yy, r * 0.15, r * (i === 1 || i === 6 ? 0.24 : 0.14), -1);
+  }
+  // глаза: выбитые уроном и целые (моргают, перед тараном красные и щурятся)
+  const knocked = new Set(MAW_KNOCK.slice(0, Math.round((1 - Math.max(0, e.hp) / e.maxHp) * 7)));
+  MAW_EYES.forEach(([ex, ey, er], i) => {
+    const x = ex * r, y = ey * r, rr = er * r;
+    if (knocked.has(i)) { mawSocket(x, y, rr); return; }
+    const op = angry ? 0.6 : mawBlink(t, i);
+    if (op < 0.15) {
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(x - rr * 1.2, y); ctx.quadraticCurveTo(x, y + rr * 0.5, x + rr * 1.2, y); ctx.stroke();
+      return;
+    }
+    glowEye(x, y, rr, angry ? C.red : C.gold, 0, op);
+    if (op < 0.95) {
+      ctx.save(); ell(x, y, rr * 1.35, rr * 1.35); ctx.clip();
+      ctx.fillStyle = '#300f0a'; ctx.fillRect(x - rr * 1.4, y - rr * 1.4, rr * 2.8, rr * 1.4 * (1 - op));
+      ctx.restore();
+    }
+  });
+  ctx.restore();
+  // струя огня изо рта, пока растёт луч
+  if (st === 'beamFire' && e.beam) {
+    const mx = e.x, my = e.y + bob + (ty + by) / 2 * swell, d = e.beam.dir, L = Math.min(e.beam.len, r * 1.6);
+    const ex2 = mx + Math.cos(d) * L, ey2 = my + Math.sin(d) * L * 0.6 + (e.y - my) * 0.6;
+    ctx.strokeStyle = hexA(C.orange, 0.8); ctx.lineCap = 'round'; ctx.lineWidth = r * 0.3;
+    ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(ex2, ey2); ctx.stroke();
+    ctx.strokeStyle = hexA(C.gold, 0.9); ctx.lineWidth = r * 0.14; ctx.stroke(); ctx.lineCap = 'butt';
+  }
+}
+
+// снаряд обстрела Демона — шип: остриём по ходу полёта
+function mawSpikeShot(x, y, ang, s) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang + Math.PI / 2); mawSpike(s * 3.2, s * 0.9, 0.7); ctx.restore();
 }
 
 // тело Спрута: шевелящиеся щупальца с присосками, тёмно-бирюзовый колышущийся блоб, светящиеся глаза над пастью,
@@ -656,5 +776,5 @@ function sweep() {
   lastDrawn = now;
 }
 
-G.foes = { has, draw, drawsHook, sweep, demon, kraken, swallowed, shieldRing };
+G.foes = { has, draw, drawsHook, sweep, maw, mawSpikeShot, kraken, swallowed, shieldRing };
 })(window.Game = window.Game || {});
