@@ -3,7 +3,8 @@
 // Клавиши определяются по физическому положению (ev.code), поэтому раскладка не важна.
 //
 // handlers:
-//   onCommand(name)   'restart' | 'recruit' | 'drop' | 'pause' | 'pick1' | 'pick2' | 'pick3' (выбор карточки улучшения)
+//   onCommand(name)   'restart' | 'recruit' | 'drop' | 'pack' (рюкзак Героя) | 'pause' | 'pick1' | 'pick2' | 'pick3'
+//                     (выбор карточки улучшения)
 // moveAxes() -> { throttle, turn, aim } — опрос зажатых клавиш движения и джойстика:
 //   throttle  +1 вперёд (W), -1 «назад» (S — Герой назад не ездит, для него это просто без газа), 0 — ни одной или обе
 //   turn      -1 налево (A), +1 направо (D), 0 — ни одной или обе; от джойстика — дробное (плавный поворот)
@@ -18,6 +19,7 @@ const KEY_COMMANDS = {
   KeyR: { name: 'restart', repeatable: true },
   Space: { name: 'recruit', repeatable: true, preventDefault: true },
   KeyX: { name: 'drop' },
+  KeyC: { name: 'pack' },
   Escape: { name: 'pause' }, KeyP: { name: 'pause' },
   Digit1: { name: 'pick1' }, Digit2: { name: 'pick2' }, Digit3: { name: 'pick3' },
   Numpad1: { name: 'pick1' }, Numpad2: { name: 'pick2' }, Numpad3: { name: 'pick3' },
@@ -27,6 +29,7 @@ const KEY_COMMANDS = {
 const LABELS = {
   recruit: { keys: 'SPACE', touch: 'GRAB' },
   drop: { keys: 'X', touch: 'DROP' },
+  pack: { keys: 'C', touch: 'BAG' },
   restart: { keys: 'R', touch: '↻' },
 };
 

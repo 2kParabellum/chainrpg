@@ -138,6 +138,8 @@
           color: rgba(255,255,255,0.75); font: bold 12px "Trebuchet MS", "Segoe UI", system-ui, sans-serif; letter-spacing: 1px; touch-action: none; }
   #tGrab { left: 100px; bottom: 18px; width: 86px; height: 86px; }
   #tDrop { left: 16px; bottom: 70px; width: 72px; height: 72px; }
+  #tPack { display: none; left: 116px; bottom: 116px; width: 60px; height: 60px; }
+  #tPack.shown { display: block; }
   .tBtn.glow { border-color: #fff4dc; color: #fff; background: rgba(239,216,161,0.18); box-shadow: 0 0 14px rgba(239,216,161,0.35); }
   #tDrop.glow { border-color: #3c9f9c; color: #efd8a1; background: rgba(60,159,156,0.18); box-shadow: 0 0 14px rgba(60,159,156,0.4); }
   .tBtn.pressed { background: rgba(255,255,255,0.3); }
@@ -188,6 +190,7 @@
       <div class="tPad">
         <button id="tGrab" class="tBtn">GRAB</button>
         <button id="tDrop" class="tBtn">DROP</button>
+        <button id="tPack" class="tBtn">BAG</button>
       </div>
     </div>
     <div id="corner">
@@ -239,6 +242,7 @@
           <tr><td>A / D</td><td>turn left / right</td></tr>
           <tr><td>SPACE</td><td>recruit a mate or pick up a knocked-out one (pads are picked up just by driving over them)</td></tr>
           <tr><td>X</td><td>drop the last mate in the chain (the Hero can’t be dropped); if the Hero is on a button, the mate stays on it and holds it down</td></tr>
+          <tr><td>C</td><td>backpack (with its upgrade): open it — the next boost pad goes inside; press again to use the boost</td></tr>
           <tr><td>R</td><td>restart the level</td></tr>
           <tr><td>P / ESC</td><td>pause</td></tr>
         </table>
@@ -246,6 +250,7 @@
           <tr><td>JOYSTICK</td><td>touch your half of the screen and drag — the joystick appears where you touch</td></tr>
           <tr><td>GRAB</td><td>recruit a mate or pick up a knocked-out one (pads are picked up by driving over them)</td></tr>
           <tr><td>DROP</td><td>drop the last mate; if the Hero is on a button, the mate stays to hold it down</td></tr>
+          <tr><td>BAG</td><td>backpack (with its upgrade): open it — the next boost pad goes inside; tap again to use the boost</td></tr>
           <tr><td>❚❚ &nbsp; ↻</td><td>pause; restart (tap twice)</td></tr>
         </table>
         <div class="opts touch-only">

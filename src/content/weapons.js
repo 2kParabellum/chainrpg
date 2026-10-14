@@ -50,12 +50,15 @@ function shootUpdate(fire) {
 
 // стрела; усиление «сила» пробивает выстрелом щит (босса, турели) насквозь (см. game/combat.js).
 // Улучшения стрелка: «тройной выстрел» — каждый every-й выстрел ещё два снаряда веером (± spread от основного);
-// «огненные стрелы» — попадание поджигает цель: за time секунд она теряет share урона стрелы
+// «огненные стрелы» — попадание поджигает цель: за time секунд она теряет share урона стрелы;
+// «Piercing Shots» — стрела с шансом passChance летит дальше сквозь врага (см. game/combat.js)
 function arrow(u, w, foe, game) {
   const dmg = w.dmg * (u.dmgMul || 1);
   const fire = game.upgrade('fireArrows'), triple = game.upgrade('tripleShot');
+  const pierce = game.upgrade('piercing');
   const extra = { pierceShield: !!(u.buffs && u.buffs.power > 0),
                   burn: fire ? { dps: (dmg * fire.share) / fire.time, time: fire.time } : null };
+  if (pierce) extra.passChance = pierce.chance;
   w.shots = (w.shots || 0) + 1;
   const spread = triple && w.shots % triple.every === 0 ? [0, -triple.spread, triple.spread] : [0];
   const base = Math.atan2(foe.y - u.y, foe.x - u.x);
@@ -71,33 +74,49 @@ const fist = {
 };
 
 // копьё: редкий сильный удар по всем обнаруженным врагам в зоне удара; без целей не тратит перезарядку.
-// На ходу (в цепочке) — две небольшие зоны по бокам, поперёк движения, плюс вплотную со всех сторон (closeReach),
-// чтобы подошедший спереди или сзади тоже получил. Стоя на месте и выбитым — круг вокруг себя (aroundReach)
+// Бьёт в одну сторону — туда, где ближайший враг, до которого достаёт (улучшение «Double Edge» — в обе стороны).
+// На ходу (в цепочке) — небольшая зона сбоку, поперёк движения, плюс вплотную (closeReach) с той же стороны, чтобы
+// подошедший спереди или сзади тоже получил. Стоя на месте и выбитым — полукруг вокруг себя (aroundReach) в сторону
+// врага (с «Double Edge» — круг). «Berserk» — урон растёт с потерей HP копейщика
 const spear = {
-  stats: { dmg: 24, cooldown: 1.6, zoneDist: 30, zoneRadius: 24, closeReach: 14, aroundReach: 40, color: COLORS.spear },
+  stats: { dmg: 24, cooldown: 1.33, zoneDist: 30, zoneRadius: 24, closeReach: 14, aroundReach: 40, color: COLORS.spear },
   update(u, w, dt, game) {
     if (!ready(w, dt)) return;
+    const both = !!game.upgrade('doubleEdge');
     const gap = (e) => dist(u, e) - u.r - e.r;
     const moving = u.kind !== 'downed' && Math.hypot(u.vx, u.vy) > 5;
-    let zones = [], inZone;
-    if (moving) {
-      const dir = Math.atan2(u.vy, u.vx);
-      zones = [1, -1].map((side) => ({
-        x: u.x + Math.cos(dir + side * Math.PI / 2) * (u.r + w.zoneDist),
-        y: u.y + Math.sin(dir + side * Math.PI / 2) * (u.r + w.zoneDist),
-      }));
-      inZone = (e) => gap(e) <= w.closeReach || zones.some((z) => dist(z, e) < w.zoneRadius + e.r);
-    } else {
-      inZone = (e) => gap(e) <= w.aroundReach;
+    const dir = Math.atan2(u.vy, u.vx);
+    // на ходу: +1 / −1 — слева или справа от направления хода (знак векторного произведения)
+    const sideOf = (e) => (Math.cos(dir) * (e.y - u.y) - Math.sin(dir) * (e.x - u.x) >= 0 ? 1 : -1);
+    const zones = {};
+    for (const side of [1, -1]) {
+      zones[side] = { x: u.x + Math.cos(dir + side * Math.PI / 2) * (u.r + w.zoneDist),
+                      y: u.y + Math.sin(dir + side * Math.PI / 2) * (u.r + w.zoneDist) };
     }
-    const hit = game.state.enemies.filter((e) => game.meleeHittable(e) && inZone(e));
+    const inZone = moving
+      ? (e) => gap(e) <= w.closeReach || [1, -1].some((side) => dist(zones[side], e) < w.zoneRadius + e.r)
+      : (e) => gap(e) <= w.aroundReach;
+    let hit = game.state.enemies.filter((e) => game.meleeHittable(e) && inZone(e));
     if (!hit.length) return;
-    for (const e of hit) game.damageUnit(e, w.dmg * (u.dmgMul || 1));
+    // в одну сторону: туда, где ближайший из достижимых
+    const near = hit.reduce((a, b) => (gap(b) < gap(a) ? b : a));
+    const toNear = Math.atan2(near.y - u.y, near.x - u.x);
+    let sides = [1, -1];
+    if (!both && moving) {
+      const side = sideOf(near);
+      sides = [side];
+      hit = hit.filter((e) => sideOf(e) === side && (gap(e) <= w.closeReach || dist(zones[side], e) < w.zoneRadius + e.r));
+    } else if (!both) {
+      hit = hit.filter((e) => Math.cos(Math.atan2(e.y - u.y, e.x - u.x) - toNear) >= 0);
+    }
+    const bers = game.upgrade('berserk');
+    const rage = bers ? 1 + (bers.maxMul - 1) * Math.max(0, 1 - u.hp / u.maxHp) : 1;
+    for (const e of hit) game.damageUnit(e, w.dmg * (u.dmgMul || 1) * rage);
     w.cd = w.cooldown;
-    // заметный удар: на ходу — выпад копья из тела в каждую боковую зону, стоя — круговой взмах (см. render)
-    const fx = (x, y, r, from) => game.state.effects.push({ type: 'spearHit', x, y, r, from, life: 0.4, maxLife: 0.4, color: w.color });
-    if (moving) for (const z of zones) fx(z.x, z.y, w.zoneRadius, { x: u.x, y: u.y });
-    else fx(u.x, u.y, u.r + w.aroundReach, null);
+    // заметный удар: на ходу — выпад копья из тела в каждую зону удара, стоя — круговой взмах или полукруг (см. render)
+    const fx = (x, y, r, from, half) => game.state.effects.push({ type: 'spearHit', x, y, r, from, half, life: 0.4, maxLife: 0.4, color: w.color });
+    if (moving) for (const side of sides) fx(zones[side].x, zones[side].y, w.zoneRadius, { x: u.x, y: u.y });
+    else fx(u.x, u.y, u.r + w.aroundReach, null, both ? undefined : toNear);
   },
 };
 
@@ -110,13 +129,29 @@ const spear = {
 // (через 1 с — 120%, через 2 с — 140% …), но не дольше rampMax секунд (дальше — 180%, не растёт);
 // новая цель или разрыв молнии сбрасывают разгон.
 // Молний — w.beams ({ target, aim, held }): обычно одна; улучшение «двойное напряжение» — до двух на разных целях,
-// «электрическая дуга» — молния рвётся дальше (заметить цель — на прежней дальности)
+// «электрическая дуга» — молния рвётся дальше (заметить цель — на прежней дальности); «Sticky Electricity» — цель
+// погибла, и молния без прицеливания перескакивает на врага вплотную к ней (разгон начинается заново)
 const spark = {
   stats: { range: 230, fullRange: 110, farMul: 0.5, breakMul: 1.25, aimTime: 1.2, dps: 31.2, bossMul: 0.3,
            rampStep: 0.2, rampMax: 4, color: COLORS.spark },
   update(u, w, dt, game) {
     const two = game.upgrade('doubleSpark'), arc = game.upgrade('arc');
     const breakDist = w.range * w.breakMul * (arc ? arc.breakMul : 1);
+    const sticky = game.upgrade('sticky');
+    if (sticky) for (const b of w.beams || []) {
+      const dead = b.target;
+      if (b.aim > 0 || game.state.enemies.includes(dead)) continue;
+      const taken = w.beams.map((x) => x.target);
+      let next = null, best = sticky.reach;
+      for (const e of game.state.targetableEnemies) {
+        if (e.hp <= 0 || taken.includes(e) || !game.state.enemies.includes(e)) continue;
+        const g = dist(dead, e) - dead.r - e.r;
+        if (g <= best && dist(u, e) <= breakDist) { best = g; next = e; }
+      }
+      if (!next) continue;
+      b.target = next; b.held = 0;
+      game.state.effects.push({ type: 'beam', x1: dead.x, y1: dead.y, x2: next.x, y2: next.y, life: 0.2, color: w.color });
+    }
     w.beams = (w.beams || []).filter((b) => game.state.enemies.includes(b.target) && dist(u, b.target) <= breakDist);
     while (w.beams.length < (two ? two.targets : 1)) {
       const taken = w.beams.map((b) => b.target);
@@ -199,7 +234,8 @@ const bow = {
 
 // активное лечение: раз в перезарядку лечит того, у кого ниже всего доля HP.
 // Улучшения медика: «регенерация» — медик сам лечится на share своего лечения в секунду;
-// «адреналин» — цель с долей HP ниже below лечится в mul раз сильнее
+// «адреналин» — цель с долей HP ниже below лечится в mul раз сильнее;
+// «Lasting Cure» — вылеченный ещё time секунд долечивается на share лечения (не складывается — заменяет прежнее)
 const heal = {
   stats: { range: 220, cooldown: 2.0, heal: 9.6 },
   update(u, w, dt, game) {
@@ -217,6 +253,8 @@ const heal = {
     const adr = game.upgrade('adrenaline');
     const amount = w.heal * (adr && worst.hp / worst.maxHp < adr.below ? adr.mul : 1);
     worst.hp = Math.min(worst.maxHp, worst.hp + amount);
+    const cure = game.upgrade('lastingCure');
+    if (cure) worst.cure = { left: cure.time, rate: (amount * cure.share) / cure.time };
     w.cd = w.cooldown;
     u.facing = Math.atan2(worst.y - u.y, worst.x - u.x);
     game.state.effects.push({ type: 'beam', x1: u.x, y1: u.y, x2: worst.x, y2: worst.y, life: 0.25, color: COLORS.medic });

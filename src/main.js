@@ -12,13 +12,13 @@
 'use strict';
 
 const { state } = G;
-const { initInput, moveAxes, keyLabel } = G.input;
+const { initInput, moveAxes, keyLabel, withKeys } = G.input;
 const { resetGame, startRun } = G.session;
 const { shuffled } = G.math;
 const { drawCard, whoOf } = G.cards;
-const { tryRecruit, dropLastAlly, nearestPickup } = G.chain;
+const { tryRecruit, dropLastAlly, nearestPickup, usePack } = G.chain;
 const { buttonUnder } = G.world;
-const { leader } = G.session;
+const { leader, upgrade } = G.session;
 const touchUI = G.touch;
 const { update } = G.update;
 const { canvas } = G.shapes;
@@ -47,6 +47,7 @@ initInput(canvas, {
     if (name === 'restart') resetGame(state.level);
     else if (name === 'recruit') tryRecruit();
     else if (name === 'drop') dropLastAlly();
+    else if (name === 'pack') usePack();
   },
 });
 
@@ -113,9 +114,16 @@ let picked = null; // выбранное; без выбора дальше не 
 // следующая карточка или сам уровень. null — дальше идти некуда (игра пройдена)
 let afterPick = null;
 
-// три случайных улучшения из тех, что ещё не взяты в этом прохождении
+// улучшение можно предложить: ещё не взято, а 2-й ранг — только если у того же персонажа уже есть 1-й
+function offerable(key) {
+  const def = G.upgrades[key];
+  if (state.upgrades.includes(key)) return false;
+  return def.tier !== 2 || state.upgrades.some((k) => G.upgrades[k].who === def.who && G.upgrades[k].tier !== 2);
+}
+
+// три случайных улучшения из тех, что можно предложить
 function rollOffers() {
-  return shuffled(Object.keys(G.upgrades).filter((k) => !state.upgrades.includes(k))).slice(0, UPGRADE_OFFERS);
+  return shuffled(Object.keys(G.upgrades).filter(offerable)).slice(0, UPGRADE_OFFERS);
 }
 
 function renderCards() {
@@ -130,14 +138,14 @@ function renderCards() {
     const whoEl = document.createElement('span');
     whoEl.className = 'who';
     whoEl.style.color = who.color;
-    whoEl.textContent = who.label;
+    whoEl.textContent = who.label + (def.tier === 2 ? ' · TIER 2' : '');
     const canvasEl = document.createElement('canvas');
     drawCard(canvasEl, key);
     const title = document.createElement('h3');
     title.textContent = def.name;
     const desc = document.createElement('p');
     desc.className = 'desc';
-    desc.textContent = def.desc;
+    desc.textContent = withKeys(def.desc);
     card.append(num, whoEl, canvasEl, title, desc);
     card.addEventListener('click', () => pickCard(i));
     cardsEl.append(card);
@@ -299,6 +307,9 @@ function syncTouch() {
   const btn = buttonUnder(leader());
   touchUI.setGlow('recruit', !state.leaving && nearestPickup());
   touchUI.setGlow('drop', !state.leaving && btn && !btn.pressed && state.party.length > 1);
+  // кнопка рюкзака — только с улучшением «Backpack»; горит, пока рюкзак открыт или в нём лежит усиление
+  touchUI.setShown('pack', !!upgrade('backpack'));
+  touchUI.setGlow('pack', state.backpack.open || state.backpack.stored);
 }
 
 function draw() {

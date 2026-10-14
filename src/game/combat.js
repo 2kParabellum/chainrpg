@@ -21,16 +21,6 @@ function nearestTarget(from, list, range) {
   return best;
 }
 
-// улучшение копейщика против ближних атак врага (hit.melee, hit.by — кто бьёт): «шипастая броня» — копейщик
-// возвращает напавшему весь урон (считается от урона до прикрытия)
-function meleeDefense(u, dmg, hit) {
-  if (u.ability === 'spear' && hit.by && state.enemies.includes(hit.by) && upgrade('spikedArmor')) {
-    damageUnit(hit.by, dmg);
-    state.effects.push({ type: 'beam', x1: u.x, y1: u.y, x2: hit.by.x, y2: hit.by.y, life: 0.2, color: COLORS.spiky });
-  }
-  return dmg;
-}
-
 // улучшение «прикрытие»: оба соседа копейщика в цепочке (не он сам) получают меньше урона — от любых атак.
 // Вспышка — не чаще раза в 0.2 с, чтобы урон в секунду (облака, огонь) не мигал каждый кадр
 function coverDefense(u, dmg) {
@@ -50,7 +40,6 @@ function coverDefense(u, dmg) {
 function damageUnit(u, dmg, hit) {
   if (u.hp <= 0) return;
   if (state.leaving && u.kind === 'ally') return; // цепочка уже уходит в портал выхода
-  if (hit && hit.melee && (u.kind === 'ally' || u.kind === 'downed')) dmg = meleeDefense(u, dmg, hit);
   dmg = coverDefense(u, dmg);
   u.hp -= dmg;
   u.regenTimer = 0;
@@ -194,8 +183,9 @@ function updateProjectiles(dt) {
       }
     } else if (!dead) {
       const targets = p.team === 'ally' ? state.enemies : allies;
-      for (const t of targets) {
-        if (dist(p, t) >= p.r + t.r) continue;
+      for (const t of targets.slice()) {
+        // пробивающая стрела каждого задевает один раз
+        if (dist(p, t) >= p.r + t.r || (p.hit && p.hit.includes(t))) continue;
         // щит (босса, турели) гасит выстрелы, пока активен; усиление «сила» пробивает его насквозь
         if (t.shielded && !p.pierceShield) {
           state.effects.push({ type: 'ring', x: t.x, y: t.y, r: t.r + 6, life: 0.2, color: COLORS.shield });
@@ -208,6 +198,12 @@ function updateProjectiles(dt) {
         }
         // игрока гарпун только ранит, а вот союзника (в цепочке или лежачего) уносит к Скорпиону
         if (p.kind === 'hook' && (t.kind === 'ally' || t.kind === 'downed') && t.hp > 0) hookAlly(t, p.owner);
+        // «Piercing Shots»: с шансом passChance стрела летит дальше (на каждого врага — бросок заново);
+        // о щит и о босса гаснет
+        if (p.passChance && !t.shielded && !enemyTypes[t.type].boss && Math.random() < p.passChance) {
+          (p.hit = p.hit || []).push(t);
+          continue;
+        }
         dead = true;
         break;
       }

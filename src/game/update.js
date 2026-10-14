@@ -151,10 +151,21 @@ function applySpikyContact(a, dt) {
   }
 }
 
-// оружие союзника (в цепочке или выбитого): работает оружие текущей способности, шипастость бьёт касанием
+// долечивание после лечения медика с улучшением «Lasting Cure»: rate HP в секунду, пока не выйдет время
+function applyCure(a, dt) {
+  const c = a.cure;
+  if (!c || c.left <= 0) return;
+  const t = Math.min(dt, c.left);
+  c.left -= dt;
+  a.hp = Math.min(a.maxHp, a.hp + c.rate * t);
+}
+
+// оружие союзника (в цепочке или выбитого): работает оружие текущей способности, шипастость бьёт касанием;
+// заодно тикает долечивание
 function updateWeapons(a, dt) {
   for (const w of a.gear) weapons[w.type].update(a, w, dt * (a.rateMul || 1), game);
   if (a.buffs.spiky > 0) applySpikyContact(a, dt);
+  applyCure(a, dt);
 }
 
 // звено цепочки: Герой идёт сам, остальные бегут за ним; когда цепочка уходит в портал выхода — не дерутся,

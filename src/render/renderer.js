@@ -770,16 +770,20 @@ function drawSpit(p) {
 function drawSpearHit(fx) {
   const t = 1 - clamp(fx.life / fx.maxLife, 0, 1); // 0 — только ударил, 1 — эффект догорел
   const fade = 1 - t;
+  // взмах стоя в одну сторону (fx.half — угол середины) — полукруг, иначе круг
+  const half = fx.half !== undefined;
+  const a0 = half ? fx.half - Math.PI / 2 : 0, a1 = half ? fx.half + Math.PI / 2 : Math.PI * 2;
   ctx.fillStyle = fx.color;
   ctx.globalAlpha = 0.35 * fade;
   ctx.beginPath();
-  ctx.arc(fx.x, fx.y, fx.r * (0.8 + 0.3 * t), 0, Math.PI * 2);
+  if (half) ctx.moveTo(fx.x, fx.y);
+  ctx.arc(fx.x, fx.y, fx.r * (0.8 + 0.3 * t), a0, a1);
   ctx.fill();
   ctx.strokeStyle = fx.color;
   ctx.lineWidth = 4 * fade + 1;
   ctx.globalAlpha = 0.95 * fade;
   ctx.beginPath();
-  ctx.arc(fx.x, fx.y, fx.r * (0.9 + 0.5 * t), 0, Math.PI * 2);
+  ctx.arc(fx.x, fx.y, fx.r * (0.9 + 0.5 * t), a0, a1);
   ctx.stroke();
   ctx.lineCap = 'round';
   const thrust = (x0, y0, a, len) => {
@@ -808,7 +812,7 @@ function drawSpearHit(fx) {
     thrust(fx.from.x, fx.from.y, a, (dist(fx.from, fx) + fx.r * 0.6) * reach);
   } else {
     for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
+      const a = half ? a0 + ((i + 0.5) / 8) * Math.PI : (i / 8) * Math.PI * 2;
       thrust(fx.x + Math.cos(a) * fx.r * 0.35, fx.y + Math.sin(a) * fx.r * 0.35, a, fx.r * 0.55 * reach);
     }
   }

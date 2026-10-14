@@ -85,21 +85,14 @@ function endBuff(u, key) {
   recalcStats(u);
 }
 
-// сколько усилений разом держит звено: CONFIG.BUFFS.maxActive, с улучшением «аккумулирование» — больше
-function maxBuffs() {
-  const up = upgrade('accumulate');
-  return CONFIG.BUFFS.maxActive + (up ? up.extra : 0);
-}
-
-// временное усиление Герою; у него не больше maxBuffs() разом: лишнее снимается самое давнее
-// по времени взятия. Повторное взятие того же обновляет таймер и делает его самым свежим
+// временное усиление Герою; разом их сколько угодно. Повторное взятие того же обновляет таймер
+// и делает его самым свежим
 function giveBuff(u, key) {
   const def = G.buffs[key];
   const fresh = !(u.buffs[key] > 0);
   u.buffs[key] = def.duration;
   removeFrom(u.buffOrder, key);
   u.buffOrder.push(key);
-  while (u.buffOrder.length > maxBuffs()) endBuff(u, u.buffOrder[0]);
   recalcStats(u);
   syncChainBuffs();
   if (fresh) for (const a of state.party) state.effects.push({ type: 'ring', x: a.x, y: a.y, r: a.r + 8, life: 0.4, color: def.color });
@@ -169,9 +162,18 @@ function touchPads() {
       markPadUsed(pad);
       // Герой берёт с одного подиума один раз, хотя касается его много кадров подряд
       if (pad.takenBy.includes(u)) continue;
+      pad.takenBy.push(u);
+      // открытый пустой рюкзак забирает усиление себе: оно включится потом, по команде (см. usePack)
+      const bag = state.backpack;
+      if (bag.open && !bag.stored && upgrade('backpack')) {
+        bag.open = false;
+        bag.stored = pad.ability;
+        state.notice = { key: pad.ability, at: state.time, packed: true };
+        state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 10, life: 0.4, color: G.buffs[pad.ability].color });
+        continue;
+      }
       // о взятом усилении — надпись на экране
       state.notice = { key: pad.ability, at: state.time };
-      pad.takenBy.push(u);
       giveBuff(u, pad.ability);
       continue;
     }
@@ -184,6 +186,21 @@ function touchPads() {
     state.effects.push({ type: 'jobGet', unit: target, pad, key: pad.ability, lvl: target.abilityLevel,
                          max: (def.levels || [{}]).length, life: 2.5, total: 2.5 });
   }
+}
+
+// рюкзак Героя (улучшение «Backpack»): усиление внутри — включить его на полное время; пусто — открыть или закрыть
+function usePack() {
+  if (state.status !== 'play' || state.leaving || !upgrade('backpack')) return;
+  const bag = state.backpack, lead = leader();
+  if (bag.stored) {
+    state.notice = { key: bag.stored, at: state.time };
+    giveBuff(lead, bag.stored);
+    bag.stored = null;
+    bag.open = false;
+    return;
+  }
+  bag.open = !bag.open;
+  state.effects.push({ type: 'ring', x: lead.x, y: lead.y, r: lead.r + 8, life: 0.3, color: COLORS.hero });
 }
 
 // --- вербовка, бросок, выбивание ---
@@ -303,6 +320,6 @@ function updateDowned(d, dt) {
 
 G.chain = {
   pushTrail, trailPointAt, followChain, touchPads, updateBuffs, jobTarget,
-  nearestPickup, tryRecruit, canBeDisplaced, knockOutAlly, displaceAlly, cutChain, dropLastAlly, hookAlly, updateDowned,
+  usePack, nearestPickup, tryRecruit, canBeDisplaced, knockOutAlly, displaceAlly, cutChain, dropLastAlly, hookAlly, updateDowned,
 };
 })(window.Game = window.Game || {});

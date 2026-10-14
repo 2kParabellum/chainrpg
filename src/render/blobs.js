@@ -256,6 +256,13 @@ function drawAlly(u, mode, alpha = 1) {
     }
     ctx.globalAlpha = baseA;
   }
+  // долечивание после лечения медика («Lasting Cure»): один розовый плюсик поднимается над телом
+  if (u.cure && u.cure.left > 0 && u.hp < u.maxHp) {
+    const k = (t * 1.2 + a.seed) % 1;
+    ctx.globalAlpha = baseA * Math.sin(k * Math.PI);
+    plus(x + r * 0.5, by - k * r * 1.6, r * 0.2, G.abilities.medic.color);
+    ctx.globalAlpha = baseA;
+  }
 
   // над головой: полоска HP (только у раненых), выше — значки усилений Героя
   let top = by - ry - (hat === 'wizard' ? r * 1.3 : hat && hat !== 'band' ? r * 0.75 : 0) - (buffs.includes('will') ? r * 0.7 : 0) - 4;

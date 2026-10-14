@@ -13,7 +13,8 @@
 //
 // setVisible(on) — показывать ли кнопки (только во время партии; джойстик и «ВЗЯТЬ» / «БРОСИТЬ» — только при
 // касаниях, значки в углу — всегда); setGlow(name, on) — подсветка кнопки команды
-// ('recruit' — рядом есть кого взять, 'drop' — Герой на кнопке и можно оставить дружочка).
+// ('recruit' — рядом есть кого взять, 'drop' — Герой на кнопке и можно оставить дружочка, 'pack' — рюкзак открыт
+// или полон); setShown(name, on) — показывать ли кнопку команды вообще (рюкзак — только с его улучшением).
 (function (G) {
 'use strict';
 
@@ -43,7 +44,7 @@ function applySettings() { document.body.classList.toggle('mirror', settings.mir
 
 // --- кнопки ---
 // что делает кнопка: команда; у «заново» — подтверждение вторым касанием, чтобы не сбросить уровень случайно
-const BUTTONS = { tGrab: 'recruit', tDrop: 'drop', tPause: 'pause', tRestart: 'restart' };
+const BUTTONS = { tGrab: 'recruit', tDrop: 'drop', tPack: 'pack', tPause: 'pause', tRestart: 'restart' };
 const CONFIRM_TIME = 2000;
 let restartArmedAt = -1e9;
 
@@ -166,10 +167,12 @@ function setVisible(on) {
   releaseAll();
 }
 
-const glowEls = { recruit: document.getElementById('tGrab'), drop: document.getElementById('tDrop') };
+const glowEls = { recruit: document.getElementById('tGrab'), drop: document.getElementById('tDrop'),
+                  pack: document.getElementById('tPack') };
 function setGlow(name, on) { glowEls[name].classList.toggle('glow', !!on); }
+function setShown(name, on) { glowEls[name].classList.toggle('shown', !!on); }
 
 applySettings();
 
-G.touch = { setVisible, setGlow, getSettings, setSetting };
+G.touch = { setVisible, setGlow, setShown, getSettings, setSetting };
 })(window.Game = window.Game || {});

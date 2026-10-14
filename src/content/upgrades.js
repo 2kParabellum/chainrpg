@@ -4,7 +4,8 @@
 // Поля записи:
 //   name  — название на карточке
 //   who   — чьё улучшение: ключ способности (стрелок, искра…) или 'hero'; от него цвет и подпись карточки
-//   desc  — что даёт, в несколько слов
+//   desc  — что даёт, в несколько слов; {команда} заменяется подписью кнопки ({pack} — «C» или «BAG»)
+//   tier  — ранг: без поля — 1-й; 2 — выпадает, только если у того же who уже взято улучшение 1-го ранга
 //   art   — (ctx, k): рисунок карточки 200 × 120; k — заготовки рисования из render/cards.js
 //   остальные поля — числа улучшения; их читает тот код, который улучшение меняет (оружие, урон, движение Героя)
 (function (G) {
@@ -44,6 +45,7 @@ const fireArrows = {
 const doubleSpark = {
   name: 'Double Voltage',
   who: 'spark',
+  tier: 2,
   desc: 'Lightning hits two targets at once',
   targets: 2,        // сколько разных целей держит молния
   art(ctx, k) {
@@ -65,6 +67,22 @@ const arc = {
     k.ring(36, 60, 132, COLORS.spark, false);
     k.enemy(162, 60);
     k.bolt(50, 60, 150, 60, COLORS.spark);
+  },
+};
+
+// цель молнии погибла — молния сразу, без прицеливания, перескакивает на врага вплотную к ней
+// (просвет между телами не больше reach — примерно один дружочек); разгон урона начинается заново
+const sticky = {
+  name: 'Sticky Electricity',
+  who: 'spark',
+  desc: 'When the target dies, lightning jumps to a foe right next to it',
+  reach: 36,
+  art(ctx, k) {
+    k.ally(36, 60, 'spark', 0);
+    k.ring(118, 60, 12, COLORS.spark, true);
+    k.enemy(160, 60);
+    k.bolt(50, 60, 116, 60, COLORS.spark);
+    k.bolt(122, 60, 148, 60, COLORS.spark);
   },
 };
 
@@ -95,17 +113,19 @@ const adrenaline = {
   },
 };
 
-const spikedArmor = {
-  name: 'Spiked Armor',
+// копейщик без него бьёт только в одну сторону — туда, где ближайший враг
+const doubleEdge = {
+  name: 'Double Edge',
   who: 'spear',
-  desc: 'Melee hits hurt the attacker back',
+  desc: 'The Brawler strikes both sides at once',
   art(ctx, k) {
-    k.ally(70, 64, 'spear', 0);
-    k.spikes(70, 64, 22);
-    k.enemy(146, 64, COLORS.hunter, 10);
-    k.trail(124, 52, 92, 52, COLORS.enemyShot);
-    k.trail(92, 76, 130, 76, COLORS.spear);
-    k.shot(132, 76, COLORS.spear);
+    k.ally(100, 64, 'spear', -Math.PI / 2);
+    k.enemy(30, 64, COLORS.hunter, 10);
+    k.enemy(170, 64, COLORS.hunter, 10);
+    k.trail(84, 64, 46, 64, COLORS.spear);
+    k.trail(116, 64, 154, 64, COLORS.spear);
+    k.shot(46, 64, COLORS.spear);
+    k.shot(154, 64, COLORS.spear);
   },
 };
 
@@ -137,17 +157,14 @@ const march = {
   },
 };
 
-const accumulate = {
-  name: 'Stockpile',
+const luckyFoot = {
+  name: 'Lucky Foot',
   who: 'hero',
-  desc: 'Three boosts at once instead of two',
-  extra: 1,          // сколько усилений сверх CONFIG.BUFFS.maxActive держит звено
+  desc: 'Boost pads show up more often',
+  mul: 1.25,         // подиумы усилений появляются во столько раз чаще (пауза между ними — во столько же раз короче)
   art(ctx, k) {
-    k.hero(100, 62, -Math.PI / 2);
-    k.ring(100, 62, 22, COLORS.speed, false);
-    k.ring(100, 62, 29, COLORS.power, false);
-    k.ring(100, 62, 36, COLORS.regen, false);
-    k.pad(38, 62, COLORS.speed); k.pad(162, 40, COLORS.power); k.pad(162, 86, COLORS.regen);
+    k.hero(100, 64, 0);
+    k.pad(40, 36, COLORS.speed); k.pad(160, 36, COLORS.power); k.pad(40, 92, COLORS.regen); k.pad(160, 92, COLORS.will);
   },
 };
 
@@ -174,5 +191,73 @@ const ram = {
   },
 };
 
-G.upgrades = { tripleShot, fireArrows, doubleSpark, arc, medicRegen, adrenaline, spikedArmor, cover, march, accumulate, ram };
+// --- 2-й ранг: выпадают, только если у того же персонажа уже есть улучшение 1-го ранга ---
+
+// стрела с шансом chance проходит врага насквозь и летит дальше (на каждого следующего — бросок заново);
+// каждого врага одна стрела ранит один раз; босса не пробивает — гаснет о него
+const piercing = {
+  name: 'Piercing Shots',
+  who: 'shooter',
+  tier: 2,
+  desc: 'Shots often pass through to the next foe (not bosses)',
+  chance: 0.6,
+  art(ctx, k) {
+    k.ally(30, 60, 'shooter', 0);
+    k.enemy(96, 60);
+    k.enemy(150, 60);
+    k.trail(50, 60, 184, 60, COLORS.allyShot);
+    k.shot(186, 60, COLORS.allyShot);
+  },
+};
+
+// вылеченный ещё time секунд понемногу долечивается: всего share от размера лечения;
+// новое лечение не складывается с прежним, а заменяет его
+const lastingCure = {
+  name: 'Lasting Cure',
+  who: 'medic',
+  tier: 2,
+  desc: 'Each heal keeps healing for a few more seconds',
+  share: 0.5,
+  time: 3,
+  art(ctx, k) {
+    k.ally(40, 64, 'medic', 0);
+    k.ally(150, 64, null, Math.PI);
+    k.beam(54, 64, 136, 64, COLORS.medic);
+    k.ring(150, 64, 24, COLORS.regen, true);
+    k.plus(150, 30, 8, COLORS.regen); k.plus(176, 46, 6, COLORS.regen);
+  },
+};
+
+// урон копья растёт с потерей HP копейщика: полное HP — ×1, у нуля — ×maxMul (линейно)
+const berserk = {
+  name: 'Berserk',
+  who: 'spear',
+  tier: 2,
+  desc: 'The more HP the Brawler has lost, the harder it hits',
+  maxMul: 1.5,
+  art(ctx, k) {
+    k.ally(80, 70, 'spear', 0);
+    k.hpBar(80, 44, 0.25);
+    k.enemy(150, 70, COLORS.hunter, 12);
+    k.impact(126, 70);
+  },
+};
+
+// рюкзак Героя: {pack} открывает его, следующий подиум усиления уходит в рюкзак (не действует);
+// {pack} ещё раз — усиление включается на полное время. В рюкзаке одно усиление; к концу уровня оно сгорает
+const backpack = {
+  name: 'Backpack',
+  who: 'hero',
+  tier: 2,
+  desc: '{pack} opens it: the next boost goes inside. {pack} again to use it',
+  art(ctx, k) {
+    k.hero(60, 64, 0);
+    k.ring(60, 64, 24, COLORS.hero, true);
+    k.pad(150, 64, COLORS.power);
+    k.trail(132, 64, 84, 64, COLORS.power);
+  },
+};
+
+G.upgrades = { tripleShot, fireArrows, arc, sticky, medicRegen, adrenaline, doubleEdge, cover, march, luckyFoot, ram,
+               piercing, lastingCure, berserk, doubleSpark, backpack };
 })(window.Game = window.Game || {});

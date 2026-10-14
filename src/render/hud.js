@@ -5,12 +5,12 @@
 
 const { CONFIG, COLORS, state } = G;
 const { abilities } = G;
-const { currentRoom, isSpotted, leaderSpeedMul, leader } = G.session;
+const { currentRoom, isSpotted, leaderSpeedMul, leader, upgrade } = G.session;
 const { world, roomCount, roomIndexAt, buttonUnder } = G.world;
 const { clamp } = G.math;
 const { nearestPickup } = G.chain;
 const { ctx, screenTransform } = G.shapes;
-const { withKeys } = G.input;
+const { withKeys, keyLabel } = G.input;
 const { isTouch, isPortrait } = G.screen;
 
 // шрифт интерфейса: округлый, жирный (graphics.md); цвета — из палитры fantasy-24
@@ -162,7 +162,7 @@ function drawNotice() {
   const def = G.buffs[n.key], V = CONFIG.VIEW;
   const y = V.h / 2 - 80 - Math.min(age, 1) * 8;
   const name = def.name[0].toUpperCase() + def.name.slice(1) + ': ';
-  const rest = `${def.desc}, ${def.duration} s`;
+  const rest = n.packed ? withKeys('in the backpack — {pack} to use') : `${def.desc}, ${def.duration} s`;
   ctx.font = `bold 14px ${UI_FONT}`;
   const nw = ctx.measureText(name).width, x = V.w / 2 - (nw + ctx.measureText(rest).width) / 2;
   ctx.globalAlpha = 0.85 * a;
@@ -248,16 +248,41 @@ function drawBossBar(e, label, x, y, w) {
   ctx.textAlign = 'left';
 }
 
+// ячейка рюкзака (улучшение «Backpack»): усиление внутри — его значок и кнопка; открыт — «OPEN» мигает;
+// пусто — тусклая подпись с кнопкой
+function drawBackpack(x, y, w) {
+  const bag = state.backpack;
+  panel(x, y, w, 30);
+  ctx.font = `bold 12px ${UI_FONT}`;
+  ctx.textAlign = 'center';
+  if (bag.stored) {
+    G.blobs.glyph(bag.stored, x + 15, y + 13, 7);
+    ctx.fillStyle = G.buffs[bag.stored].color;
+    ctx.fillText(keyLabel('pack'), x + 15 + (w - 15) / 2, y + 19);
+  } else if (bag.open) {
+    ctx.globalAlpha = 0.6 + 0.4 * Math.sin(state.time * 8);
+    ctx.fillStyle = UI.gold;
+    ctx.fillText('OPEN', x + w / 2, y + 19);
+    ctx.globalAlpha = 1;
+  } else {
+    ctx.fillStyle = UI.muted;
+    ctx.fillText(`BAG ${keyLabel('pack')}`, x + w / 2, y + 19);
+  }
+}
+
 // таймеры усилений Героя наверху посередине: значок, секунды, полоска остатка; перед концом мигают.
-// Если посередине тесно (узкий экран) — под плашками слева
+// С улучшением «Backpack» первой в ряду — ячейка рюкзака. Если посередине тесно (узкий экран) — под плашками слева
 function drawBuffTimers(cx, y, leftRight, leftBottom) {
   const lead = state.party[0];
   if (!lead || !lead.buffOrder) return;
   const keys = lead.buffOrder.filter((k) => lead.buffs[k] > 0);
-  if (!keys.length) return;
-  const itemW = 64, gap = 6, total = keys.length * itemW + (keys.length - 1) * gap;
+  const bag = !!upgrade('backpack');
+  const n = keys.length + (bag ? 1 : 0);
+  if (!n) return;
+  const itemW = 64, gap = 6, total = n * itemW + (n - 1) * gap;
   let x = cx - total / 2;
   if (x < leftRight + 4) { x = 10; y = leftBottom + 10; }
+  if (bag) { drawBackpack(x, y, itemW); x += itemW + gap; }
   keys.forEach((k, i) => {
     const left = lead.buffs[k], def = G.buffs[k], ix = x + i * (itemW + gap);
     if (left < 4 && Math.floor(state.time * 6) % 2) ctx.globalAlpha = 0.45;
