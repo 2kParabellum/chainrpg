@@ -1058,12 +1058,15 @@ function krakenTentacles(e, dt, chain, game) {
 }
 
 // всасывание: лежачих и ждущих вербовки рядом тянет к телу — у края зоны со скоростью suckSpeed, у самого тела
-// в suckAccel раз быстрее; дотянуло — проглатывает: дружочек гибнет, а его тело ещё eatTime секунд уходит в пасть
+// в suckAccel раз быстрее; дотянуло — проглатывает: дружочек гибнет, а его тело ещё eatTime секунд уходит в пасть.
+// После проглатывания всасывание отдыхает suckCooldown секунд
 function krakenSuck(e, dt, game) {
   const cfg = e.cfg, st = game.state;
   for (const f of e.eating.slice()) { f.t += dt; if (f.t >= cfg.eatTime) game.removeFrom(e.eating, f); }
   e.gulp = Math.max(0, e.gulp - dt);
+  e.suckCd = Math.max(0, e.suckCd - dt);
   e.sucking = [];
+  if (e.suckCd > 0) return;
   for (const u of st.downed.concat(st.neutrals)) {
     const d = dist(e, u), touch = e.r + u.r + 2;
     if (d > cfg.suckRadius) continue;
@@ -1071,6 +1074,7 @@ function krakenSuck(e, dt, game) {
       e.eating.push({ u, x: u.x, y: u.y, t: 0 });
       e.gulp = cfg.eatTime;
       game.damageUnit(u, u.hp + 1);
+      e.suckCd = cfg.suckCooldown;
       continue;
     }
     e.sucking.push(u);
@@ -1348,8 +1352,9 @@ const kraken = {
            tentacleChance: 0.5,     // шанс, что попытка обернётся замахом
            tentacleShow: 0.6,       // сколько видна ударившая тентакля
            // всасывание: дружочков не в цепи ближе suckRadius тянет к телу — у края со скоростью suckSpeed, у тела
-           // в suckAccel раз быстрее (с края зоны до пасти — около 1.5 с); проглоченный уходит в пасть за eatTime
-           suckRadius: 320, suckSpeed: 110, suckAccel: 2.5, eatTime: 0.6,
+           // в suckAccel раз быстрее (с края зоны до пасти — около 4 с); проглоченный уходит в пасть за eatTime,
+           // после проглатывания всасывание отдыхает suckCooldown секунд
+           suckRadius: 320, suckSpeed: 37, suckAccel: 2.5, eatTime: 0.6, suckCooldown: 2,
            // пук: Герой ближе fartTrigger от края тела — раз в fartCooldown fartCount облаков вокруг Героя (в пределах
            // fartSpread), каждое радиусом fartRadius, fartDps урона в секунду, висит fartLife секунд
            fartTrigger: 110, fartCooldown: 14, fartCount: 5, fartSpread: 110, fartRadius: 70, fartDps: 10, fartLife: 4.5,
@@ -1367,7 +1372,7 @@ const kraken = {
   init(e) {
     e.age = 0;
     e.tentacles = []; e.tentacleCd = 2;
-    e.sucking = []; e.eating = []; e.gulp = 0;
+    e.sucking = []; e.eating = []; e.gulp = 0; e.suckCd = 0;
     e.fartCd = 3; e.fartFx = 0;
     e.globs = []; e.globCd = 3;
     e.mines = [];
