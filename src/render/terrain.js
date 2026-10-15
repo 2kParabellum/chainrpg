@@ -212,13 +212,108 @@ const VX = {
     }
   },
 };
-function paintVoid(r) {
+function paintVoidRaw(r) {
   ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
   VOID.rock(r); VX.patches(r); VX.slabsBroken(r); VX.cracks(r); VX.gravel(r); VX.flecks(r);
   ctx.restore();
 }
+
+// Скала не меняется: рисунок зависит только от координат мира (не от уровня). Поэтому она рисуется один раз кусками
+// TILE×TILE в разрешении экрана, а каждый кадр только копируется. Куски рядом с экраном дорисовываются заранее,
+// по PREFETCH за кадр, чтобы на ходу не было рывков; давно не нужные выбрасываются. Сменился масштаб экрана — заново
+const TILE = 256, PREFETCH = 1;
+const tiles = new Map();   // 'tx,ty' → холст куска; порядок — от давно нужного к свежему
+const spare = [];          // холсты выброшенных кусков того же размера — под новые куски
+let tileScale = 0;
+function useScale(s) {
+  if (Math.abs(s - tileScale) < 1e-6) return;
+  tiles.clear(); spare.length = 0; tileScale = s;
+}
+function tileFor(tx, ty) {
+  const id = tx + ',' + ty;
+  let c = tiles.get(id);
+  if (c) { tiles.delete(id); tiles.set(id, c); return c; }
+  const px = Math.max(1, Math.round(TILE * tileScale)), k = px / TILE;
+  c = spare.pop() || document.createElement('canvas');
+  if (c.width !== px) { c.width = px; c.height = px; }
+  const keep = ctx; ctx = c.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, px, px);
+  ctx.setTransform(k, 0, 0, k, -tx * TILE * k, -ty * TILE * k);
+  paintVoidRaw({ x: tx * TILE, y: ty * TILE, w: TILE, h: TILE });
+  ctx = keep;
+  tiles.set(id, c);
+  // кусков в запасе — на экран и кольцо вокруг него
+  const max = (Math.ceil(CONFIG.VIEW.w / TILE) + 3) * (Math.ceil(CONFIG.VIEW.h / TILE) + 3) + 6;
+  for (const [old, oc] of tiles) {
+    if (tiles.size <= max) break;
+    tiles.delete(old);
+    if (oc.width === px) spare.push(oc);
+  }
+  return c;
+}
+// кусок целиком под полом: под фоном его не видно (пол непрозрачный). Нужен ли он стенам — отдельно: верх стены
+// поднят над её основанием и заходит на пол. Считается раз на кусок, заново — когда мир перестроен
+let tileInfo = { src: null, map: new Map() };
+function tileKind(tx, ty) {
+  if (tileInfo.src !== world.floors) tileInfo = { src: world.floors, map: new Map() };
+  const id = tx + ',' + ty;
+  let k = tileInfo.map.get(id);
+  if (k) return k;
+  const x0 = tx * TILE, y0 = ty * TILE, x1 = x0 + TILE, y1 = y0 + TILE;
+  const covered = world.floors.some((f) => f.x <= x0 && f.y <= y0 && f.x + f.w >= x1 && f.y + f.h >= y1);
+  const walled = world.walls.some((w) => w.x < x1 && w.x + w.w > x0 && w.y - WALL_H < y1 && w.y + w.h > y0);
+  k = { covered, needed: !covered || walled };
+  tileInfo.map.set(id, k);
+  return k;
+}
+// экран в координатах мира с запасом pad
+function viewRect(pad = 4) {
+  return { x: state.camera.x - pad, y: state.camera.y - pad, w: CONFIG.VIEW.w + 2 * pad, h: CONFIG.VIEW.h + 2 * pad };
+}
+// часть прямоугольника мира r на экране (с небольшим запасом) или null
+function inView(r) {
+  const v = viewRect();
+  const x0 = Math.max(r.x, v.x), y0 = Math.max(r.y, v.y);
+  const x1 = Math.min(r.x + r.w, v.x + v.w), y1 = Math.min(r.y + r.h, v.y + v.h);
+  return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+}
+// копирует скалу в прямоугольник мира r на текущий холст. Куски кладутся по целым пикселям холста встык — без швов;
+// underFloor — пропустить куски целиком под полом
+function blitVoid(r, underFloor) {
+  const m = ctx.getTransform();
+  useScale(m.a);
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  for (let ty = Math.floor(r.y / TILE); ty * TILE < r.y + r.h; ty++) {
+    const y0 = Math.round(m.d * ty * TILE + m.f), y1 = Math.round(m.d * (ty + 1) * TILE + m.f);
+    for (let tx = Math.floor(r.x / TILE); tx * TILE < r.x + r.w; tx++) {
+      if (underFloor && tileKind(tx, ty).covered) continue;
+      const x0 = Math.round(m.a * tx * TILE + m.e), x1 = Math.round(m.a * (tx + 1) * TILE + m.e);
+      ctx.drawImage(tileFor(tx, ty), x0, y0, x1 - x0, y1 - y0);
+    }
+  }
+  ctx.restore();
+}
+// скала в прямоугольнике мира r (верх стены): только видимая часть, по краю r — обрезка
+function paintVoid(r) {
+  const v = inView(r);
+  if (!v) return;
+  ctx.save(); ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip();
+  blitVoid(v);
+  ctx.restore();
+}
+// фон за уровнем: весь экран, кроме того, что точно под полом; заранее — по куску из кольца вокруг экрана
 function drawVoid() {
-  paintVoid({ x: state.camera.x - 60, y: state.camera.y - 60, w: CONFIG.VIEW.w + 120, h: CONFIG.VIEW.h + 120 });
+  const v = viewRect();
+  blitVoid(v, true);
+  let budget = PREFETCH;
+  const tx0 = Math.floor(v.x / TILE) - 1, tx1 = Math.floor((v.x + v.w) / TILE) + 1;
+  const ty0 = Math.floor(v.y / TILE) - 1, ty1 = Math.floor((v.y + v.h) / TILE) + 1;
+  for (let ty = ty0; ty <= ty1 && budget > 0; ty++) for (let tx = tx0; tx <= tx1 && budget > 0; tx++) {
+    if (tiles.has(tx + ',' + ty) || !tileKind(tx, ty).needed) continue;
+    tileFor(tx, ty);
+    budget--;
+  }
 }
 
 // ===================== СТЕНЫ И КОЛОННЫ =====================
@@ -288,9 +383,12 @@ function wallEdges() {
 function drawLevelWall(c, r) {
   const H = WALL_H, ed = wallEdges().get(r) || { face: [], S: [], N: [], W: [], E: [] };
   const keep = ctx; ctx = c;
-  paintVoid({ x: r.x, y: r.y - H, w: r.w, h: r.h + H });   // верх и всё под ним до основания
-  // кирпичные грани над полом
-  for (const [x0, x1] of ed.face) {
+  paintVoid({ x: r.x, y: r.y - H, w: r.w, h: r.h + H });   // верх и всё под ним до основания (только видимая часть)
+  // кирпичные грани над полом — только видимый кусок (края обрезки за экраном, кладка привязана к миру)
+  const vr = viewRect(60);
+  for (const [a0, a1] of ed.face) {
+    const x0 = Math.max(a0, vr.x), x1 = Math.min(a1, vr.x + vr.w);
+    if (x1 <= x0) continue;
     const fy = r.y + r.h - H, w = x1 - x0;
     const g = c.createLinearGradient(0, r.y + r.h, 0, r.y + r.h + 14);
     g.addColorStop(0, 'rgba(20,10,5,0.45)'); g.addColorStop(1, 'rgba(20,10,5,0)');
@@ -318,12 +416,20 @@ function drawLevelWall(c, r) {
   ctx = keep;
 }
 // все стены, колонны и закрытые двери: от дальних к ближним, чтобы ближняя закрывала грань дальней
+// список собирается заново, только когда мир перестроен, открылась или закрылась дверь, появилась или пропала база
+let blockCache = { walls: null, pillars: null, key: '', list: [] };
 function blocks() {
-  return world.walls.map((r) => ({ r, level: true }))
+  let key = world.base && state.base ? 'b' : '';
+  for (const d of world.doors || []) key += d.open ? '1' : '0';
+  const bc = blockCache;
+  if (bc.walls === world.walls && bc.pillars === world.pillars && bc.key === key) return bc.list;
+  const list = world.walls.map((r) => ({ r, level: true }))
     .concat(world.pillars.map((r) => ({ r, top: COLORS.pillar, face: COLORS.pillarSide, line: '#45230d' })))
     .concat((world.doors || []).filter((d) => !d.open).map((r) => ({ r, top: COLORS.doorEdge, face: COLORS.door, line: '#45230d', planks: true })))
     .concat(world.base && state.base ? [{ r: world.base, house: true }] : [])
     .sort((a, b) => a.r.y + a.r.h - (b.r.y + b.r.h));
+  blockCache = { walls: world.walls, pillars: world.pillars, key, list };
+  return list;
 }
 function drawOne(c, b) {
   if (b.house) G.baseArt.draw(c, b.r);   // база «Обороны» — избушка (render/baseart.js)
@@ -337,8 +443,22 @@ function drawWalls() {
 // Спрятанные за стеной. Стены нарисованы до тел, поэтому тела за стеной оказались поверх неё; здесь, после тел,
 // такая стена рисуется ещё раз поверх: во временном холсте вокруг каждого спрятанного (Герой, дружочки, враги)
 // небольшое мягкое пятно, где стена прозрачна наполовину — его видно сквозь стену; у стоящих перед стеной
-// (их головы заходят на её грань) и у ближних стен — сквозные дыры
+// (их головы заходят на её грань) и у ближних стен — сквозные дыры. Стена перерисовывается не вся, а только там,
+// куда заходит рисунок спрятанных (блоб крупнее тела, сверху шапка, полоска HP, значки); у кого рисунок раскидан
+// далеко (спрут: тени тентаклей) — вся видимая часть. Во временном холсте занят и переносится только этот кусок
 let osc = null, octx = null;
+const PAD_BLOCK = [6, 6, 6, 20], PAD_HOUSE = [40, 130, 40, 24];   // запас вокруг поднятого блока: слева, сверху, справа, снизу
+function spriteBounds(list) {
+  const out = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+  for (const u of list) {
+    const reach = u.kind === 'enemy' ? (G.enemyTypes[u.type].drawReach || 0) : 0;
+    if (reach > 200) return { x0: -Infinity, y0: -Infinity, x1: Infinity, y1: Infinity };
+    const side = u.r * 2.2 + 16;
+    out.x0 = Math.min(out.x0, u.x - side); out.x1 = Math.max(out.x1, u.x + side);
+    out.y0 = Math.min(out.y0, u.y - u.r * 3.4 - 40); out.y1 = Math.max(out.y1, u.y + u.r * 1.6 + 8);
+  }
+  return out;
+}
 function bodies() {
   const out = [];
   for (const u of state.party) out.push(u);
@@ -349,6 +469,7 @@ function bodies() {
 }
 function drawOccluders() {
   const list = bodies(), all = blocks();
+  let m = null;
   for (const b of all) {
     const r = b.r, L = lifted(r);
     if (!visible(L)) continue;
@@ -356,11 +477,22 @@ function drawOccluders() {
     const hidden = list.filter((u) => inX(u) && u.y < bottom && u.y + u.r > L.y);
     if (!hidden.length) continue;
     const front = list.filter((u) => inX(u) && u.y >= bottom && u.y - u.r * 3 < bottom);
-    if (!osc || osc.width !== ctx.canvas.width || osc.height !== ctx.canvas.height) {
-      osc = document.createElement('canvas'); osc.width = ctx.canvas.width; osc.height = ctx.canvas.height; octx = osc.getContext('2d');
-    }
-    octx.setTransform(1, 0, 0, 1, 0, 0); octx.clearRect(0, 0, osc.width, osc.height);
-    octx.setTransform(ctx.getTransform());
+    const cw = ctx.canvas.width, ch = ctx.canvas.height;
+    // перерисовываемый кусок: блок с запасом, где заходят рисунки спрятанных, на экране — в пикселях холста
+    if (!m) m = ctx.getTransform();
+    const p = b.house ? PAD_HOUSE : PAD_BLOCK, sb = spriteBounds(hidden);
+    const wx0 = Math.max(L.x - p[0], sb.x0), wy0 = Math.max(L.y - p[1], sb.y0);
+    const wx1 = Math.min(L.x + L.w + p[2], sb.x1), wy1 = Math.min(L.y + L.h + p[3], sb.y1);
+    const x0 = Math.max(0, Math.floor(m.a * wx0 + m.e)), y0 = Math.max(0, Math.floor(m.d * wy0 + m.f));
+    const x1 = Math.min(cw, Math.ceil(m.a * wx1 + m.e)), y1 = Math.min(ch, Math.ceil(m.d * wy1 + m.f));
+    if (x1 <= x0 || y1 <= y0) continue;
+    const w = x1 - x0, h = y1 - y0;
+    // временный холст по размеру куска (только растёт): чем он меньше, тем дешевле каждое копирование на экран
+    if (!osc) { osc = document.createElement('canvas'); osc.width = 0; osc.height = 0; octx = osc.getContext('2d'); }
+    if (osc.width < w || osc.height < h) { osc.width = Math.max(osc.width, Math.ceil(w / 64) * 64); osc.height = Math.max(osc.height, Math.ceil(h / 64) * 64); }
+    octx.setTransform(1, 0, 0, 1, 0, 0); octx.clearRect(0, 0, w, h);
+    octx.save(); octx.beginPath(); octx.rect(0, 0, w, h); octx.clip();
+    octx.setTransform(m.a, m.b, m.c, m.d, m.e - x0, m.f - y0);
     drawOne(octx, b);
     octx.globalCompositeOperation = 'destination-out';
     for (const u of hidden) {
@@ -377,7 +509,8 @@ function drawOccluders() {
       if (M.x < L.x + L.w && M.x + M.w > L.x && M.y < L.y + L.h && M.y + M.h > L.y) octx.fillRect(M.x, M.y, M.w, M.h);
     }
     octx.globalCompositeOperation = 'source-over';
-    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(osc, 0, 0); ctx.restore();
+    octx.restore();
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(osc, 0, 0, w, h, x0, y0, w, h); ctx.restore();
   }
 }
 

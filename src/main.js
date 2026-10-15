@@ -318,6 +318,14 @@ function draw() {
   drawHud();
 }
 
+// кадр рисуется, только когда картинка может измениться: идёт партия, сменился экран или размер холста
+// (смена размера стирает холст). В меню, на паузе, после поражения игра стоит — время не идёт, кадр тот же
+let drawnStatus = null, drawnTime = -1, resized = true;
+screenInfo.onChange(() => { resized = true; });
+function needsDraw() {
+  return state.status === 'play' || state.status !== drawnStatus || state.time !== drawnTime || resized;
+}
+
 let lastTime = performance.now();
 let lastStatus = null;
 function loop(now) {
@@ -332,7 +340,10 @@ function loop(now) {
   lastStatus = state.status;
   syncOverlay();
   syncTouch();
-  draw();
+  if (needsDraw()) {
+    draw();
+    drawnStatus = state.status; drawnTime = state.time; resized = false;
+  }
   requestAnimationFrame(loop);
 }
 
