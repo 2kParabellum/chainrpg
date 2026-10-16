@@ -1,13 +1,14 @@
-// Объёмное окружение (graphics.md): тёмная скала за пределами уровня, стены уровня (верх — та же скала, кирпичная
-// грань только над полом), высокие колонны и двери, полупрозрачное окошко в стене вокруг спрятанного за ней,
-// пропасть-колодец в перспективе и декор на полу.
+// Объёмное окружение (graphics.md) — как оно выглядит: тёмная скала за пределами уровня, пол из плит и подсветка зон,
+// стены уровня (верх — та же скала, кирпичная грань только над полом), высокие колонны и двери, шипы,
+// пропасть-колодец в перспективе с мостками и декор на полу.
+// Каждый кадр это не рисуется: render/ground.js один раз рисует неподвижное (paintGround) кусками и потом только
+// копирует их. Живое здесь — туман и камешки пропасти (drawPitLife).
 // Всё только рисуется: столкновения и проходимость — по прямоугольникам мира, как раньше.
 (function (G) {
 'use strict';
 
-const { CONFIG, COLORS, state } = G;
-let { ctx } = G.shapes;
-const { visible } = G.shapes;
+const { COLORS, state } = G;
+let { ctx } = G.shapes;      // холст, в который рисуем сейчас (кусок земли, скала для него или временный холст окошка)
 const { world } = G.world;
 const TAU = Math.PI * 2, INK = '#2a1d0d';
 const WALL_H = 48;               // на сколько рисунок стены поднят над её основанием — выше дружочка
@@ -17,6 +18,9 @@ const h2 = (x, y, k = 0) => { const s = Math.sin(x * 12.9898 + y * 78.233 + k * 
 const lerp = (a, b, k) => a + (b - a) * k;
 const P = (a, b, k) => ({ x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k) });
 function poly(pts) { ctx.beginPath(); pts.forEach((p, i) => ctx[i ? 'lineTo' : 'moveTo'](p.x, p.y)); ctx.closePath(); }
+// прямоугольники мира пересекаются
+const hit = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+const grow = (r, d) => ({ x: r.x - d, y: r.y - d, w: r.w + 2 * d, h: r.h + 2 * d });
 
 // ===================== ПРОПАСТЬ =====================
 // Колодец: проём r, дно — меньший прямоугольник внутри, сдвинутый вверх (дальняя, северная стенка самая высокая).
@@ -24,11 +28,17 @@ function poly(pts) { ctx.beginPath(); pts.forEach((p, i) => ctx[i ? 'lineTo' : '
 // (сгущаются к дну) и швы, сходящиеся к дну; по углам тёмные рёбра, от северного и западного края — тень внутрь,
 // у ближнего края видна толщина плиты пола. На дне плывёт туман, с кромки сыплются камешки
 const INS = [0.42, 0.26, 0.26, 0.12];   // отступы дна от проёма: север, запад, восток, юг (доли меньшей стороны)
-function drawPit(r) {
-  const t = state.time, m = Math.min(r.w, r.h, 180);
+// углы проёма (A B C D) и дна (a b c d)
+function pitShape(r) {
+  const m = Math.min(r.w, r.h, 180);
   const A = { x: r.x, y: r.y }, B = { x: r.x + r.w, y: r.y }, C = { x: r.x + r.w, y: r.y + r.h }, D = { x: r.x, y: r.y + r.h };
   const a = { x: r.x + m * INS[1], y: r.y + m * INS[0] }, b = { x: r.x + r.w - m * INS[2], y: r.y + m * INS[0] };
   const c = { x: r.x + r.w - m * INS[2], y: r.y + r.h - m * INS[3] }, d = { x: r.x + m * INS[1], y: r.y + r.h - m * INS[3] };
+  return { m, A, B, C, D, a, b, c, d, seed: r.x * 0.01 + r.y * 0.013 };
+}
+// неподвижная часть колодца — всё, кроме тумана и камешков
+function drawPitStatic(r) {
+  const { m, A, B, C, D, a, b, c, d } = pitShape(r);
   const walls = [[A, B, b, a, '#684c3c'], [B, C, c, b, '#45230d'], [D, A, a, d, '#36170c'], [C, D, d, c, '#300f0a']];
   const rows = [0.18, 0.34, 0.48, 0.6, 0.7, 0.79, 0.86, 0.92];
   ctx.save();
@@ -54,18 +64,11 @@ function drawPit(r) {
     });
     ctx.restore();
   }
-  // дно: почти чёрное, темнее к середине, по нему плывёт туман
+  // дно: почти чёрное, темнее к середине (туман по нему — drawPitAnim)
   poly([a, b, c, d]); ctx.fillStyle = '#1f240a'; ctx.fill();
   const cx = (a.x + c.x) / 2, cy = (a.y + c.y) / 2;
   const bg = ctx.createRadialGradient(cx, cy, 2, cx, cy, Math.max(c.x - a.x, c.y - a.y) * 0.7);
   bg.addColorStop(0, 'rgba(10,5,2,0.9)'); bg.addColorStop(1, 'rgba(10,5,2,0.3)'); ctx.fillStyle = bg; ctx.fill();
-  ctx.save(); poly([a, b, c, d]); ctx.clip();
-  const bw = b.x - a.x, bh = d.y - a.y, seed = r.x * 0.01 + r.y * 0.013;
-  for (let i = 0; i < 4; i++) {
-    const x = a.x + ((h2(i, seed, 1) * bw + t * (6 + i * 3)) % (bw + 60)) - 30, y = a.y + h2(i, seed, 2) * bh;
-    ctx.fillStyle = hexA('#684c3c', 0.16); ell(ctx, x, y, 30, 9); ctx.fill();
-  }
-  ctx.restore();
   // рёбра углов
   ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.globalAlpha = 0.9;
   for (const [p, q] of [[A, a], [B, b], [C, c], [D, d]]) { ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke(); }
@@ -75,19 +78,31 @@ function drawPit(r) {
   ctx.fillStyle = 'rgba(20,10,5,0.45)';
   poly([A, B, { x: B.x - sh * 0.4, y: B.y + sh }, { x: A.x + sh, y: A.y + sh }]); ctx.fill();
   poly([A, { x: A.x + sh, y: A.y + sh }, { x: D.x + sh, y: D.y - sh * 0.2 }, D]); ctx.fill();
-  // камешки срываются с северной кромки и тают в темноте
-  for (let i = 0; i < 3; i++) {
-    const k = (t * 0.5 + i / 3 + h2(seed, i)) % 1, n = Math.floor(t * 0.5 + i / 3 + h2(seed, i)), f = 0.15 + h2(n * 7 + i, seed, 3) * 0.7;
-    const p = P(P(A, B, f), P(a, b, f), k * k);
-    ctx.globalAlpha = 1 - k; ctx.fillStyle = '#927e6a'; ell(ctx, p.x, p.y, 2.4 * (1 - k * 0.6), 2 * (1 - k * 0.6)); ctx.fill();
-  }
-  ctx.globalAlpha = 1;
   // кромка: светлый край у ближней стороны, тёмная обводка, толщина плиты пола у ближнего края
   ctx.strokeStyle = '#927e6a'; ctx.lineWidth = 3; ctx.globalAlpha = 0.85;
   ctx.beginPath(); ctx.moveTo(D.x, D.y - 1.5); ctx.lineTo(C.x, C.y - 1.5); ctx.stroke();
   ctx.globalAlpha = 1; ctx.strokeStyle = INK; ctx.lineWidth = 2.5; poly([A, B, C, D]); ctx.stroke();
   ctx.fillStyle = '#45230d'; ctx.fillRect(D.x + 1, D.y - 6, r.w - 2, 4.5);
   ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(D.x, D.y - 6); ctx.lineTo(C.x, C.y - 6); ctx.stroke();
+  ctx.restore();
+}
+// живая часть колодца, поверх готовой: по дну плывёт туман, с северной кромки срываются камешки и тают в темноте
+// (под тёмной обводкой кромки их не видно)
+function drawPitAnim(r) {
+  const t = state.time, { A, B, a, b, c, d, seed } = pitShape(r);
+  ctx.save(); poly([a, b, c, d]); ctx.clip();
+  const bw = b.x - a.x, bh = d.y - a.y;
+  for (let i = 0; i < 4; i++) {
+    const x = a.x + ((h2(i, seed, 1) * bw + t * (6 + i * 3)) % (bw + 60)) - 30, y = a.y + h2(i, seed, 2) * bh;
+    ctx.fillStyle = hexA('#684c3c', 0.16); ell(ctx, x, y, 30, 9); ctx.fill();
+  }
+  ctx.restore();
+  ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y + 1.25, r.w, r.h); ctx.clip();
+  for (let i = 0; i < 3; i++) {
+    const k = (t * 0.5 + i / 3 + h2(seed, i)) % 1, n = Math.floor(t * 0.5 + i / 3 + h2(seed, i)), f = 0.15 + h2(n * 7 + i, seed, 3) * 0.7;
+    const p = P(P(A, B, f), P(a, b, f), k * k);
+    ctx.globalAlpha = 1 - k; ctx.fillStyle = '#927e6a'; ell(ctx, p.x, p.y, 2.4 * (1 - k * 0.6), 2 * (1 - k * 0.6)); ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -107,33 +122,51 @@ function chasmBoxes() {
   chasmCache = { src: world.pits, n: world.pits.length, boxes };
   return boxes;
 }
-function drawPits() {
-  for (const r of world.pits) if (!r.seamless && visible(r)) drawPit(r);
-  for (const b of chasmBoxes()) if (visible(b)) drawPit(b);
-  // мостки над пропастью: сперва все боковины, потом все верхи
-  for (const r of world.bridges) {
-    if (!visible(r)) continue;
+// проёмы всех колодцев: отдельные пропасти и комнаты-пропасти целиком
+function pitRects() {
+  return world.pits.filter((r) => !r.seamless).concat(chasmBoxes());
+}
+// мостки над пропастью: сперва все боковины, потом все верхи (с боковиной и обводкой — на 12 ниже прямоугольника)
+const bridgeBox = (r) => ({ x: r.x - 2, y: r.y - 2, w: r.w + 4, h: r.h + 14 });
+function drawBridges(area) {
+  const list = world.bridges.filter((r) => hit(bridgeBox(r), area));
+  for (const r of list) {
     ctx.fillStyle = COLORS.wallSide; ctx.fillRect(r.x, r.y + r.h, r.w, 10);
     ctx.fillStyle = 'rgba(20,10,5,0.4)'; ctx.fillRect(r.x, r.y + r.h + 6, r.w, 4);
   }
-  for (const r of world.bridges) {
-    if (!visible(r)) continue;
+  for (const r of list) {
     ctx.fillStyle = COLORS.bridge; ctx.fillRect(r.x, r.y, r.w, r.h);
     ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(r.x, r.y, r.w, r.h + 10);
   }
 }
+// туман и камешки всех колодцев, которые заходят в прямоугольник мира view, — на холсте c
+function drawPitLife(c, view) {
+  const keep = ctx; ctx = c;
+  for (const r of pitRects()) if (hit(r, view)) drawPitAnim(r);
+  ctx = keep;
+}
 
 // ===================== НЕИГРАБЕЛЬНАЯ ЗОНА =====================
-// всё вне пола — очень тёмная скала (рисунок привязан к миру); ею же покрыт верх стен уровня
+// всё вне пола — очень тёмная скала; ею же покрыт верх стен уровня. Скала — бесшовная текстура: рисуется один раз
+// квадратом VOID_PERIOD × VOID_PERIOD единиц мира и повторяется (на тёмной, едва читаемой скале повтора не видно).
+// Чтобы края квадрата сходились, у каждого слоя целое число клеток на квадрат, а номера клеток для случайных
+// чисел берутся по кругу (wrap)
+const VOID_PERIOD = 1024;
+let period = VOID_PERIOD;        // точная сторона квадрата текстуры в единицах мира (под целое число пикселей)
+function cells(s0) {
+  const n = Math.max(1, Math.round(period / s0));
+  return { s: period / n, w: (i) => ((i % n) + n) % n };
+}
 const VOID = {
   // тёмная скала: неровные камни с бликом, сверху всё сильно притемнено — рисунок едва читается
   rock(r) {
     ctx.fillStyle = '#2a1d0d'; ctx.fillRect(r.x, r.y, r.w, r.h);
-    const s = 56;
+    const { s, w } = cells(56);
     for (let ty = Math.floor(r.y / s) - 1; ty * s < r.y + r.h + s; ty++) for (let tx = Math.floor(r.x / s) - 1; tx * s < r.x + r.w + s; tx++) {
-      const cx = tx * s + s / 2 + (h2(tx, ty) - 0.5) * 20, cy = ty * s + s / 2 + (h2(tx, ty, 1) - 0.5) * 20, rad = 22 + h2(tx, ty, 2) * 12;
-      ctx.fillStyle = h2(tx, ty, 3) > 0.5 ? '#300f0a' : '#36170c'; ctx.globalAlpha = 0.8;
-      ell(ctx, cx, cy, rad, rad * 0.8, h2(tx, ty, 4) * 3); ctx.fill();
+      const u = w(tx), v = w(ty);
+      const cx = tx * s + s / 2 + (h2(u, v) - 0.5) * 20, cy = ty * s + s / 2 + (h2(u, v, 1) - 0.5) * 20, rad = 22 + h2(u, v, 2) * 12;
+      ctx.fillStyle = h2(u, v, 3) > 0.5 ? '#300f0a' : '#36170c'; ctx.globalAlpha = 0.8;
+      ell(ctx, cx, cy, rad, rad * 0.8, h2(u, v, 4) * 3); ctx.fill();
       ctx.globalAlpha = 0.15; ctx.fillStyle = '#684c3c'; ell(ctx, cx - rad * 0.3, cy - rad * 0.35, rad * 0.4, rad * 0.16, -0.3); ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -144,51 +177,55 @@ const VOID = {
 const VX = {
   // пятна: крупные размытые области чуть светлее и чуть темнее (ломают ровный ритм камней)
   patches(r) {
-    const s = 220;
+    const { s, w } = cells(220);
     for (let ty = Math.floor(r.y / s) - 1; ty * s < r.y + r.h + s; ty++) for (let tx = Math.floor(r.x / s) - 1; tx * s < r.x + r.w + s; tx++) {
-      const x = tx * s + h2(tx, ty, 81) * s, y = ty * s + h2(tx, ty, 82) * s, rad = 70 + h2(tx, ty, 83) * 70, light = h2(tx, ty, 84) > 0.5;
+      const u = w(tx), v = w(ty);
+      const x = tx * s + h2(u, v, 81) * s, y = ty * s + h2(u, v, 82) * s, rad = 70 + h2(u, v, 83) * 70, light = h2(u, v, 84) > 0.5;
       const g = ctx.createRadialGradient(x, y, 4, x, y, rad);
       g.addColorStop(0, light ? 'rgba(104,76,60,0.10)' : 'rgba(5,3,1,0.35)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g; ell(ctx, x, y, rad, rad * 0.7, h2(tx, ty, 85) * 3); ctx.fill();
+      ctx.fillStyle = g; ell(ctx, x, y, rad, rad * 0.7, h2(u, v, 85) * 3); ctx.fill();
     }
   },
   // обломки плит: угловатые тёмные куски с еле заметной светлой гранью
   slabsBroken(r) {
-    const s = 90;
+    const { s, w } = cells(90);
     for (let ty = Math.floor(r.y / s) - 1; ty * s < r.y + r.h + s; ty++) for (let tx = Math.floor(r.x / s) - 1; tx * s < r.x + r.w + s; tx++) {
-      if (h2(tx, ty, 91) > 0.6) continue;
-      const x = tx * s + h2(tx, ty, 92) * s, y = ty * s + h2(tx, ty, 93) * s, n = 2 + Math.floor(h2(tx, ty, 94) * 3);
+      const u = w(tx), v = w(ty);
+      if (h2(u, v, 91) > 0.6) continue;
+      const x = tx * s + h2(u, v, 92) * s, y = ty * s + h2(u, v, 93) * s, n = 2 + Math.floor(h2(u, v, 94) * 3);
       for (let i = 0; i < n; i++) {
-        const px = x + (h2(i, tx, 95) - 0.5) * 34, py = y + (h2(i, ty, 96) - 0.5) * 20, w = 8 + h2(i, tx + ty, 97) * 14, hh = 5 + h2(i, 98) * 8;
-        ctx.save(); ctx.translate(px, py); ctx.rotate((h2(i, tx, 99) - 0.5) * 0.9);
-        ctx.beginPath(); ctx.moveTo(-w / 2, -hh / 2); ctx.lineTo(w / 2 - 2, -hh / 2 + 1); ctx.lineTo(w / 2, hh / 2); ctx.lineTo(-w / 2 + 3, hh / 2); ctx.closePath();
+        const px = x + (h2(i, u, 95) - 0.5) * 34, py = y + (h2(i, v, 96) - 0.5) * 20, wd = 8 + h2(i, u + v, 97) * 14, hh = 5 + h2(i, 98) * 8;
+        ctx.save(); ctx.translate(px, py); ctx.rotate((h2(i, u, 99) - 0.5) * 0.9);
+        ctx.beginPath(); ctx.moveTo(-wd / 2, -hh / 2); ctx.lineTo(wd / 2 - 2, -hh / 2 + 1); ctx.lineTo(wd / 2, hh / 2); ctx.lineTo(-wd / 2 + 3, hh / 2); ctx.closePath();
         ctx.fillStyle = 'rgba(54,23,12,0.75)'; ctx.fill();
-        ctx.strokeStyle = 'rgba(104,76,60,0.18)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-w / 2, -hh / 2); ctx.lineTo(w / 2 - 2, -hh / 2 + 1); ctx.stroke();
-        ctx.fillStyle = 'rgba(5,3,1,0.4)'; ctx.fillRect(-w / 2 + 2, hh / 2, w - 2, 2);
+        ctx.strokeStyle = 'rgba(104,76,60,0.18)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-wd / 2, -hh / 2); ctx.lineTo(wd / 2 - 2, -hh / 2 + 1); ctx.stroke();
+        ctx.fillStyle = 'rgba(5,3,1,0.4)'; ctx.fillRect(-wd / 2 + 2, hh / 2, wd - 2, 2);
         ctx.restore();
       }
     }
   },
   // щебень: россыпи мелких камешков чуть светлее основы
   gravel(r) {
-    const s = 55;
+    const { s, w } = cells(55);
     for (let ty = Math.floor(r.y / s) - 1; ty * s < r.y + r.h + s; ty++) for (let tx = Math.floor(r.x / s) - 1; tx * s < r.x + r.w + s; tx++) {
-      if (h2(tx, ty, 101) > 0.55) continue;
-      const x = tx * s + h2(tx, ty, 102) * s, y = ty * s + h2(tx, ty, 103) * s;
-      for (let i = 0; i < 7; i++) { ctx.fillStyle = i % 3 ? 'rgba(54,23,12,0.8)' : 'rgba(104,76,60,0.16)'; ell(ctx, x + (h2(i, tx, 104) - 0.5) * 30, y + (h2(i, ty, 105) - 0.5) * 16, 1.5 + h2(i, 106) * 2.2, 1.2 + h2(i, 107) * 1.4); ctx.fill(); }
+      const u = w(tx), v = w(ty);
+      if (h2(u, v, 101) > 0.55) continue;
+      const x = tx * s + h2(u, v, 102) * s, y = ty * s + h2(u, v, 103) * s;
+      for (let i = 0; i < 7; i++) { ctx.fillStyle = i % 3 ? 'rgba(54,23,12,0.8)' : 'rgba(104,76,60,0.16)'; ell(ctx, x + (h2(i, u, 104) - 0.5) * 30, y + (h2(i, v, 105) - 0.5) * 16, 1.5 + h2(i, 106) * 2.2, 1.2 + h2(i, 107) * 1.4); ctx.fill(); }
     }
   },
   // трещины: тонкие ветвящиеся тёмные линии и сколы
   cracks(r) {
-    const s = 130;
+    const { s, w } = cells(130);
     ctx.lineCap = 'round';
     for (let ty = Math.floor(r.y / s) - 1; ty * s < r.y + r.h + s; ty++) for (let tx = Math.floor(r.x / s) - 1; tx * s < r.x + r.w + s; tx++) {
-      if (h2(tx, ty, 111) > 0.65) continue;
-      const x = tx * s + h2(tx, ty, 112) * s, y = ty * s + h2(tx, ty, 113) * s;
-      let a = h2(tx, ty, 114) * TAU, px = x, py = y;
+      const u = w(tx), v = w(ty);
+      if (h2(u, v, 111) > 0.65) continue;
+      const x = tx * s + h2(u, v, 112) * s, y = ty * s + h2(u, v, 113) * s;
+      let a = h2(u, v, 114) * TAU, px = x, py = y;
       ctx.strokeStyle = 'rgba(5,3,1,0.7)'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(px, py);
       const pts = [];
-      for (let i = 0; i < 6; i++) { a += (h2(tx + i, ty, 115) - 0.5) * 1.4; px += Math.cos(a) * 14; py += Math.sin(a) * 14; ctx.lineTo(px, py); pts.push([px, py, a]); }
+      for (let i = 0; i < 6; i++) { a += (h2(u + i, v, 115) - 0.5) * 1.4; px += Math.cos(a) * 14; py += Math.sin(a) * 14; ctx.lineTo(px, py); pts.push([px, py, a]); }
       ctx.stroke();
       const [bx, by, ba] = pts[2]; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(ba + 1.1) * 12, by + Math.sin(ba + 1.1) * 12); ctx.stroke();
       ctx.strokeStyle = 'rgba(104,76,60,0.12)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + 1, y + 1.5); pts.slice(0, 4).forEach(([qx, qy]) => ctx.lineTo(qx + 1, qy + 1.5)); ctx.stroke();
@@ -197,122 +234,105 @@ const VX = {
   },
   // серые вкрапления: мелкие угловатые камешки светлее основы, по одному и кучками
   flecks(r) {
-    const s = 34;
+    const { s, w } = cells(34);
     for (let ty = Math.floor(r.y / s) - 1; ty * s < r.y + r.h + s; ty++) for (let tx = Math.floor(r.x / s) - 1; tx * s < r.x + r.w + s; tx++) {
-      const v = h2(tx, ty, 121); if (v > 0.42) continue;
-      const x = tx * s + h2(tx, ty, 122) * s, y = ty * s + h2(tx, ty, 123) * s, n = v < 0.1 ? 3 : 1;
+      const u = w(tx), v = w(ty);
+      const q = h2(u, v, 121); if (q > 0.42) continue;
+      const x = tx * s + h2(u, v, 122) * s, y = ty * s + h2(u, v, 123) * s, n = q < 0.1 ? 3 : 1;
       for (let i = 0; i < n; i++) {
-        const px = x + (i ? (h2(i, tx, 124) - 0.5) * 12 : 0), py = y + (i ? (h2(i, ty, 125) - 0.5) * 8 : 0), w = 2 + h2(tx + i, ty, 126) * 3.5, hh = 1.5 + h2(tx, ty + i, 127) * 2;
-        ctx.save(); ctx.translate(px, py); ctx.rotate(h2(tx, ty, 128 + i) * 3);
-        ctx.fillStyle = h2(tx, ty, 130 + i) > 0.5 ? 'rgba(146,126,106,0.38)' : 'rgba(104,76,60,0.5)';
-        ctx.beginPath(); ctx.moveTo(-w, 0); ctx.lineTo(-w * 0.3, -hh); ctx.lineTo(w, -hh * 0.4); ctx.lineTo(w * 0.6, hh); ctx.lineTo(-w * 0.5, hh * 0.8); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = 'rgba(5,3,1,0.45)'; ctx.fillRect(-w * 0.5, hh * 0.8, w, 1.2);
+        const px = x + (i ? (h2(i, u, 124) - 0.5) * 12 : 0), py = y + (i ? (h2(i, v, 125) - 0.5) * 8 : 0), wd = 2 + h2(u + i, v, 126) * 3.5, hh = 1.5 + h2(u, v + i, 127) * 2;
+        ctx.save(); ctx.translate(px, py); ctx.rotate(h2(u, v, 128 + i) * 3);
+        ctx.fillStyle = h2(u, v, 130 + i) > 0.5 ? 'rgba(146,126,106,0.38)' : 'rgba(104,76,60,0.5)';
+        ctx.beginPath(); ctx.moveTo(-wd, 0); ctx.lineTo(-wd * 0.3, -hh); ctx.lineTo(wd, -hh * 0.4); ctx.lineTo(wd * 0.6, hh); ctx.lineTo(-wd * 0.5, hh * 0.8); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = 'rgba(5,3,1,0.45)'; ctx.fillRect(-wd * 0.5, hh * 0.8, wd, 1.2);
         ctx.restore();
       }
     }
   },
 };
-function paintVoidRaw(r) {
-  ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
-  VOID.rock(r); VX.patches(r); VX.slabsBroken(r); VX.cracks(r); VX.gravel(r); VX.flecks(r);
-  ctx.restore();
-}
-
-// Скала не меняется: рисунок зависит только от координат мира (не от уровня). Поэтому она рисуется один раз кусками
-// TILE×TILE в разрешении экрана, а каждый кадр только копируется. Куски рядом с экраном дорисовываются заранее,
-// по PREFETCH за кадр, чтобы на ходу не было рывков; давно не нужные выбрасываются. Сменился масштаб экрана — заново
-const TILE = 256, PREFETCH = 1;
-const tiles = new Map();   // 'tx,ty' → холст куска; порядок — от давно нужного к свежему
-const spare = [];          // холсты выброшенных кусков того же размера — под новые куски
-let tileScale = 0;
-function useScale(s) {
-  if (Math.abs(s - tileScale) < 1e-6) return;
-  tiles.clear(); spare.length = 0; tileScale = s;
-}
-function tileFor(tx, ty) {
-  const id = tx + ',' + ty;
-  let c = tiles.get(id);
-  if (c) { tiles.delete(id); tiles.set(id, c); return c; }
-  const px = Math.max(1, Math.round(TILE * tileScale)), k = px / TILE;
-  c = spare.pop() || document.createElement('canvas');
-  if (c.width !== px) { c.width = px; c.height = px; }
+// текстура скалы под масштаб экрана scale (пикселей холста на единицу мира): квадрат целого числа пикселей,
+// рисуется один раз на масштаб
+let voidTex = { scale: 0, canvas: null };
+function voidTexture(scale) {
+  if (voidTex.scale === scale) return voidTex.canvas;
+  const px = Math.round(VOID_PERIOD * scale);
+  const c = voidTex.canvas || document.createElement('canvas');
+  c.width = px; c.height = px;
+  period = px / scale;
   const keep = ctx; ctx = c.getContext('2d');
-  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, px, px);
-  ctx.setTransform(k, 0, 0, k, -tx * TILE * k, -ty * TILE * k);
-  paintVoidRaw({ x: tx * TILE, y: ty * TILE, w: TILE, h: TILE });
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  const r = { x: 0, y: 0, w: period, h: period };
+  VOID.rock(r); VX.patches(r); VX.slabsBroken(r); VX.cracks(r); VX.gravel(r); VX.flecks(r);
   ctx = keep;
-  tiles.set(id, c);
-  // кусков в запасе — на экран и кольцо вокруг него
-  const max = (Math.ceil(CONFIG.VIEW.w / TILE) + 3) * (Math.ceil(CONFIG.VIEW.h / TILE) + 3) + 6;
-  for (const [old, oc] of tiles) {
-    if (tiles.size <= max) break;
-    tiles.delete(old);
-    if (oc.width === px) spare.push(oc);
-  }
+  voidTex = { scale, canvas: c };
   return c;
 }
-// кусок целиком под полом: под фоном его не видно (пол непрозрачный). Нужен ли он стенам — отдельно: верх стены
-// поднят над её основанием и заходит на пол. Считается раз на кусок, заново — когда мир перестроен
-let tileInfo = { src: null, map: new Map() };
-function tileKind(tx, ty) {
-  if (tileInfo.src !== world.floors) tileInfo = { src: world.floors, map: new Map() };
-  const id = tx + ',' + ty;
-  let k = tileInfo.map.get(id);
-  if (k) return k;
-  const x0 = tx * TILE, y0 = ty * TILE, x1 = x0 + TILE, y1 = y0 + TILE;
-  const covered = world.floors.some((f) => f.x <= x0 && f.y <= y0 && f.x + f.w >= x1 && f.y + f.h >= y1);
-  const walled = world.walls.some((w) => w.x < x1 && w.x + w.w > x0 && w.y - WALL_H < y1 && w.y + w.h > y0);
-  k = { covered, needed: !covered || walled };
-  tileInfo.map.set(id, k);
-  return k;
+// заливка скалой для холста c (кусок земли): текстура привязана к началу мира, пиксель текстуры — пиксель холста
+let voidFill = null;
+function prepareVoid(c) {
+  const scale = c.getTransform().a;
+  const p = c.createPattern(voidTexture(scale), 'repeat');
+  p.setTransform(new DOMMatrix([1 / scale, 0, 0, 1 / scale, 0, 0]));
+  voidFill = p;
 }
-// экран в координатах мира с запасом pad
-function viewRect(pad = 4) {
-  return { x: state.camera.x - pad, y: state.camera.y - pad, w: CONFIG.VIEW.w + 2 * pad, h: CONFIG.VIEW.h + 2 * pad };
+// скала в прямоугольнике мира r
+function paintVoid(r) {
+  if (!voidFill) return;
+  ctx.fillStyle = voidFill; ctx.fillRect(r.x, r.y, r.w, r.h);
 }
-// часть прямоугольника мира r на экране (с небольшим запасом) или null
-function inView(r) {
-  const v = viewRect();
-  const x0 = Math.max(r.x, v.x), y0 = Math.max(r.y, v.y);
-  const x1 = Math.min(r.x + r.w, v.x + v.w), y1 = Math.min(r.y + r.h, v.y + v.h);
-  return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
-}
-// копирует скалу в прямоугольник мира r на текущий холст. Куски кладутся по целым пикселям холста встык — без швов;
-// underFloor — пропустить куски целиком под полом
-function blitVoid(r, underFloor) {
-  const m = ctx.getTransform();
-  useScale(m.a);
+
+// ===================== ПОЛ И ШИПЫ =====================
+// пол из каменных плит: тёмные швы и редкие плиты потемнее (рисунок привязан к миру); area — какой кусок рисуем
+function drawFloor(f, area) {
+  const x0 = Math.max(f.x, area.x), y0 = Math.max(f.y, area.y);
+  const x1 = Math.min(f.x + f.w, area.x + area.w), y1 = Math.min(f.y + f.h, area.y + area.h);
+  if (x1 <= x0 || y1 <= y0) return;
+  const v = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  ctx.fillStyle = COLORS.floor;
+  ctx.fillRect(v.x, v.y, v.w, v.h);
+  const s = 64;
   ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  for (let ty = Math.floor(r.y / TILE); ty * TILE < r.y + r.h; ty++) {
-    const y0 = Math.round(m.d * ty * TILE + m.f), y1 = Math.round(m.d * (ty + 1) * TILE + m.f);
-    for (let tx = Math.floor(r.x / TILE); tx * TILE < r.x + r.w; tx++) {
-      if (underFloor && tileKind(tx, ty).covered) continue;
-      const x0 = Math.round(m.a * tx * TILE + m.e), x1 = Math.round(m.a * (tx + 1) * TILE + m.e);
-      ctx.drawImage(tileFor(tx, ty), x0, y0, x1 - x0, y1 - y0);
+  ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip();
+  ctx.fillStyle = COLORS.floorStone;
+  ctx.strokeStyle = COLORS.floorLine;
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.55;
+  for (let ty = Math.floor(v.y / s); ty * s < v.y + v.h; ty++) {
+    const off = (ty & 1) * s / 2;
+    for (let tx = Math.floor((v.x - off) / s); tx * s + off < v.x + v.w; tx++) {
+      const x = tx * s + off, y = ty * s;
+      const n = Math.sin(tx * 12.9898 + ty * 78.233) * 43758.5453;
+      if (n - Math.floor(n) > 0.82) ctx.fillRect(x + 6, y + 6, s - 12, s - 12);
+      ctx.strokeRect(x, y, s, s);
     }
   }
   ctx.restore();
 }
-// скала в прямоугольнике мира r (верх стены): только видимая часть, по краю r — обрезка
-function paintVoid(r) {
-  const v = inView(r);
-  if (!v) return;
-  ctx.save(); ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip();
-  blitVoid(v);
-  ctx.restore();
-}
-// фон за уровнем: весь экран, кроме того, что точно под полом; заранее — по куску из кольца вокруг экрана
-function drawVoid() {
-  const v = viewRect();
-  blitVoid(v, true);
-  let budget = PREFETCH;
-  const tx0 = Math.floor(v.x / TILE) - 1, tx1 = Math.floor((v.x + v.w) / TILE) + 1;
-  const ty0 = Math.floor(v.y / TILE) - 1, ty1 = Math.floor((v.y + v.h) / TILE) + 1;
-  for (let ty = ty0; ty <= ty1 && budget > 0; ty++) for (let tx = tx0; tx <= tx1 && budget > 0; tx++) {
-    if (tiles.has(tx + ',' + ty) || !tileKind(tx, ty).needed) continue;
-    tileFor(tx, ty);
-    budget--;
+
+// шипы: тёмно-красная плита с рамкой, на ней ряды металлических конусов — светлый бок, тёмный бок, блик на острие
+function drawSpikes(r) {
+  ctx.fillStyle = COLORS.spikeFloor;
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.strokeStyle = COLORS.floorLine;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+  const s = 16, hw = 5, h = 11;
+  ctx.lineWidth = 1.2;
+  ctx.lineJoin = 'round';
+  for (let y = r.y + s * 0.85; y < r.y + r.h - 2; y += s) {
+    const row = Math.round((y - r.y) / s);
+    for (let x = r.x + s / 2 + (row % 2) * s / 2; x < r.x + r.w - 4; x += s) {
+      ctx.fillStyle = 'rgba(20,10,5,0.5)';
+      ctx.beginPath(); ctx.ellipse(x, y, hw + 1, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = COLORS.spikeTeeth;
+      ctx.beginPath(); ctx.moveTo(x - hw, y); ctx.lineTo(x, y - h); ctx.lineTo(x, y); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = COLORS.pillarSide;
+      ctx.beginPath(); ctx.moveTo(x + hw, y); ctx.lineTo(x, y - h); ctx.lineTo(x, y); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = COLORS.floorLine;
+      ctx.beginPath(); ctx.moveTo(x - hw, y); ctx.lineTo(x, y - h); ctx.lineTo(x + hw, y); ctx.stroke();
+      ctx.fillStyle = COLORS.allyShot;
+      ctx.fillRect(x - 1, y - h + 1, 1.5, 2.5);
+    }
   }
 }
 
@@ -380,12 +400,13 @@ function wallEdges() {
   return map;
 }
 // c — холст (основной или временный для окошка)
-function drawLevelWall(c, r) {
+// area — какой кусок земли рисуем: длинная грань рисуется только в его пределах (края обрезки за ним, кладка привязана к миру)
+function drawLevelWall(c, r, area) {
   const H = WALL_H, ed = wallEdges().get(r) || { face: [], S: [], N: [], W: [], E: [] };
   const keep = ctx; ctx = c;
-  paintVoid({ x: r.x, y: r.y - H, w: r.w, h: r.h + H });   // верх и всё под ним до основания (только видимая часть)
-  // кирпичные грани над полом — только видимый кусок (края обрезки за экраном, кладка привязана к миру)
-  const vr = viewRect(60);
+  paintVoid({ x: r.x, y: r.y - H, w: r.w, h: r.h + H });   // верх и всё под ним до основания
+  // кирпичные грани над полом
+  const vr = grow(area, 60);
   for (const [a0, a1] of ed.face) {
     const x0 = Math.max(a0, vr.x), x1 = Math.min(a1, vr.x + vr.w);
     if (x1 <= x0) continue;
@@ -431,87 +452,17 @@ function blocks() {
   blockCache = { walls: world.walls, pillars: world.pillars, key, list };
   return list;
 }
-function drawOne(c, b) {
+function drawOne(c, b, area) {
   if (b.house) G.baseArt.draw(c, b.r);   // база «Обороны» — избушка (render/baseart.js)
-  else if (b.level) drawLevelWall(c, b.r);
+  else if (b.level) drawLevelWall(c, b.r, area);
   else drawBlock(c, b.r, b.top, b.face, b.line, b.planks);
 }
-function drawWalls() {
-  for (const b of blocks()) if (visible(lifted(b.r))) drawOne(ctx, b);
-}
-
-// Спрятанные за стеной. Стены нарисованы до тел, поэтому тела за стеной оказались поверх неё; здесь, после тел,
-// такая стена рисуется ещё раз поверх: во временном холсте вокруг каждого спрятанного (Герой, дружочки, враги)
-// небольшое мягкое пятно, где стена прозрачна наполовину — его видно сквозь стену; у стоящих перед стеной
-// (их головы заходят на её грань) и у ближних стен — сквозные дыры. Стена перерисовывается не вся, а только там,
-// куда заходит рисунок спрятанных (блоб крупнее тела, сверху шапка, полоска HP, значки); у кого рисунок раскидан
-// далеко (спрут: тени тентаклей) — вся видимая часть. Во временном холсте занят и переносится только этот кусок
-let osc = null, octx = null;
-const PAD_BLOCK = [6, 6, 6, 20], PAD_HOUSE = [40, 130, 40, 24];   // запас вокруг поднятого блока: слева, сверху, справа, снизу
-function spriteBounds(list) {
-  const out = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
-  for (const u of list) {
-    const reach = u.kind === 'enemy' ? (G.enemyTypes[u.type].drawReach || 0) : 0;
-    if (reach > 200) return { x0: -Infinity, y0: -Infinity, x1: Infinity, y1: Infinity };
-    const side = u.r * 2.2 + 16;
-    out.x0 = Math.min(out.x0, u.x - side); out.x1 = Math.max(out.x1, u.x + side);
-    out.y0 = Math.min(out.y0, u.y - u.r * 3.4 - 40); out.y1 = Math.max(out.y1, u.y + u.r * 1.6 + 8);
-  }
-  return out;
-}
-function bodies() {
-  const out = [];
-  for (const u of state.party) out.push(u);
-  for (const u of state.downed) out.push(u);
-  for (const u of state.neutrals) out.push(u);
-  for (const e of state.enemies) if (e.hp > 0) out.push(e);
-  return out;
-}
-function drawOccluders() {
-  const list = bodies(), all = blocks();
-  let m = null;
-  for (const b of all) {
-    const r = b.r, L = lifted(r);
-    if (!visible(L)) continue;
-    const bottom = r.y + r.h, inX = (u) => u.x + u.r > r.x && u.x - u.r < r.x + r.w;
-    const hidden = list.filter((u) => inX(u) && u.y < bottom && u.y + u.r > L.y);
-    if (!hidden.length) continue;
-    const front = list.filter((u) => inX(u) && u.y >= bottom && u.y - u.r * 3 < bottom);
-    const cw = ctx.canvas.width, ch = ctx.canvas.height;
-    // перерисовываемый кусок: блок с запасом, где заходят рисунки спрятанных, на экране — в пикселях холста
-    if (!m) m = ctx.getTransform();
-    const p = b.house ? PAD_HOUSE : PAD_BLOCK, sb = spriteBounds(hidden);
-    const wx0 = Math.max(L.x - p[0], sb.x0), wy0 = Math.max(L.y - p[1], sb.y0);
-    const wx1 = Math.min(L.x + L.w + p[2], sb.x1), wy1 = Math.min(L.y + L.h + p[3], sb.y1);
-    const x0 = Math.max(0, Math.floor(m.a * wx0 + m.e)), y0 = Math.max(0, Math.floor(m.d * wy0 + m.f));
-    const x1 = Math.min(cw, Math.ceil(m.a * wx1 + m.e)), y1 = Math.min(ch, Math.ceil(m.d * wy1 + m.f));
-    if (x1 <= x0 || y1 <= y0) continue;
-    const w = x1 - x0, h = y1 - y0;
-    // временный холст по размеру куска (только растёт): чем он меньше, тем дешевле каждое копирование на экран
-    if (!osc) { osc = document.createElement('canvas'); osc.width = 0; osc.height = 0; octx = osc.getContext('2d'); }
-    if (osc.width < w || osc.height < h) { osc.width = Math.max(osc.width, Math.ceil(w / 64) * 64); osc.height = Math.max(osc.height, Math.ceil(h / 64) * 64); }
-    octx.setTransform(1, 0, 0, 1, 0, 0); octx.clearRect(0, 0, w, h);
-    octx.save(); octx.beginPath(); octx.rect(0, 0, w, h); octx.clip();
-    octx.setTransform(m.a, m.b, m.c, m.d, m.e - x0, m.f - y0);
-    drawOne(octx, b);
-    octx.globalCompositeOperation = 'destination-out';
-    for (const u of hidden) {
-      const R = Math.min(90, u.r * 2.2 + 6), g = octx.createRadialGradient(u.x, u.y - u.r * 0.6, R * 0.45, u.x, u.y - u.r * 0.6, R);
-      g.addColorStop(0, 'rgba(0,0,0,0.5)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-      octx.fillStyle = g; octx.fillRect(u.x - R, u.y - u.r * 0.6 - R, R * 2, R * 2);
-    }
-    octx.fillStyle = '#000';
-    for (const u of front) { ell(octx, u.x, u.y - u.r * 0.9, u.r * 1.5, u.r * 2.1); octx.fill(); }
-    // ближние стены, заходящие на эту, уже нарисованы поверх неё — не закрывать их
-    for (const o of all) {
-      if (o.r.y + o.r.h <= bottom) continue;
-      const M = lifted(o.r);
-      if (M.x < L.x + L.w && M.x + M.w > L.x && M.y < L.y + L.h && M.y + M.h > L.y) octx.fillRect(M.x, M.y, M.w, M.h);
-    }
-    octx.globalCompositeOperation = 'source-over';
-    octx.restore();
-    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(osc, 0, 0, w, h, x0, y0, w, h); ctx.restore();
-  }
+// сколько рисунок блока выходит за поднятый прямоугольник: слева, сверху, справа, снизу (тень у подножия, обводка;
+// у избушки — крыша, флаг и дым из трубы)
+const PAD_BLOCK = [6, 6, 6, 20], PAD_HOUSE = [40, 130, 40, 24];
+function blockBox(b) {
+  const L = lifted(b.r), p = b.house ? PAD_HOUSE : PAD_BLOCK;
+  return { x: L.x - p[0], y: L.y - p[1], w: L.w + p[0] + p[2], h: L.h + p[1] + p[3] };
 }
 
 // ===================== ДЕКОР =====================
@@ -560,13 +511,83 @@ function layoutDecor() {
   decor = { src: world.floors, items };
   return items;
 }
-function drawDecor() {
+// вещь декора целиком (масштаб DECOR_SCALE, самые длинные — цепи и кольцо с цепью) помещается в этот прямоугольник
+const decorBox = (it) => ({ x: it.x - 90, y: it.y - 60, w: 180, h: 120 });
+function drawDecor(area) {
   for (const it of layoutDecor()) {
-    if (!visible({ x: it.x - 60, y: it.y - 40, w: 120, h: 80 })) continue;
+    if (!hit(decorBox(it), area)) continue;
     ctx.save(); ctx.translate(it.x, it.y); ctx.scale(DECOR_SCALE * it.flip, DECOR_SCALE);
     DECOR[it.kind](0, 0); ctx.restore();
   }
 }
 
-G.terrain = { drawVoid, drawPits, drawWalls, drawOccluders, drawDecor, WALL_H };
+// ===================== ЗЕМЛЯ ЦЕЛИКОМ =====================
+// Всё неподвижное в прямоугольнике мира area на холсте c (кусок земли; холст уже сдвинут и отмасштабирован под него).
+// part: 'all' — всё; 'lower' — до пропастей включительно; 'upper' — то, что над пропастью и её живой частью
+// (мостки, шипы, стены, колонны, закрытые двери). Избушка базы живая — её здесь нет
+// части прямоугольника area, не закрытые полом (пол непрозрачный — под ним скалы не видно); комнаты уровня стоят
+// встык, поэтому кусок часто закрыт полом нескольких комнат сразу
+function bareParts(area) {
+  let parts = [area];
+  for (const f of world.floors) {
+    const next = [];
+    for (const p of parts) {
+      if (!hit(p, f)) { next.push(p); continue; }
+      const x0 = Math.max(p.x, f.x), x1 = Math.min(p.x + p.w, f.x + f.w), y0 = Math.max(p.y, f.y), y1 = Math.min(p.y + p.h, f.y + f.h);
+      if (y0 > p.y) next.push({ x: p.x, y: p.y, w: p.w, h: y0 - p.y });
+      if (y1 < p.y + p.h) next.push({ x: p.x, y: y1, w: p.w, h: p.y + p.h - y1 });
+      if (x0 > p.x) next.push({ x: p.x, y: y0, w: x0 - p.x, h: y1 - y0 });
+      if (x1 < p.x + p.w) next.push({ x: x1, y: y0, w: p.x + p.w - x1, h: y1 - y0 });
+    }
+    parts = next;
+  }
+  return parts.filter((p) => p.w > 0.01 && p.h > 0.01);
+}
+// общая рамка прямоугольников (с запасом d) внутри area или null
+function frameOf(list, area, d) {
+  if (!list.length) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const r of list) { x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y); x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h); }
+  x0 = Math.max(area.x, x0 - d); y0 = Math.max(area.y, y0 - d);
+  x1 = Math.min(area.x + area.w, x1 + d); y1 = Math.min(area.y + area.h, y1 + d);
+  return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+}
+function paintGround(c, area, part) {
+  const lower = part !== 'upper', upper = part !== 'lower';
+  const keep = ctx; ctx = c;
+  c.save();
+  c.lineJoin = 'round';   // так рисует и сцена: круглые стыки линий — общий вид всего окружения
+  // скала — там, где нет пола (общей рамкой: без швов между частями, пол потом ляжет сверху), и на верхе стен
+  const bare = lower ? frameOf(bareParts(area), area, 2) : null;
+  const walled = upper && world.walls.some((w) => hit(lifted(w), grow(area, 6)));
+  if (bare || walled) prepareVoid(c);
+  if (bare) paintVoid(bare);
+  if (lower) {
+    for (const f of world.floors) drawFloor(f, area);
+    // зоны поля подсвечены по степени опасности
+    for (const f of world.floors) {
+      if (!f.tint || !hit(f, area)) continue;
+      c.fillStyle = COLORS.zoneTint[f.tint];
+      c.fillRect(f.x, f.y, f.w, f.h);
+    }
+    drawDecor(area);
+    for (const r of pitRects()) if (hit(grow(r, 4), area)) drawPitStatic(r);
+  }
+  if (upper) {
+    drawBridges(area);
+    for (const r of world.spikes) if (hit(grow(r, 4), area)) drawSpikes(r);
+    for (const b of blocks()) if (!b.house && hit(blockBox(b), area)) drawOne(c, b, area);
+  }
+  c.restore();
+  voidFill = null; ctx = keep;
+}
+// кусок задевает проём пропасти: её живая часть рисуется между нижним и верхним слоем
+function splitAt(area) { return pitRects().some((r) => hit(r, area)); }
+// в куске есть что-то из верхнего слоя
+function hasUpperAt(area) {
+  return world.bridges.some((r) => hit(bridgeBox(r), area)) || world.spikes.some((r) => hit(grow(r, 4), area))
+    || blocks().some((b) => !b.house && hit(blockBox(b), area));
+}
+
+G.terrain = { paintGround, splitAt, hasUpperAt, drawPitLife, blocks, blockBox, drawOne, lifted, WALL_H };
 })(window.Game = window.Game || {});

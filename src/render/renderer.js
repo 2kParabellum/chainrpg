@@ -240,85 +240,6 @@ function drawFinish() {
   ctx.globalAlpha = 1;
 }
 
-// пол из каменных плит: тёмные швы и редкие плиты потемнее (рисунок привязан к миру, не к экрану)
-function drawFloor(f) {
-  const v = clipToView(f);
-  if (!v) return;
-  ctx.fillStyle = COLORS.floor;
-  ctx.fillRect(v.x, v.y, v.w, v.h);
-  const s = 64;
-  ctx.save();
-  ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip();
-  ctx.fillStyle = COLORS.floorStone;
-  ctx.strokeStyle = COLORS.floorLine;
-  ctx.lineWidth = 2;
-  ctx.globalAlpha = 0.55;
-  for (let ty = Math.floor(v.y / s); ty * s < v.y + v.h; ty++) {
-    const off = (ty & 1) * s / 2;
-    for (let tx = Math.floor((v.x - off) / s); tx * s + off < v.x + v.w; tx++) {
-      const x = tx * s + off, y = ty * s;
-      const n = Math.sin(tx * 12.9898 + ty * 78.233) * 43758.5453;
-      if (n - Math.floor(n) > 0.82) ctx.fillRect(x + 6, y + 6, s - 12, s - 12);
-      ctx.strokeRect(x, y, s, s);
-    }
-  }
-  ctx.restore();
-}
-
-// часть прямоугольника, которая видна на экране (или null)
-function clipToView(r) {
-  const x0 = Math.max(r.x, state.camera.x - 40), y0 = Math.max(r.y, state.camera.y - 40);
-  const x1 = Math.min(r.x + r.w, state.camera.x + CONFIG.VIEW.w + 40), y1 = Math.min(r.y + r.h, state.camera.y + CONFIG.VIEW.h + 40);
-  return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
-}
-
-// шипы: тёмно-красная плита с рамкой, на ней ряды металлических конусов — светлый бок, тёмный бок, блик на острие
-function drawSpikes(r) {
-  ctx.fillStyle = COLORS.spikeFloor;
-  ctx.fillRect(r.x, r.y, r.w, r.h);
-  ctx.strokeStyle = COLORS.floorLine;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
-  const s = 16, hw = 5, h = 11;
-  ctx.lineWidth = 1.2;
-  ctx.lineJoin = 'round';
-  for (let y = r.y + s * 0.85; y < r.y + r.h - 2; y += s) {
-    const row = Math.round((y - r.y) / s);
-    for (let x = r.x + s / 2 + (row % 2) * s / 2; x < r.x + r.w - 4; x += s) {
-      ctx.fillStyle = 'rgba(20,10,5,0.5)';
-      ctx.beginPath(); ctx.ellipse(x, y, hw + 1, 2.5, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = COLORS.spikeTeeth;
-      ctx.beginPath(); ctx.moveTo(x - hw, y); ctx.lineTo(x, y - h); ctx.lineTo(x, y); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = COLORS.pillarSide;
-      ctx.beginPath(); ctx.moveTo(x + hw, y); ctx.lineTo(x, y - h); ctx.lineTo(x, y); ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = COLORS.floorLine;
-      ctx.beginPath(); ctx.moveTo(x - hw, y); ctx.lineTo(x, y - h); ctx.lineTo(x + hw, y); ctx.stroke();
-      ctx.fillStyle = COLORS.allyShot;
-      ctx.fillRect(x - 1, y - h + 1, 1.5, 2.5);
-    }
-  }
-}
-
-function drawTerrain() {
-  G.terrain.drawVoid();
-  for (const f of world.floors) drawFloor(f);
-  // зоны поля подсвечены по степени опасности
-  for (const f of world.floors) {
-    if (!f.tint || !visible(f)) continue;
-    ctx.fillStyle = COLORS.zoneTint[f.tint];
-    ctx.fillRect(f.x, f.y, f.w, f.h);
-  }
-
-  G.terrain.drawDecor();
-  // пропасти-колодцы, тропы и островки над ними (render/terrain.js)
-  G.terrain.drawPits();
-
-  for (const r of world.spikes) if (visible(r)) drawSpikes(r);
-
-  // высокие стены и колонны (render/terrain.js); кто за ними — см. drawOccluders в drawScene
-  G.terrain.drawWalls();
-}
-
 // база уровня «Оборона»: здание с толстой рамкой и знаком-короной, над ним длинная полоска HP;
 // при попадании здание вспыхивает красным
 function drawBase() {
@@ -979,9 +900,11 @@ function drawScene() {
   ctx.fillStyle = '#1d140a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   screenTransform();
-  ctx.translate(-state.camera.x, -state.camera.y);
+  // камера сдвигается на целые пиксели холста: готовые куски земли (render/ground.js) ложатся пиксель в пиксель
+  const s = G.screen.pixelScale();
+  ctx.translate(-Math.round(state.camera.x * s) / s, -Math.round(state.camera.y * s) / s);
 
-  drawTerrain();
+  G.ground.draw();             // неподвижное окружение — готовыми кусками, живые туман пропастей и избушка базы
   drawNests();
   drawBase();
   drawFinish();
@@ -1000,7 +923,7 @@ function drawScene() {
   drawWarnings();
   drawEnemies();
   drawChain();
-  G.terrain.drawOccluders();   // стена поверх спрятанных за ней: полупрозрачная, с окошком вокруг каждого
+  G.ground.drawOccluders();    // стена поверх спрятанных за ней: полупрозрачная, с окошком вокруг каждого
   drawWeapons();
   drawProjectiles();
   drawEffects();
