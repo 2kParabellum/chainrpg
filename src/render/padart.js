@@ -25,11 +25,7 @@ function drawPad(pad, key, alpha, opt = {}) {
   if (opt.sx) { ctx.translate(cx, y + h); ctx.scale(opt.sx, opt.sy); ctx.translate(-cx, -(y + h)); }
   const dormant = opt.charge !== undefined;
   // свечение вокруг
-  if (!dormant) {
-  const g = ctx.createRadialGradient(cx, cy, w * 0.3, cx, cy, w);
-  g.addColorStop(0, hexA(col, 0.35 + 0.08 * wave)); g.addColorStop(1, hexA(col, 0));
-  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, w, 0, TAU); ctx.fill();
-  }
+  if (!dormant) G.shapes.glow(ctx, cx, cy, w, col, 0.35 + 0.08 * wave, 0.3);
   // передняя грань с кладкой
   ctx.fillStyle = '#45230d'; ctx.fillRect(x + 2, y + topH, w - 4, face);
   ctx.strokeStyle = '#36170c'; ctx.lineWidth = 1.5;
@@ -67,9 +63,7 @@ function drawPad(pad, key, alpha, opt = {}) {
   if (!opt.noIcon && !dormant) {
     const fy = cy - 8 + Math.sin(t * 2.5) * 3 + (opt.iconDy || 0);
     ctx.globalAlpha = alpha * (opt.iconA === undefined ? 1 : opt.iconA);
-    const ig = ctx.createRadialGradient(cx, fy, 2, cx, fy, w * 0.42);
-    ig.addColorStop(0, hexA('#fff4dc', 0.35)); ig.addColorStop(1, hexA('#fff4dc', 0));
-    ctx.fillStyle = ig; ell(cx, fy, w * 0.42, w * 0.42); ctx.fill();
+    G.shapes.glow(ctx, cx, fy, w * 0.42, '#fff4dc', 0.35, 2 / (w * 0.42));
     if (key === 'will') G.blobs.drawWingsAt(cx, fy + 12, w * 0.33, t);
     else G.blobs.glyph(key, cx, fy, w * 0.26);
   }

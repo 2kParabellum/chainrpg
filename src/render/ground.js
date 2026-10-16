@@ -209,11 +209,7 @@ function drawOccluders() {
     octx.setTransform(m.a, m.b, m.c, m.d, m.e - x0, m.f - y0);
     if (b.house) T.drawOne(octx, b); else blitTop(octx, L);
     octx.globalCompositeOperation = 'destination-out';
-    for (const u of hidden) {
-      const R = Math.min(90, u.r * 2.2 + 6), gr = octx.createRadialGradient(u.x, u.y - u.r * 0.6, R * 0.45, u.x, u.y - u.r * 0.6, R);
-      gr.addColorStop(0, 'rgba(0,0,0,0.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-      octx.fillStyle = gr; octx.fillRect(u.x - R, u.y - u.r * 0.6 - R, R * 2, R * 2);
-    }
+    for (const u of hidden) G.shapes.glow(octx, u.x, u.y - u.r * 0.6, Math.min(90, u.r * 2.2 + 6), '#000000', 0.5, 0.45);
     octx.fillStyle = '#000';
     for (const u of front) { octx.beginPath(); octx.ellipse(u.x, u.y - u.r * 0.9, u.r * 1.5, u.r * 2.1, 0, 0, Math.PI * 2); octx.fill(); }
     // ближние блоки, заходящие на этот, уже лежат поверх него и окошко у них своё — не закрывать их

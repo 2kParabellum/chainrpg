@@ -6,7 +6,7 @@
 
 const { state, allyTypes } = G;
 const { clamp } = G.math;
-const { ctx } = G.shapes;
+const { ctx, glow } = G.shapes;
 
 const TAU = Math.PI * 2;
 // цвета — из палитры fantasy-24 (graphics.md)
@@ -163,13 +163,8 @@ function drawAlly(u, mode, alpha = 1) {
 
   // подобрать можно: мягкое светлое пятно под телом
   if (mode !== 'chain') {
-    const k = 0.5 - 0.5 * Math.cos(t * 3);
-    const g = ctx.createRadialGradient(u.x, u.y, r * 0.6, u.x, u.y, r * (1.9 + 0.3 * k));
-    g.addColorStop(0, 'rgba(255,244,220,0.22)');
-    g.addColorStop(1, 'rgba(255,244,220,0)');
-    ctx.fillStyle = g;
-    ell(u.x, u.y, r * (1.9 + 0.3 * k), r * (1.9 + 0.3 * k));
-    ctx.fill();
+    const k = 0.5 - 0.5 * Math.cos(t * 3), R = r * (1.9 + 0.3 * k);
+    glow(ctx, u.x, u.y, R, '#fff4dc', 0.22, r * 0.6 / R);
   }
   // тень на полу
   const sk = 1 - hop / (r * 3);
@@ -180,14 +175,7 @@ function drawAlly(u, mode, alpha = 1) {
   ctx.save();
   ctx.translate(x, by);
   ctx.rotate(lean);
-  if (buffs.includes('power')) {
-    const g = ctx.createRadialGradient(0, 0, r * 0.6, 0, 0, r * 1.9);
-    g.addColorStop(0, 'rgba(239,58,12,0.55)');
-    g.addColorStop(1, 'rgba(239,58,12,0)');
-    ctx.fillStyle = g;
-    ell(0, 0, r * 1.9, r * 1.9);
-    ctx.fill();
-  }
+  if (buffs.includes('power')) glow(ctx, 0, 0, r * 1.9, '#ef3a0c', 0.55, 0.6 / 1.9);
   if (buffs.includes('speed')) {
     ctx.strokeStyle = C.gold; ctx.lineCap = 'round'; ctx.lineWidth = r * 0.14;
     for (let i = 0; i < 3; i++) {
@@ -483,9 +471,7 @@ function drawWeapon(w, lvl, hx, hy, r, face, t, firing) {
     } else { // посох с крестом
       ctx.strokeStyle = C.ink; ctx.lineWidth = r * 0.2; ctx.beginPath(); ctx.moveTo(r * 0.1, r * 0.5); ctx.lineTo(r * 0.1, -r * 1.2); ctx.stroke();
       ctx.strokeStyle = C.brown; ctx.lineWidth = r * 0.1; ctx.beginPath(); ctx.moveTo(r * 0.1, r * 0.5); ctx.lineTo(r * 0.1, -r * 1.2); ctx.stroke();
-      const g = ctx.createRadialGradient(r * 0.1, -r * 1.45, 0, r * 0.1, -r * 1.45, r * 0.9);
-      g.addColorStop(0, `rgba(60,159,156,${0.5 + 0.2 * Math.sin(t * 5)})`); g.addColorStop(1, 'rgba(60,159,156,0)');
-      ctx.fillStyle = g; ell(r * 0.1, -r * 1.45, r * 0.9, r * 0.9); ctx.fill();
+      glow(ctx, r * 0.1, -r * 1.45, r * 0.9, C.teal, 0.5 + 0.2 * Math.sin(t * 5));
       plus(r * 0.1, -r * 1.45, r * 0.4, C.cream);
       plus(r * 0.1, -r * 1.45, r * 0.2, C.red);
     }
@@ -498,9 +484,7 @@ function drawWeapon(w, lvl, hx, hy, r, face, t, firing) {
       ctx.strokeStyle = C.ink; ctx.lineWidth = r * 0.2; ctx.beginPath(); ctx.moveTo(r * 0.1, r * 0.45); ctx.lineTo(ox, oy + orr * 0.6); ctx.stroke();
       ctx.strokeStyle = lvl === 3 ? C.mud : C.brown; ctx.lineWidth = r * 0.1; ctx.beginPath(); ctx.moveTo(r * 0.1, r * 0.45); ctx.lineTo(ox, oy + orr * 0.6); ctx.stroke();
     }
-    const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, orr * 2.6);
-    g.addColorStop(0, 'rgba(60,159,156,0.8)'); g.addColorStop(1, 'rgba(60,159,156,0)');
-    ctx.fillStyle = g; ell(ox, oy, orr * 2.6, orr * 2.6); ctx.fill();
+    glow(ctx, ox, oy, orr * 2.6, C.teal, 0.8);
     ctx.fillStyle = C.teal; ctx.strokeStyle = C.ink; ctx.lineWidth = lw; ell(ox, oy, orr * p, orr * p); ctx.fill(); ctx.stroke();
     ctx.fillStyle = C.eye; ell(ox - orr * 0.25, oy - orr * 0.25, orr * 0.35, orr * 0.35); ctx.fill();
     if (lvl === 3) {

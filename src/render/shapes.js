@@ -1,4 +1,4 @@
-// Примитивы отрисовки: канвас, фигуры юнитов, полоски HP. Состояние только читают.
+// Примитивы отрисовки: канвас, фигуры юнитов, полоски HP, штамп свечения. Состояние только читают.
 (function (G) {
 'use strict';
 
@@ -18,6 +18,34 @@ function screenTransform() {
 function visible(rect) {
   return rect.x + rect.w > state.camera.x - 40 && rect.x < state.camera.x + CONFIG.VIEW.w + 40
       && rect.y + rect.h > state.camera.y - 40 && rect.y < state.camera.y + CONFIG.VIEW.h + 40;
+}
+
+// Свечение — мягкий круг радиуса R: у центра цвет col с непрозрачностью alpha (умножается на текущую прозрачность
+// холста), к краю плавно уходит в прозрачный цвет to (по умолчанию тот же col); внутри доли q радиуса — ровно.
+// Вместо нового градиента каждый кадр — готовая картинка круга (одна на цвета и q), растянутая до R.
+// Цвета — '#rrggbb'. Работает и под поворотом, и под растяжением холста — как градиент, залитый кругом
+const GLOW_PX = 64;
+const glowSprites = new Map();
+function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+function glowSprite(col, q, to) {
+  const key = col + '|' + q + '|' + to;
+  let c = glowSprites.get(key);
+  if (c) return c;
+  c = document.createElement('canvas'); c.width = c.height = GLOW_PX * 2;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(GLOW_PX, GLOW_PX, GLOW_PX * q, GLOW_PX, GLOW_PX, GLOW_PX);
+  g.addColorStop(0, rgba(col, 1)); g.addColorStop(1, rgba(to, 0));
+  x.fillStyle = g; x.fillRect(0, 0, GLOW_PX * 2, GLOW_PX * 2);
+  glowSprites.set(key, c);
+  return c;
+}
+function glow(c, x, y, R, col, alpha = 1, q = 0, to = col) {
+  if (!(R > 0) || !(alpha > 0)) return;
+  const img = glowSprite(col, Math.round(Math.min(0.98, Math.max(0, q)) * 50) / 50, to);
+  const a = c.globalAlpha;
+  c.globalAlpha = a * Math.min(1, alpha);
+  c.drawImage(img, x - R, y - R, R * 2, R * 2);
+  c.globalAlpha = a;
 }
 
 function drawRects(list, color) {
@@ -64,5 +92,5 @@ function unitName(u) {
   return abilities[u.ability].name + (u.abilityLevel > 1 ? ' ' + u.abilityLevel : '');
 }
 
-G.shapes = { canvas, ctx, screenTransform, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor, unitName };
+G.shapes = { canvas, ctx, screenTransform, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor, unitName, glow };
 })(window.Game = window.Game || {});

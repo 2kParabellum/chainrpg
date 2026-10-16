@@ -7,7 +7,7 @@
 'use strict';
 
 const { state } = G;
-const { ctx } = G.shapes;
+const { ctx, glow } = G.shapes;
 
 const TAU = Math.PI * 2;
 const C = {
@@ -74,10 +74,7 @@ function edgePath(rx, ry, t, kind, seed) {
 
 // светящийся глаз без белка: ореол, тёмная глазница, цветная радужка, блик
 function glowEye(x, y, rad, col, rot = 0, squash = 1) {
-  const g = ctx.createRadialGradient(x, y, 0, x, y, rad * 2.8);
-  g.addColorStop(0, hexA(col, 0.5));
-  g.addColorStop(1, hexA(col, 0));
-  ctx.fillStyle = g; ell(x, y, rad * 2.8, rad * 2.8); ctx.fill();
+  glow(ctx, x, y, rad * 2.8, col, 0.5);
   ctx.fillStyle = C.dark; ell(x, y, rad * 1.3, rad * 1.3 * squash, rot); ctx.fill();
   ctx.fillStyle = col; ell(x, y, rad, rad * squash, rot); ctx.fill();
   ctx.fillStyle = C.cream; ell(x - rad * 0.3, y - rad * 0.3 * squash, rad * 0.3, rad * 0.3 * squash); ctx.fill();
@@ -412,11 +409,7 @@ function drawMine(m, a) {
 // Урон виден: из свода выпадают камни (до 5), их обломки лежат у порога; при попадании — вспышка и осколки
 const p2 = (x, y) => { const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453; return s - Math.floor(s); };
 function portalRune(x, y, s, soon) {
-  if (soon > 0) {
-    const g = ctx.createRadialGradient(x, y, 0, x, y, s * 2.5);
-    g.addColorStop(0, hexA(C.red, 0.5 * soon)); g.addColorStop(1, hexA(C.red, 0));
-    ctx.fillStyle = g; ell(x, y, s * 2.5, s * 2.5); ctx.fill();
-  }
+  if (soon > 0) glow(ctx, x, y, s * 2.5, C.red, 0.5 * soon);
   ctx.strokeStyle = soon > 0.1 ? C.orange : '#9b1a0a'; ctx.lineWidth = 2; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.arc(x, y, s * 0.6, 0, TAU); ctx.moveTo(x, y - s); ctx.lineTo(x, y + s); ctx.stroke();
   ctx.lineCap = 'butt';
@@ -446,16 +439,12 @@ function portalSwirl(r, age, soon) {
   }
   ctx.lineCap = 'butt';
   const core = r * (0.22 + 0.04 * Math.sin(age * 3) + soon * 0.15);
-  const cg = ctx.createRadialGradient(0, 0, 0, 0, 0, core * 2);
-  cg.addColorStop(0, `rgba(239,105,47,${0.6 + soon * 0.4})`); cg.addColorStop(1, 'rgba(239,58,12,0)');
-  ctx.fillStyle = cg; ell(0, 0, core * 2, core * 2); ctx.fill();
+  glow(ctx, 0, 0, core * 2, '#ef692f', 0.6 + soon * 0.4, 0, '#ef3a0c');
 }
 function drawPortal(e, a) {
   const k = e.r / 46, age = e.age || 0, fl = hurtFlash(a), hp = Math.max(0, e.hp / e.maxHp);
   const soon = e.spawnIn < 1.5 ? 1 - Math.max(0, e.spawnIn) / 1.5 : 0;
-  const g = ctx.createRadialGradient(e.x, e.y, e.r * 0.6, e.x, e.y, e.r * 2.4);
-  g.addColorStop(0, 'rgba(155,26,10,0.3)'); g.addColorStop(1, 'rgba(155,26,10,0)');
-  ctx.fillStyle = g; ell(e.x, e.y, e.r * 2.4, e.r * 2.4); ctx.fill();
+  glow(ctx, e.x, e.y, e.r * 2.4, '#9b1a0a', 0.3, 0.25);
   ctx.save(); ctx.translate(e.x, e.y); ctx.scale(k, k);
   const baseY = 16, colH = 56, R0 = 40, R1 = 58, cyA = baseY - colH;
   // порог
@@ -585,11 +574,7 @@ function mawSpike(len, w, glow) {
   ctx.quadraticCurveTo(w * 0.15, -len * 0.5, w * 0.6, -len * 0.05); ctx.closePath(); ctx.fill();
   ctx.fillStyle = glow > 0.1 ? (glow > 0.6 ? C.gold : C.orange) : C.cream;
   ctx.beginPath(); ctx.moveTo(-w * 0.32, -len * 0.68); ctx.lineTo(0, -len); ctx.lineTo(w * 0.32, -len * 0.68); ctx.closePath(); ctx.fill();
-  if (glow > 0.1) {
-    const g = ctx.createRadialGradient(0, -len, 0, 0, -len, w * 3);
-    g.addColorStop(0, hexA(C.red, 0.5 * glow)); g.addColorStop(1, hexA(C.red, 0));
-    ctx.fillStyle = g; ell(0, -len, w * 3, w * 3); ctx.fill();
-  }
+  if (glow > 0.1) G.shapes.glow(ctx, 0, -len, w * 3, C.red, 0.5 * glow);
 }
 function mawFang(x, y, w, h, dir) { ctx.beginPath(); ctx.moveTo(x - w / 2, y); ctx.lineTo(x, y + h * dir); ctx.lineTo(x + w / 2, y); ctx.closePath(); ctx.fill(); ctx.stroke(); }
 // e — Демон, k — доля замаха текущей атаки (0..1)
@@ -669,11 +654,7 @@ function maw(e, k) {
   ctx.fillStyle = C.dark; mouth(); ctx.fill();
   ctx.save(); mouth(); ctx.clip();
   const hot = st === 'beamAim' ? k : st === 'beamFire' ? 1 : st === 'idle' && since(a.megaAt) < 0.5 ? 1 : 0;
-  if (hot > 0) {
-    const g = ctx.createRadialGradient(0, (ty + by) / 2, 0, 0, (ty + by) / 2, r * 0.8);
-    g.addColorStop(0, hexA(C.gold, 0.85 * hot)); g.addColorStop(1, hexA(C.red, 0));
-    ctx.fillStyle = g; ctx.fillRect(-mw, ty - r * 0.2, mw * 2, by - ty + r * 0.5);
-  }
+  if (hot > 0) glow(ctx, 0, (ty + by) / 2, r * 0.8, C.gold, 0.85 * hot, 0, C.red);
   ctx.fillStyle = '#9b1a0a'; ell(r * 0.1, by + r * 0.05, r * 0.42, r * 0.2 + open * r * 0.1); ctx.fill(); ctx.lineWidth = 2; ctx.stroke();
   ctx.restore();
   ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; mouth(); ctx.stroke();

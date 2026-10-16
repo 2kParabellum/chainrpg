@@ -10,7 +10,7 @@ const { padUnder } = G.pads;
 const { isSpotted } = G.session;
 const { allyTypes, enemyTypes, weapons, abilities } = G;
 const shapes = G.shapes;
-const { canvas, ctx, screenTransform, visible, drawHpBar, drawUnitBody, drawMark, allyColor } = shapes;
+const { canvas, ctx, screenTransform, visible, drawHpBar, drawUnitBody, drawMark, allyColor, glow } = shapes;
 
 // точка (с запасом pad) попадает в кадр: рисовать то, что за экраном, незачем
 function onScreen(p, pad = 0) {
@@ -149,9 +149,7 @@ function drawBossShot(p, k, height) {
     return;
   }
   const s = p.r + 7;
-  const g = ctx.createRadialGradient(p.x, y, 0, p.x, y, s * 2.4);
-  g.addColorStop(0, 'rgba(239,172,40,0.55)'); g.addColorStop(1, 'rgba(239,172,40,0)');
-  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, y, s * 2.4, 0, Math.PI * 2); ctx.fill();
+  glow(ctx, p.x, y, s * 2.4, '#efac28', 0.55);
   ctx.fillStyle = '#9b1a0a'; ctx.strokeStyle = COLORS.floorLine; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.arc(p.x, y, s, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   ctx.fillStyle = '#efac28'; ctx.beginPath(); ctx.arc(p.x, y, s * 0.55, 0, Math.PI * 2); ctx.fill();
@@ -513,11 +511,7 @@ function drawExit() {
   const pulse = 0.5 + 0.5 * Math.sin(state.time * 3);
   const ry = r * 0.5, face = r * 0.22;
   // тёплое свечение вокруг
-  const g = ctx.createRadialGradient(ex.x, ex.y, r * 0.5, ex.x, ex.y, r * 2.2);
-  g.addColorStop(0, 'rgba(239,172,40,0.35)');
-  g.addColorStop(1, 'rgba(239,172,40,0)');
-  ctx.fillStyle = g;
-  ctx.beginPath(); ctx.arc(ex.x, ex.y, r * 2.2, 0, Math.PI * 2); ctx.fill();
+  glow(ctx, ex.x, ex.y, r * 2.2, '#efac28', 0.35, 0.5 / 2.2);
   // каменный круглый постамент: боковина и верх
   ctx.strokeStyle = COLORS.floorLine; ctx.lineWidth = 3;
   ctx.fillStyle = COLORS.wallSide;

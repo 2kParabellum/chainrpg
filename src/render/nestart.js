@@ -29,9 +29,7 @@ function blob(x, y, rx, ry, seed, amp, n = 18) {
   ctx.closePath();
 }
 function glowEye(x, y, rad) {
-  const g = ctx.createRadialGradient(x, y, 0, x, y, rad * 2.8);
-  g.addColorStop(0, 'rgba(239,172,40,0.5)'); g.addColorStop(1, 'rgba(239,172,40,0)');
-  ctx.fillStyle = g; ell(x, y, rad * 2.8, rad * 2.8); ctx.fill();
+  G.shapes.glow(ctx, x, y, rad * 2.8, '#efac28', 0.5);
   ctx.fillStyle = '#300f0a'; ell(x, y, rad * 1.3, rad * 1.3); ctx.fill();
   ctx.fillStyle = '#efac28'; ell(x, y, rad, rad); ctx.fill();
 }

@@ -30,10 +30,8 @@ function drawBase(pad, key, alpha, opt = {}) {
   ctx.save();
   if (opt.sx) { ctx.translate(cx, top + h); ctx.scale(opt.sx, opt.sy); ctx.translate(-cx, -(top + h)); }
   if (active && !opt.noGlow) {
-    const gr = ctx.createRadialGradient(cx, top, r * 0.3, cx, top, r * 1.4);
-    gr.addColorStop(0, color); gr.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = gr; ctx.globalAlpha = (0.3 + 0.08 * wave) * alpha;
-    ctx.beginPath(); ctx.arc(cx, top, r * 1.4, 0, TAU); ctx.fill();
+    ctx.globalAlpha = (0.3 + 0.08 * wave) * alpha;
+    G.shapes.glow(ctx, cx, top, r * 1.4, color, 1, 0.3 / 1.4, '#000000');
   }
   ctx.globalAlpha = (active ? 1 : 0.55) * alpha;
   ctx.strokeStyle = COLORS.floorLine; ctx.lineWidth = 2;
