@@ -7,7 +7,8 @@
 'use strict';
 
 const { state } = G;
-const { ctx, glow } = G.shapes;
+const { glow } = G.shapes;
+let ctx = G.shapes.ctx; // на время рисования готовой картинки — её холст (bake)
 
 const TAU = Math.PI * 2;
 const C = {
@@ -63,7 +64,7 @@ function edgePath(rx, ry, t, kind, seed) {
   const N = kind === 'spiky' ? 26 : 32;
   for (let i = 0; i <= N; i++) {
     const ang = i / N * TAU;
-    let k = 1 + 0.05 * Math.sin(3 * ang + t * 3 + seed) + 0.035 * Math.sin(5 * ang - t * 4.3 + seed);
+    let k = 1 + 0.05 * Math.sin(3 * ang + t * 3 + seed) + 0.035 * Math.sin(5 * ang - t * 4.5 + seed);
     if (kind === 'spiky') k += i % 2 ? -0.1 : 0.16;
     if (kind === 'drip') { const s = Math.sin(ang); if (s > 0.3) k += 0.1 * Math.max(0, Math.sin(ang * 9 + t * 1.5 + seed)) * s; }
     const x = Math.cos(ang) * rx * k, y = Math.sin(ang) * ry * k;
@@ -132,6 +133,171 @@ function drawsHook(owner) { return owner && owner.type === 'scorpion' && state.e
 
 function has(type) { return !!LOOK[type] || !!SPECIAL[type]; }
 
+// --- готовые картинки частей тела ---
+// Обычный враг из 40–60 рисований каждый кадр — дорого, в толпе это больше половины кадра. Поэтому части
+// (лапки, тело, лицо) рисуются один раз в готовую картинку в разрешении экрана и дальше только копируются:
+// сплющивание и рывок — растяжкой картинки, вспышка от удара — готовым белым силуэтом поверх тела.
+// Колыхание края — BODY_FRAMES кадров на цикл: за BODY_CYCLE секунд обе волны края проходят целое число раз,
+// так что кадры зацикливаются без скачка
+const BODY_FRAMES = 32, BODY_CYCLE = 4 * Math.PI / 3, LEG_FRAMES = 12, BOB_FRAMES = 12, MOUTH_FRAMES = 8, DIRS = 16;
+const SPRITES_MAX = 900;
+const sprites = new Map();
+let spriteScale = 0;
+
+// кадр n-кадрового цикла длиной period, в котором сейчас значение v
+function frameAt(v, period, n) { return Math.floor(((v / period) % 1 + 1) % 1 * n) % n; }
+
+function cached(key) {
+  const s = G.screen.pixelScale();
+  if (s !== spriteScale) { sprites.clear(); spriteScale = s; }
+  return sprites.get(key);
+}
+
+// рисует paint() в новую картинку; box — [x0, y0, x1, y1] в долях r вокруг центра тела (с запасом на обводку).
+// Край картинки — на целом пикселе экрана: нерастянутая картинка копируется пиксель в пиксель, без размытия
+function bake(key, r, box, paint) {
+  if (sprites.size > SPRITES_MAX) sprites.clear();
+  const s = spriteScale, x0 = Math.floor((box[0] * r - 3) * s) / s, y0 = Math.floor((box[1] * r - 3) * s) / s;
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.ceil((box[2] * r + 3 - x0) * s));
+  c.height = Math.max(1, Math.ceil((box[3] * r + 3 - y0) * s));
+  const g = c.getContext('2d'), main = ctx;
+  g.setTransform(s, 0, 0, s, -x0 * s, -y0 * s);
+  g.strokeStyle = C.ink; g.lineWidth = 2; g.lineJoin = 'round'; g.lineCap = 'round';
+  ctx = g; paint(); ctx = main;
+  const sp = { c, x0, y0, w: c.width / s, h: c.height / s };
+  sprites.set(key, sp);
+  return sp;
+}
+
+// картинка с центром тела в (x, y), растянутая на sx × sy; без растяжки — сдвинута на целый пиксель экрана
+function stamp(sp, x, y, sx, sy) {
+  if (sx === undefined) ctx.drawImage(sp.c, snap(x) + sp.x0, snap(y) + sp.y0, sp.w, sp.h);
+  else ctx.drawImage(sp.c, x + sp.x0 * sx, y + sp.y0 * sy, sp.w * sx, sp.h * sy);
+}
+function snap(v) { return Math.round(v * spriteScale) / spriteScale; }
+
+// рамки картинок в долях r; лицо — для взгляда вправо, влево отражается
+const BOX = {
+  body: [-1.3, -1.3, 1.3, 1.3], legs: [-0.9, 0.4, 0.9, 0.95],
+  shooter: [-1.2, -1.25, 2, 0.85], bull: [-1.45, -1.55, 2, 0.85], chariot: [-1.45, -1.55, 2, 0.85],
+  hunter: [-1.1, -0.75, 1.1, 0.6], zombie: [-1.25, -0.95, 1.25, 0.65], scorpion: [-1, -0.75, 1, 0.45], arm: [0.2, -0.4, 2, 0.95],
+};
+const mirror = (b, face) => (face > 0 ? b : [-b[2], b[1], -b[0], b[3]]);
+
+// тело без сплющивания: тёмная тень, цвет, подсветка снизу цветом глаз (у Зомби — пятна)
+function paintBody(type, L, r, t, tele) {
+  const rx = r, ry = r * 0.92;
+  edgePath(rx, ry, t, L.edge, 0); ctx.fillStyle = L.sh; ctx.fill();
+  ctx.save();
+  edgePath(rx, ry, t, L.edge, 0); ctx.clip();
+  ctx.fillStyle = tele ? '#ab5c1c' : L.col; ell(-rx * 0.05, -ry * 0.12, rx * 0.92, ry * 0.85); ctx.fill();
+  ctx.strokeStyle = hexA(L.eye, tele ? 0.6 : 0.35); ctx.lineWidth = r * 0.24; ell(0, -r * 0.18, rx * 1.02, ry); ctx.stroke();
+  if (type === 'zombie') { ctx.fillStyle = C.olive; ell(-rx * 0.45, ry * 0.3, rx * 0.2, ry * 0.12); ctx.fill(); ell(rx * 0.5, -ry * 0.45, rx * 0.12, ry * 0.08); ctx.fill(); }
+  ctx.restore();
+  edgePath(rx, ry, t, L.edge, 0); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke();
+}
+
+// белый силуэт тела под обводкой — вспышка от удара
+function paintFlash(L, r, t) {
+  edgePath(r, r * 0.92, t, L.edge, 0); ctx.fillStyle = 'rgb(255,250,240)'; ctx.fill();
+  ctx.globalCompositeOperation = 'destination-out'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+// лапки; ph — кадр шага (−1 — стоит)
+function paintLegs(L, r, ph) {
+  ctx.fillStyle = L.sh;
+  for (let i = 0; i < 2; i++) for (const s of [-1, 1]) {
+    const lift = ph >= 0 ? Math.max(0, Math.sin(ph / LEG_FRAMES * TAU + i + (s > 0 ? Math.PI : 0))) * r * 0.14 : 0;
+    ell(s * r * (0.35 + i * 0.3), r * 0.75 - lift, r * 0.18, r * 0.14); ctx.fill(); ctx.stroke();
+  }
+}
+
+function paintShooter(L, r, face, f, rec) {
+  const fx = face * r * 0.22;
+  glowEye(fx * 0.6, -r * 0.2, r * 0.36, L.eye);
+  ctx.fillStyle = C.ink; ell(fx * 0.6 + Math.cos(f) * r * 0.1, -r * 0.2 + Math.sin(f) * r * 0.08, r * 0.09, r * 0.27); ctx.fill();
+  const back = rec ? -r * 0.15 : 0;
+  ctx.save(); ctx.scale(face, 1);
+  ctx.fillStyle = L.sh; ctx.beginPath(); ctx.roundRect(r * 0.65 + back, r * 0.05, r * 0.65, r * 0.42, 4); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = C.dark; ell(r * 1.3 + back, r * 0.26, r * 0.1, r * 0.2); ctx.fill(); ctx.stroke();
+  if (rec) star(r * 1.55, r * 0.26, r * 0.38, C.orange);
+  ctx.restore();
+}
+
+// Бычок и Колесница: глаза, нос, сигарета в углу рта (длинная белая, оранжевый фильтр, тлеющий кончик), рога
+function paintBull(L, r, face, tele) {
+  const fx = face * r * 0.22;
+  for (const s of [-1, 1]) glowEye(fx + s * r * 0.33, -r * 0.2, r * 0.16, tele ? C.gold : L.eye, s * face * 0.5, 0.45);
+  ctx.fillStyle = L.sh; ell(fx + face * r * 0.2, r * 0.32, r * 0.42, r * 0.24); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = C.dark; for (const s of [-1, 1]) { ell(fx + face * r * 0.2 + s * r * 0.15, r * 0.32, r * 0.06, r * 0.08); ctx.fill(); }
+  const [cx0, cy0, len, ang] = cigarette(r, face), th = r * 0.17;
+  ctx.save(); ctx.translate(cx0, cy0); ctx.rotate(ang);
+  ctx.fillStyle = '#fff4dc'; ctx.beginPath(); ctx.rect(0, -th / 2, len, th); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#ab5c1c'; ctx.fillRect(0, -th / 2, len * 0.3, th); ctx.strokeRect(0, -th / 2, len * 0.3, th);
+  ctx.fillStyle = C.stone; ctx.fillRect(len * 0.9, -th / 2, len * 0.07, th);
+  ctx.fillStyle = tele ? C.gold : C.red; ctx.fillRect(len * 0.96, -th / 2, len * 0.06, th);
+  ctx.restore();
+  ctx.fillStyle = C.cream;
+  for (const s of [-1, 1]) {
+    ctx.beginPath(); ctx.moveTo(s * r * 0.45, -r * 0.62); ctx.quadraticCurveTo(s * r * 1.35, -r * 0.75, s * r * 1.2, -r * 1.45);
+    ctx.quadraticCurveTo(s * r * 0.95, -r * 0.95, s * r * 0.2, -r * 0.85); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+}
+// где сигарета: начало у рта, длина, наклон
+function cigarette(r, face) { return [face * r * 0.62, r * 0.42, r * 1.15, face > 0 ? 0.2 : Math.PI - 0.2]; }
+
+function paintHunter(L, r, face) {
+  const fx = face * r * 0.22;
+  for (const s of [-1, 1]) glowEye(fx + s * r * 0.24, -r * 0.22, r * 0.16, L.eye);
+  ctx.fillStyle = C.dark; ctx.beginPath(); ctx.ellipse(fx, r * 0.18, r * 0.52, r * 0.32, 0, 0, Math.PI); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = C.cream;
+  for (let i = 0; i < 4; i++) {
+    const tx = fx - r * 0.44 + i * r * 0.22;
+    ctx.beginPath(); ctx.moveTo(tx, r * 0.2); ctx.lineTo(tx + r * 0.11, r * 0.4); ctx.lineTo(tx + r * 0.22, r * 0.2); ctx.closePath(); ctx.fill();
+  }
+}
+
+// Зомби: eye — большой глаз: 'n' целый, 's' пустая глазница, 'd' глазница с потёком, 'x' нет (рисуется живьём);
+// mq — кадр дыхания рта
+function paintZombie(L, r, face, eye, mq) {
+  const fx = face * r * 0.22, ex = fx - r * 0.3, ey = -r * 0.2, er = r * 0.24;
+  if (eye === 'n') glowEye(ex, ey, er, L.eye);
+  else if (eye !== 'x') {
+    ctx.fillStyle = C.dark; ell(ex, ey, er * 1.1, er); ctx.fill(); ctx.stroke();
+    if (eye === 'd') { ctx.fillStyle = C.olive; ell(ex, ey + er * 0.9, er * 0.25, er * 0.35); ctx.fill(); }
+  }
+  ctx.fillStyle = C.dark; ell(fx + r * 0.33, -r * 0.15, r * 0.14, r * 0.12); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = C.red; ell(fx + r * 0.33, -r * 0.15, r * 0.05, r * 0.05); ctx.fill();
+  ctx.fillStyle = C.dark; ell(fx, r * 0.33, r * 0.28, r * 0.18 + 0.04 * r * Math.sin(mq / MOUTH_FRAMES * TAU)); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = C.cream; ctx.fillRect(fx - r * 0.08, r * 0.17, r * 0.12, r * 0.12);
+}
+
+// Скорпион: глаза, бровь, рот с клыками; armOut — лапа улетела, у плеча только обрубок с креплением
+function paintScorpion(L, r, face, armOut) {
+  const fx = face * r * 0.22;
+  for (const sx2 of [-1, 1]) glowEye(fx + sx2 * r * 0.24, -r * 0.25, r * 0.13, L.eye, 0, 0.7);
+  ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(fx - r * 0.42, -r * 0.48); ctx.lineTo(fx + r * 0.42, -r * 0.48); ctx.stroke();
+  ctx.fillStyle = C.dark; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(fx, r * 0.22, r * 0.3, r * 0.14, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = C.cream;
+  for (const sx2 of [-1, 1]) { ctx.beginPath(); ctx.moveTo(fx + sx2 * r * 0.2, r * 0.25); ctx.lineTo(fx + sx2 * r * 0.13, r * 0.05); ctx.lineTo(fx + sx2 * r * 0.06, r * 0.25); ctx.closePath(); ctx.fill(); }
+  if (armOut) { ctx.fillStyle = C.stone; ell(face * r * 0.75, r * 0.1, r * 0.2, r * 0.2); ctx.fill(); ctx.stroke(); }
+}
+
+// огромная лапа Скорпиона у плеча: покачивается (кадр bob), при щипке (pinch 0..1) выбрасывается вперёд
+function paintArm(L, r, face, py, pinch) {
+  let px = face * r * 1.1, pk = 1;
+  if (pinch > 0) { px = face * r * (1.1 + 0.45 * pinch); py = r * (0.3 + 0.25 * pinch); pk = 1 + 0.15 * pinch; }
+  for (const [lw, col] of [[r * 0.42, C.ink], [r * 0.28, L.sh]]) {
+    ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(face * r * 0.55, r * 0.1); ctx.lineTo(px, py); ctx.stroke();
+  }
+  drawPaw(px, py, r * 0.55 * pk, face, L);
+  if (pinch > 0.5) star(px + face * r * 0.75, py, r * 0.35, C.orange);
+}
+
 function draw(e) {
   if (SPECIAL[e.type]) { drawSpecial(e); return; }
   // Зомби и Хантер рисуются крупнее своего тела (столкновения те же): Зомби — громадина, Хантера видно издалека
@@ -181,120 +347,77 @@ function draw(e) {
   ctx.fillStyle = 'rgba(20,10,5,0.5)';
   ell(e.x, y + r * 0.85, r * 1.05, r * 0.32); ctx.fill();
 
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-
-  // лапки
+  // лапки, тело (растянуто), вспышка от удара — готовые картинки
+  const rk = Math.round(r * 4) / 4;
   if (type !== 'shooter' && type !== 'zombie') {
-    const n = 2, fast = a.speed > 10;
-    ctx.fillStyle = L.sh;
-    for (let i = 0; i < n; i++) for (const s of [-1, 1]) {
-      const lift = fast ? Math.max(0, Math.sin(a.ph * 2.5 + i + (s > 0 ? Math.PI : 0))) * r * 0.14 : 0;
-      ell(s * r * (0.35 + i * 0.3), r * 0.75 - lift, r * 0.18, r * 0.14); ctx.fill(); ctx.stroke();
-    }
+    const ph = a.speed > 10 ? frameAt(a.ph * 2.5, TAU, LEG_FRAMES) : -1, k = `l|${type}|${rk}|${ph}`;
+    stamp(cached(k) || bake(k, r, BOX.legs, () => paintLegs(L, r, ph)), x, y);
+  }
+  const fr = frameAt(t, BODY_CYCLE, BODY_FRAMES), tf = fr * BODY_CYCLE / BODY_FRAMES;
+  const kb = `b|${type}|${rk}|${fr}|${telegraph ? 1 : 0}`;
+  stamp(cached(kb) || bake(kb, r, BOX.body, () => paintBody(type, L, r, tf, telegraph)), x, y, sx, sy);
+  if (flash > 0) {
+    const kf = `f|${type}|${rk}|${fr}`;
+    ctx.globalAlpha = 0.9 * flash;
+    stamp(cached(kf) || bake(kf, r, BOX.body, () => paintFlash(L, r, tf)), x, y, sx, sy);
+    ctx.globalAlpha = 1;
   }
 
-  // тело: тёмная тень, цвет, подсветка снизу цветом глаз
-  edgePath(rx, ry, t, L.edge, a.seed); ctx.fillStyle = L.sh; ctx.fill();
   ctx.save();
-  edgePath(rx, ry, t, L.edge, a.seed); ctx.clip();
-  ctx.fillStyle = telegraph ? '#ab5c1c' : L.col; ell(-rx * 0.05, -ry * 0.12, rx * 0.92, ry * 0.85); ctx.fill();
-  ctx.strokeStyle = hexA(L.eye, telegraph ? 0.6 : 0.35); ctx.lineWidth = r * 0.24; ell(0, -r * 0.18, rx * 1.02, ry); ctx.stroke();
-  if (type === 'zombie') { ctx.fillStyle = C.olive; ell(-rx * 0.45, ry * 0.3, rx * 0.2, ry * 0.12); ctx.fill(); ell(rx * 0.5, -ry * 0.45, rx * 0.12, ry * 0.08); ctx.fill(); }
-  if (flash > 0) { ctx.fillStyle = `rgba(255,250,240,${0.9 * flash})`; ctx.fillRect(-rx * 1.5, -ry * 1.5, rx * 3, ry * 3); }
-  ctx.restore();
-  edgePath(rx, ry, t, L.edge, a.seed); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke();
-
+  ctx.translate(snap(x), snap(y));
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   if (type === 'zombie') for (let i = 0; i < 2; i++) {
     const k = (t * 0.6 + i * 0.5) % 1, px = (i ? 0.35 : -0.25) * rx;
     ctx.globalAlpha = 1 - k; ctx.fillStyle = L.col; ell(px, ry * 0.95 + k * r * 0.5, r * 0.1, r * 0.13); ctx.fill(); ctx.stroke(); ctx.globalAlpha = 1;
   }
 
-  // лицо: зрачки и глаза смотрят туда, куда смотрит враг
-  const fx = face * r * 0.22;
+  // лицо: зрачки и глаза смотрят туда, куда смотрит враг; готовая картинка на сторону и состояние,
+  // живьём — только то, что меняется плавно
+  const fx = face * r * 0.22, box = mirror(BOX[type], face);
+  let kl;
   if (type === 'shooter') {
-    const f = e.facing || 0;
-    glowEye(fx * 0.6, -r * 0.2, r * 0.36, L.eye);
-    ctx.fillStyle = C.ink; ell(fx * 0.6 + Math.cos(f) * r * 0.1, -r * 0.2 + Math.sin(f) * r * 0.08, r * 0.09, r * 0.27); ctx.fill();
-    const rec = sa >= 0 && sa < 0.12 ? -r * 0.15 : 0;
-    ctx.save(); ctx.scale(face, 1);
-    ctx.fillStyle = L.sh; ctx.beginPath(); ctx.roundRect(r * 0.65 + rec, r * 0.05, r * 0.65, r * 0.42, 4); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = C.dark; ell(r * 1.3 + rec, r * 0.26, r * 0.1, r * 0.2); ctx.fill(); ctx.stroke();
-    if (sa >= 0 && sa < 0.12) star(r * 1.55, r * 0.26, r * 0.38, C.orange);
-    ctx.restore();
+    const dir = ((Math.round((e.facing || 0) / TAU * DIRS) % DIRS) + DIRS) % DIRS, rec = sa >= 0 && sa < 0.12;
+    kl = `s|${rk}|${face}|${dir}|${rec ? 1 : 0}`;
+    stamp(cached(kl) || bake(kl, r, box, () => paintShooter(L, r, face, dir / DIRS * TAU, rec)), 0, 0);
   } else if (type === 'bull' || type === 'chariot') {
-    for (const s of [-1, 1]) glowEye(fx + s * r * 0.33, -r * 0.2, r * 0.16, telegraph ? C.gold : L.eye, s * face * 0.5, 0.45);
-    ctx.fillStyle = L.sh; ell(fx + face * r * 0.2, r * 0.32, r * 0.42, r * 0.24); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = C.dark; for (const s of [-1, 1]) { ell(fx + face * r * 0.2 + s * r * 0.15, r * 0.32, r * 0.06, r * 0.08); ctx.fill(); }
-    // сигарета в углу рта: длинная белая, оранжевый фильтр у рта, тлеющий кончик, пепел и струйка дыма
-    const cx0 = fx + face * r * 0.4, cy0 = r * 0.42, len = r * 1.15, ang = face > 0 ? 0.2 : Math.PI - 0.2, th = r * 0.17;
-    const tx = cx0 + Math.cos(ang) * len, ty = cy0 + Math.sin(ang) * len;
-    ctx.save(); ctx.translate(cx0, cy0); ctx.rotate(ang);
-    ctx.fillStyle = '#fff4dc'; ctx.beginPath(); ctx.rect(0, -th / 2, len, th); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#ab5c1c'; ctx.fillRect(0, -th / 2, len * 0.3, th); ctx.strokeRect(0, -th / 2, len * 0.3, th);
-    ctx.fillStyle = C.stone; ctx.fillRect(len * 0.9, -th / 2, len * 0.07, th);
-    ctx.fillStyle = telegraph ? C.gold : C.red; ctx.fillRect(len * 0.96, -th / 2, len * 0.06, th);
-    ctx.restore();
+    kl = `u|${rk}|${face}|${telegraph ? 1 : 0}`;
+    stamp(cached(kl) || bake(kl, r, box, () => paintBull(L, r, face, telegraph)), 0, 0);
+    // струйка дыма с кончика сигареты
+    const [cx0, cy0, len, ang] = cigarette(r, face), tx = cx0 + Math.cos(ang) * len, ty = cy0 + Math.sin(ang) * len;
     ctx.strokeStyle = hexA(C.stone, 0.6); ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(tx, ty);
     for (let i = 1; i <= 6; i++) ctx.lineTo(tx + Math.sin(t * 3 + i) * r * 0.12 + face * i * r * 0.04, ty - i * r * 0.22);
     ctx.stroke();
-    ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
-    ctx.fillStyle = C.cream;
-    for (const s of [-1, 1]) {
-      ctx.beginPath(); ctx.moveTo(s * r * 0.45, -r * 0.62); ctx.quadraticCurveTo(s * r * 1.35, -r * 0.75, s * r * 1.2, -r * 1.45);
-      ctx.quadraticCurveTo(s * r * 0.95, -r * 0.95, s * r * 0.2, -r * 0.85); ctx.closePath(); ctx.fill(); ctx.stroke();
-    }
   } else if (type === 'hunter') {
-    for (const s of [-1, 1]) glowEye(fx + s * r * 0.24, -r * 0.22, r * 0.16, L.eye);
-    ctx.fillStyle = C.dark; ctx.beginPath(); ctx.ellipse(fx, r * 0.18, r * 0.52, r * 0.32, 0, 0, Math.PI); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = C.cream;
-    for (let i = 0; i < 4; i++) {
-      const tx = fx - r * 0.44 + i * r * 0.22;
-      ctx.beginPath(); ctx.moveTo(tx, r * 0.2); ctx.lineTo(tx + r * 0.11, r * 0.4); ctx.lineTo(tx + r * 0.22, r * 0.2); ctx.closePath(); ctx.fill();
-    }
+    kl = `h|${rk}|${face}`;
+    stamp(cached(kl) || bake(kl, r, box, () => paintHunter(L, r, face)), 0, 0);
   } else if (type === 'zombie') {
     // при атаке (облако) жёлтый глаз раздувается и лопается брызгами; глазница пустая, потом глаз отрастает
     const ex = fx - r * 0.3, ey = -r * 0.2, er = r * 0.24;
-    if (sa >= 0 && sa < 0.15) glowEye(ex, ey, er * (1 + 0.7 * sa / 0.15), L.eye);
-    else if (sa >= 0.15 && sa < 3.6) {
-      ctx.fillStyle = C.dark; ell(ex, ey, er * 1.1, er); ctx.fill(); ctx.stroke();
-      if (sa < 0.8) {
-        const k = (sa - 0.15) / 0.65;
-        for (let i = 0; i < 8; i++) {
-          const ang = i / 8 * TAU + 0.4, d = er * (1 + k * 4);
-          ctx.globalAlpha = 1 - k; ctx.fillStyle = i % 2 ? L.eye : C.olive;
-          ell(ex + Math.cos(ang) * d, ey + Math.sin(ang) * d + k * k * r * 0.8, er * 0.35 * (1 - k * 0.5), er * 0.35 * (1 - k * 0.5)); ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-      } else if (sa > 2.6) glowEye(ex, ey, er * (sa - 2.6), L.eye);
-      else { ctx.fillStyle = C.olive; ell(ex, ey + er * 0.9, er * 0.25, er * 0.35); ctx.fill(); }
-    } else glowEye(ex, ey, er, L.eye);
-    ctx.fillStyle = C.dark; ell(fx + r * 0.33, -r * 0.15, r * 0.14, r * 0.12); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = C.red; ell(fx + r * 0.33, -r * 0.15, r * 0.05, r * 0.05); ctx.fill();
-    ctx.fillStyle = C.dark; ell(fx, r * 0.33, r * 0.28, r * 0.18 + 0.04 * r * Math.sin(t * 2)); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = C.cream; ctx.fillRect(fx - r * 0.08, r * 0.17, r * 0.12, r * 0.12);
+    const eye = sa >= 0 && sa < 0.15 ? 'x' : sa >= 0.15 && sa < 3.6 ? (sa >= 0.8 && sa <= 2.6 ? 'd' : 's') : 'n';
+    const mq = frameAt(t * 2, TAU, MOUTH_FRAMES);
+    kl = `z|${rk}|${face}|${eye}|${mq}`;
+    stamp(cached(kl) || bake(kl, r, box, () => paintZombie(L, r, face, eye, mq)), 0, 0);
+    if (eye === 'x') glowEye(ex, ey, er * (1 + 0.7 * sa / 0.15), L.eye);
+    else if (eye === 's' && sa < 0.8) {
+      const k = (sa - 0.15) / 0.65;
+      for (let i = 0; i < 8; i++) {
+        const ang = i / 8 * TAU + 0.4, d = er * (1 + k * 4);
+        ctx.globalAlpha = 1 - k; ctx.fillStyle = i % 2 ? L.eye : C.olive;
+        ell(ex + Math.cos(ang) * d, ey + Math.sin(ang) * d + k * k * r * 0.8, er * 0.35 * (1 - k * 0.5), er * 0.35 * (1 - k * 0.5)); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    } else if (eye === 's') glowEye(ex, ey, er * (sa - 2.6), L.eye);
   } else if (type === 'scorpion') {
     // громила с одной огромной лапой: ей бьёт вплотную (pinchFx) и замахивается, бросая гарпун (выстрел)
-    for (const sx2 of [-1, 1]) glowEye(fx + sx2 * r * 0.24, -r * 0.25, r * 0.13, L.eye, 0, 0.7);
-    ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(fx - r * 0.42, -r * 0.48); ctx.lineTo(fx + r * 0.42, -r * 0.48); ctx.stroke();
-    ctx.fillStyle = C.dark; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.ellipse(fx, r * 0.22, r * 0.3, r * 0.14, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = C.cream;
-    for (const sx2 of [-1, 1]) { ctx.beginPath(); ctx.moveTo(fx + sx2 * r * 0.2, r * 0.25); ctx.lineTo(fx + sx2 * r * 0.13, r * 0.05); ctx.lineTo(fx + sx2 * r * 0.06, r * 0.25); ctx.closePath(); ctx.fill(); }
-    if (armOut) {
-      // лапа улетела на пружине: у плеча — только обрубок с креплением
-      ctx.fillStyle = C.stone; ell(face * r * 0.75, r * 0.1, r * 0.2, r * 0.2); ctx.fill(); ctx.stroke();
-    } else {
-      let px = face * r * 1.1, py = r * 0.3 + Math.sin(t * 3) * r * 0.05, pk = 1;
-      if (e.pinchFx > 0) { const k = e.pinchFx / 0.2; px = face * r * (1.1 + 0.45 * k); py = r * (0.3 + 0.25 * k); pk = 1 + 0.15 * k; }
-      for (const [lw, col] of [[r * 0.42, C.ink], [r * 0.28, L.sh]]) {
-        ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(face * r * 0.55, r * 0.1); ctx.lineTo(px, py); ctx.stroke();
+    kl = `c|${rk}|${face}|${armOut ? 1 : 0}`;
+    stamp(cached(kl) || bake(kl, r, box, () => paintScorpion(L, r, face, !!armOut)), 0, 0);
+    if (!armOut) {
+      if (e.pinchFx > 0) paintArm(L, r, face, 0, e.pinchFx / 0.2);
+      else {
+        const bq = frameAt(t * 3, TAU, BOB_FRAMES), ka = `a|${rk}|${face}|${bq}`;
+        stamp(cached(ka) || bake(ka, r, mirror(BOX.arm, face), () => paintArm(L, r, face, r * 0.3 + Math.sin(bq / BOB_FRAMES * TAU) * r * 0.05, 0)), 0, 0);
       }
-      drawPaw(px, py, r * 0.55 * pk, face, L);
-      if (e.pinchFx > 0.1) star(px + face * r * 0.75, py, r * 0.35, C.orange);
     }
   }
   ctx.restore();
