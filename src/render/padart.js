@@ -8,6 +8,7 @@
 
 const { stamp, frameAt } = G.shapes;
 let ctx = G.shapes.ctx; // на время рисования готовой картинки — её холст
+G.shapes.onCtx((c) => { ctx = c; });
 const { COLORS, state } = G;
 const TAU = Math.PI * 2;
 const INK = '#2a1d0d';

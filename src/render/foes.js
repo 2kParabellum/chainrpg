@@ -9,6 +9,7 @@
 const { state } = G;
 const { glow, stamp, snap, frameAt, dirOf } = G.shapes;
 let ctx = G.shapes.ctx; // на время рисования готовой картинки — её холст (bake)
+G.shapes.onCtx((c) => { ctx = c; });
 
 const TAU = Math.PI * 2;
 const C = {

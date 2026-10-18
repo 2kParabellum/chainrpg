@@ -8,7 +8,18 @@ const { allyTypes, abilities } = G;
 
 // холст непрозрачный: сцена каждый раз закрывает его целиком (земля), и браузеру не нужно смешивать его со страницей
 const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d', { alpha: false });
+const main = canvas.getContext('2d', { alpha: false });
+let ctx = main;   // холст, в который сейчас рисуют модули отрисовки: сцена, а на время drawOn — чужой
+
+// Рисовать готовыми частями тел и подиумов на чужом холсте (рисунок карточки улучшения): на время fn все модули,
+// что подписались через onCtx (свои, враги, подиумы), и сами примитивы здесь рисуют в c, потом — снова в сцену
+const ctxUsers = [];
+function onCtx(set) { ctxUsers.push(set); }
+function drawOn(c, fn) {
+  const was = ctx, use = (x) => { ctx = x; for (const set of ctxUsers) set(x); };
+  use(c);
+  try { fn(); } finally { use(was); }
+}
 
 // рисование в единицах вида (CONFIG.VIEW) без камеры: канвас крупнее в pixelScale раз (чёткость на телефоне)
 function screenTransform() {
@@ -134,6 +145,6 @@ function unitName(u) {
   return abilities[u.ability].name + (u.abilityLevel > 1 ? ' ' + u.abilityLevel : '');
 }
 
-G.shapes = { canvas, ctx, screenTransform, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor, unitName, glow,
+G.shapes = { canvas, ctx: main, onCtx, drawOn, screenTransform, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor, unitName, glow,
   spriteCache, stamp, snap, frameAt, dirOf };
 })(window.Game = window.Game || {});

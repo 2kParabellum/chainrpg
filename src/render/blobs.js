@@ -8,6 +8,7 @@ const { state, allyTypes } = G;
 const { clamp } = G.math;
 const { glow, stamp, snap, frameAt, dirOf } = G.shapes;
 let ctx = G.shapes.ctx; // на время рисования готовой картинки — её холст
+G.shapes.onCtx((c) => { ctx = c; });
 
 const TAU = Math.PI * 2;
 // цвета — из палитры fantasy-24 (graphics.md)

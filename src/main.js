@@ -135,10 +135,20 @@ function renderCards() {
     const num = document.createElement('span');
     num.className = 'num';
     num.textContent = i + 1;
+    // ярлыки: чьё улучшение (его цветом) и ранг; текст — отдельным блоком, чтобы на вертикальном экране встать справа
+    const tags = document.createElement('div');
+    tags.className = 'tags';
     const whoEl = document.createElement('span');
     whoEl.className = 'who';
     whoEl.style.color = who.color;
-    whoEl.textContent = who.label + (def.tier === 2 ? ' · TIER 2' : '');
+    whoEl.textContent = who.label;
+    tags.append(whoEl);
+    if (def.tier === 2) {
+      const tier = document.createElement('span');
+      tier.className = 'tier';
+      tier.textContent = '★ TIER 2';
+      tags.append(tier);
+    }
     const canvasEl = document.createElement('canvas');
     drawCard(canvasEl, key);
     const title = document.createElement('h3');
@@ -146,7 +156,10 @@ function renderCards() {
     const desc = document.createElement('p');
     desc.className = 'desc';
     desc.textContent = withKeys(def.desc);
-    card.append(num, whoEl, canvasEl, title, desc);
+    const txt = document.createElement('div');
+    txt.className = 'txt';
+    txt.append(tags, title, desc);
+    card.append(num, canvasEl, txt);
     card.addEventListener('click', () => pickCard(i));
     cardsEl.append(card);
   });
