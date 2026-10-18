@@ -1,6 +1,6 @@
 // Сенсорное управление: HTML-слой поверх канваса — плавающий джойстик и кнопки. Касания превращаются в те же
 // намерения, что и клавиши: команды уходят в input.command(), отклонение джойстика — в input.setStick().
-// Значки паузы и «заново» в углу — отдельно от слоя: они есть и на компьютере (мышью).
+// Значки паузы и «заново» в углу — отдельно от слоя, тоже только при касаниях (на компьютере — клавиши).
 // Размеры — в пикселях экрана, от масштаба игры не зависят. Мультитач: у каждого пальца свой pointerId,
 // можно ехать джойстиком и одновременно жать «ВЗЯТЬ».
 //
@@ -9,12 +9,17 @@
 //   'tank' — как клавиатура: вверх — газ (по порогу), влево/вправо — плавный поворот;
 //   'aim'  — «Направление»: куда тянут, туда Герой разворачивается и едет (что из угла получается газ и поворот,
 //            решает движение Героя в game/update.js).
-// Настройка mirror — зеркально: джойстик слева, кнопки справа. Настройки хранятся в localStorage.
+// Настройка cruise — «Автоход»: отпустил джойстик — Герой едет дальше, как ехал (в «Танке» — прямо); коснулся
+// и отпустил без сдвига — стоп.
+// Настройка mirror — зеркально: джойстик слева, кнопки справа. Настройка layout — где стоят кнопки (центр в пикселях
+// от левого края — от правого, если зеркально, — и от нижнего; кнопка у края экрана не уходит за него), size — их
+// размер (доля обычного). Настройки хранятся в localStorage.
 //
-// setVisible(on) — показывать ли кнопки (только во время партии; джойстик и «ВЗЯТЬ» / «БРОСИТЬ» — только при
-// касаниях, значки в углу — всегда); setGlow(name, on) — подсветка кнопки команды
-// ('recruit' — рядом есть кого взять, 'drop' — Герой на кнопке и можно оставить дружочка, 'pack' — рюкзак открыт
-// или полон); setShown(name, on) — показывать ли кнопку команды вообще (рюкзак — только с его улучшением).
+// setVisible(on) — показывать ли кнопки (только во время партии и только при касаниях); setGlow(name, on) —
+// подсветка кнопки команды ('recruit' — рядом есть кого взять, 'drop' — Герой на кнопке и можно оставить дружочка,
+// 'pack' — рюкзак открыт или полон); setShown(name, on) — показывать ли кнопку команды вообще (рюкзак — только
+// с его улучшением). editLayout(onDone) — расстановка: слой поверх меню, кнопки перетаскивают пальцем (или мышью),
+// команды не срабатывают; «Готово» — onDone().
 (function (G) {
 'use strict';
 
@@ -31,16 +36,60 @@ const restartEl = document.getElementById('tRestart');
 
 // --- настройки ---
 const STORE_KEY = 'chain.touch';
-const settings = { mode: 'aim', mirror: false };
-try { Object.assign(settings, JSON.parse(localStorage.getItem(STORE_KEY) || '{}')); } catch (e) { /* без хранилища — по умолчанию */ }
+// кнопки: обычный диаметр и место центра по умолчанию
+const PAD_BUTTONS = {
+  tGrab: { size: 86, x: 143, y: 61 },
+  tDrop: { size: 72, x: 52, y: 106 },
+  tPack: { size: 60, x: 146, y: 146 },
+};
+const SIZES = [0.8, 1, 1.2, 1.4];
+function defaultLayout() {
+  const layout = {};
+  for (const [id, b] of Object.entries(PAD_BUTTONS)) layout[id] = { x: b.x, y: b.y };
+  return layout;
+}
+const settings = { mode: 'aim', mirror: false, cruise: false, size: 1, layout: defaultLayout() };
+try {
+  const saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+  Object.assign(settings, saved, { layout: { ...defaultLayout(), ...(saved.layout || {}) } });
+} catch (e) { /* без хранилища — по умолчанию */ }
 
 function getSettings() { return { ...settings }; }
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(settings)); } catch (e) { /* не запомнится — не беда */ }
+}
 function setSetting(key, value) {
   settings[key] = value;
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(settings)); } catch (e) { /* не запомнится — не беда */ }
+  save();
   applySettings();
 }
-function applySettings() { document.body.classList.toggle('mirror', settings.mirror); }
+function resetLayout() {
+  settings.layout = defaultLayout();
+  settings.size = 1;
+  save();
+  applySettings();
+}
+
+// кнопки по местам: центр не ближе радиуса к краю слоя, чтобы кнопка была видна целиком на любом экране
+function placeButtons() {
+  const w = layer.clientWidth || window.innerWidth, h = layer.clientHeight || window.innerHeight;
+  for (const [id, b] of Object.entries(PAD_BUTTONS)) {
+    const el = document.getElementById(id);
+    const d = b.size * settings.size, r = d / 2;
+    const p = settings.layout[id];
+    const x = clamp(p.x, r, Math.max(r, w - r)), y = clamp(p.y, r, Math.max(r, h - r));
+    el.style.width = el.style.height = d + 'px';
+    el.style.fontSize = Math.round(12 * Math.sqrt(settings.size)) + 'px';
+    el.style.bottom = (y - r) + 'px';
+    el.style.left = settings.mirror ? '' : (x - r) + 'px';
+    el.style.right = settings.mirror ? (x - r) + 'px' : '';
+  }
+}
+
+function applySettings() {
+  document.body.classList.toggle('mirror', settings.mirror);
+  placeButtons();
+}
 
 // --- кнопки ---
 // что делает кнопка: команда; у «заново» — подтверждение вторым касанием, чтобы не сбросить уровень случайно
@@ -68,6 +117,7 @@ function press(el) {
 // --- джойстик ---
 let stickId = null;            // палец, который ведёт джойстик
 let originX = 0, originY = 0;  // где палец коснулся — центр джойстика (в координатах слоя)
+let lastAxes = null;           // последнее отклонение джойстика — для «Автохода»
 const pressed = new Map();     // палец -> нажатая им кнопка
 
 function stickAxes(nx, ny) {
@@ -86,19 +136,30 @@ function moveStick(x, y) {
   const d = Math.hypot(dx, dy);
   if (d > R) { dx *= R / d; dy *= R / d; }
   knobEl.style.transform = `translate(${dx}px, ${dy}px)`;
-  setStick(stickAxes(dx / R, dy / R));
+  lastAxes = stickAxes(dx / R, dy / R);
+  setStick(lastAxes);
 }
 
-function releaseStick() {
+// палец отпущен. С «Автоходом» (и не сброс всего: keep) Герой едет дальше: в «Направлении» — туда же, в «Танке» —
+// прямо с газом, если газ был; джойстик остаётся на месте бледным. Отпустил, не сдвинув, — стоп
+function releaseStick(keep) {
   stickId = null;
-  stickEl.style.display = 'none';
+  const a = lastAxes;
+  lastAxes = null;
+  if (keep && settings.cruise && a && (a.aim !== null || a.throttle > 0)) {
+    setStick(a.aim !== null ? a : { throttle: 1, turn: 0, aim: null });
+    stickEl.classList.add('ghost');
+    return;
+  }
   setStick(null);
+  stickEl.style.display = 'none';
+  stickEl.classList.remove('ghost');
 }
 
 // точка касания в координатах слоя
 function local(ev) {
   const r = layer.getBoundingClientRect();
-  return { x: ev.clientX - r.left, y: ev.clientY - r.top, w: r.width };
+  return { x: ev.clientX - r.left, y: ev.clientY - r.top, w: r.width, h: r.height };
 }
 
 // кнопку нажали пальцем или мышью: подсвечена, пока держат
@@ -108,7 +169,68 @@ function pressButton(ev, btn) {
   press(btn);
 }
 
+// --- расстановка кнопок ---
+let editing = null;            // { onDone } — идёт расстановка
+let drag = null;               // { id, btn, dx, dy } — кнопку тащат: палец и смещение от центра
+
+function startDrag(ev, btn) {
+  const p = local(ev), r = btn.getBoundingClientRect(), lr = layer.getBoundingClientRect();
+  const cx = r.left + r.width / 2 - lr.left, cy = r.top + r.height / 2 - lr.top;
+  drag = { id: ev.pointerId, btn, dx: cx - p.x, dy: cy - p.y };
+  btn.classList.add('pressed');
+  layer.setPointerCapture(ev.pointerId);
+}
+function moveDrag(ev) {
+  const p = local(ev);
+  const cx = p.x + drag.dx, cy = p.y + drag.dy;
+  settings.layout[drag.btn.id] = { x: Math.round(settings.mirror ? p.w - cx : cx), y: Math.round(p.h - cy) };
+  placeButtons();
+}
+function endDrag() {
+  if (!drag) return;
+  drag.btn.classList.remove('pressed');
+  drag = null;
+  // запоминаем там, где кнопку видно: если утащили за край, она встаёт у края
+  const w = layer.clientWidth, h = layer.clientHeight;
+  for (const [id, b] of Object.entries(PAD_BUTTONS)) {
+    const r = b.size * settings.size / 2, p = settings.layout[id];
+    settings.layout[id] = { x: clamp(p.x, r, Math.max(r, w - r)), y: clamp(p.y, r, Math.max(r, h - r)) };
+  }
+  save();
+}
+
+function editLayout(onDone) {
+  releaseAll();
+  editing = { onDone };
+  document.body.classList.add('layoutEdit');
+  placeButtons();
+}
+function finishEdit() {
+  endDrag();
+  editing.onDone();
+  editing = null;
+  document.body.classList.remove('layoutEdit');
+}
+// размер кнопок: следующий из SIZES по кругу
+function nextSize() {
+  const i = SIZES.indexOf(settings.size);
+  setSetting('size', SIZES[(i + 1) % SIZES.length]);
+  syncEditBar();
+}
+function syncEditBar() { document.getElementById('tSize').textContent = `Size: ${Math.round(settings.size * 100)}%`; }
+
+document.getElementById('tDone').addEventListener('click', finishEdit);
+document.getElementById('tReset').addEventListener('click', () => { resetLayout(); syncEditBar(); });
+document.getElementById('tSize').addEventListener('click', nextSize);
+
 layer.addEventListener('pointerdown', (ev) => {
+  if (editing) {
+    if (ev.target.closest('.tEditBar')) return; // кнопки панели расстановки — обычные щелчки
+    ev.preventDefault();
+    const btn = ev.target.closest('.tBtn');
+    if (btn && !drag) startDrag(ev, btn);
+    return;
+  }
   ev.preventDefault();
   const btn = ev.target.closest('.tBtn');
   if (btn) { pressButton(ev, btn); return; }
@@ -121,18 +243,21 @@ layer.addEventListener('pointerdown', (ev) => {
   stickEl.style.left = p.x + 'px';
   stickEl.style.top = p.y + 'px';
   stickEl.style.display = 'block';
+  stickEl.classList.remove('ghost');
   layer.setPointerCapture(ev.pointerId);
   moveStick(p.x, p.y);
 });
 
 layer.addEventListener('pointermove', (ev) => {
+  if (drag && ev.pointerId === drag.id) { moveDrag(ev); return; }
   if (ev.pointerId !== stickId) return;
   const p = local(ev);
   moveStick(p.x, p.y);
 });
 
 function onUp(ev) {
-  if (ev.pointerId === stickId) releaseStick();
+  if (drag && ev.pointerId === drag.id) endDrag();
+  if (ev.pointerId === stickId) releaseStick(true);
   const btn = pressed.get(ev.pointerId);
   if (btn) { btn.classList.remove('pressed'); pressed.delete(ev.pointerId); }
 }
@@ -149,22 +274,24 @@ window.addEventListener('pointercancel', onUp);
 layer.addEventListener('lostpointercapture', onUp);
 for (const el of [layer, corner]) el.addEventListener('contextmenu', (ev) => ev.preventDefault());
 
-// все пальцы отпущены: свернули вкладку, слой спрятан — Герой не должен ехать сам
+// все пальцы отпущены: свернули вкладку, слой спрятан — Герой не должен ехать сам (и с «Автоходом»)
 function releaseAll() {
-  releaseStick();
+  releaseStick(false);
+  endDrag();
   for (const btn of pressed.values()) btn.classList.remove('pressed');
   pressed.clear();
 }
 document.addEventListener('visibilitychange', releaseAll);
 
-let visible = false, visibleTouch = false;
+let visible = false;
 function setVisible(on) {
   const onTouch = on && isTouch();
-  if (on === visible && onTouch === visibleTouch) return;
-  visible = on; visibleTouch = onTouch;
-  corner.classList.toggle('on', on);
+  if (onTouch === visible) return;
+  visible = onTouch;
+  corner.classList.toggle('on', onTouch);
   layer.classList.toggle('on', onTouch);
   releaseAll();
+  if (onTouch) placeButtons(); // пока слой был скрыт, его размер не знали
 }
 
 const glowEls = { recruit: document.getElementById('tGrab'), drop: document.getElementById('tDrop'),
@@ -173,6 +300,8 @@ function setGlow(name, on) { glowEls[name].classList.toggle('glow', !!on); }
 function setShown(name, on) { glowEls[name].classList.toggle('shown', !!on); }
 
 applySettings();
+syncEditBar();
+G.screen.onChange(placeButtons);
 
-G.touch = { setVisible, setGlow, setShown, getSettings, setSetting };
+G.touch = { setVisible, setGlow, setShown, getSettings, setSetting, editLayout };
 })(window.Game = window.Game || {});

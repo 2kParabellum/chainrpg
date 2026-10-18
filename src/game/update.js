@@ -49,11 +49,26 @@ function aimSteer(lead, aim, maxTurn) {
   };
 }
 
+// мышь: Герой поворачивает к точке курсора (x, y в мире) и едет к ней. У самой точки (CONFIG.MOUSE.stopRadius) — стоит;
+// если точка внутри круга разворота (на этой скорости до неё не довернуть — Герой кружил бы вокруг) или близко за спиной,
+// газ отпущен: Герой притормаживает и доворачивает. Точка на расстоянии d под углом diff внутри круга радиуса R = v/ω,
+// если d < 2R·|sin diff|
+function pointSteer(lead, x, y, maxTurn, turnSpeed) {
+  const dx = x - lead.x, dy = y - lead.y, d = Math.hypot(dx, dy);
+  if (d < CONFIG.MOUSE.stopRadius) return { turn: 0, throttle: 0 };
+  const angle = Math.atan2(dy, dx), diff = angleDiff(angle, lead.heading);
+  const steer = aimSteer(lead, angle, maxTurn);
+  const R = Math.hypot(lead.vx, lead.vy) / Math.max(turnSpeed, 1e-6);
+  if (d < 2 * R * Math.abs(Math.sin(diff)) || Math.abs(diff) > Math.PI / 2 && d < 2 * R) steer.throttle = 0;
+  return steer;
+}
+
 // «танковое» движение Героя с инерцией: A/D поворачивают направление (heading), W даёт газ вперёд вдоль него.
 // Заднего хода нет: Герой ездит только вперёд, S (или джойстик вниз в «Танке») — просто без газа.
 // Скорость тянется к желаемой с разгоном, без газа — накат и торможение.
 // heading отдельно от facing: оружие поворачивает facing к цели, но не должно разворачивать Героя.
-// Джойстик в режиме «Направление» задаёт угол aim, из которого получаются те же газ и поворот (aimSteer).
+// Джойстик в режиме «Направление» задаёт угол aim, из которого получаются те же газ и поворот (aimSteer), мышь — точку
+// toward на экране (pointSteer).
 // Длинная цепочка тяжелее (масса M, см. CHAIN.heft): разгон делится на M (торможение — на меньшую массу), а поворот на ходу упирается
 // в предел сцепления — боковое ускорение v·ω не больше, чем у Героя налегке на полной скорости:
 // ω ≤ turnSpeed·mv·min(1, speed·mv / (M·v)). Медленно тяжёлая цепочка поворачивает круто, на полном ходу — дугой
@@ -66,8 +81,10 @@ function updateLeader(dt) {
   const v = Math.hypot(lead.vx, lead.vy);
   const turnSpeed = cfg.turnSpeed * mv * Math.min(1, (cfg.speed * mv) / (mass * Math.max(v, 1)));
   let { throttle, turn } = state.moveInput;
-  const aim = state.moveInput.aim;
-  if (aim !== null && aim !== undefined) ({ throttle, turn } = aimSteer(lead, aim, turnSpeed * dt));
+  const { aim, toward } = state.moveInput;
+  if (toward) {
+    ({ throttle, turn } = pointSteer(lead, state.camera.x + toward.x, state.camera.y + toward.y, turnSpeed * dt, turnSpeed));
+  } else if (aim !== null && aim !== undefined) ({ throttle, turn } = aimSteer(lead, aim, turnSpeed * dt));
 
   // в экранных координатах (y вниз) уменьшение угла — поворот налево
   lead.heading += turn * turnSpeed * dt;
