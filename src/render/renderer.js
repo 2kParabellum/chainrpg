@@ -10,7 +10,7 @@ const { padUnder } = G.pads;
 const { isSpotted } = G.session;
 const { allyTypes, enemyTypes, weapons, abilities } = G;
 const shapes = G.shapes;
-const { canvas, ctx, screenTransform, visible, drawHpBar, drawUnitBody, drawMark, allyColor, glow } = shapes;
+const { ctx, screenTransform, visible, drawHpBar, drawUnitBody, drawMark, allyColor, glow } = shapes;
 
 // точка (с запасом pad) попадает в кадр: рисовать то, что за экраном, незачем
 function onScreen(p, pad = 0) {
@@ -888,11 +888,9 @@ function drawSlimeBlast(fx) {
   ctx.globalAlpha = 1;
 }
 
-// сцена целиком, слой за слоем; камера остаётся применённой до конца кадра
+// сцена целиком, слой за слоем; камера остаётся применённой до конца кадра. Фон не заливается: куски земли
+// закрывают весь холст (за краем уровня — скала)
 function drawScene() {
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = '#1d140a';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
   screenTransform();
   // камера сдвигается на целые пиксели холста: готовые куски земли (render/ground.js) ложатся пиксель в пиксель
   const s = G.screen.pixelScale();

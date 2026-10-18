@@ -6,8 +6,9 @@ const { CONFIG, COLORS, state } = G;
 const { clamp } = G.math;
 const { allyTypes, abilities } = G;
 
+// холст непрозрачный: сцена каждый раз закрывает его целиком (земля), и браузеру не нужно смешивать его со страницей
 const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d', { alpha: false });
 
 // рисование в единицах вида (CONFIG.VIEW) без камеры: канвас крупнее в pixelScale раз (чёткость на телефоне)
 function screenTransform() {
@@ -47,6 +48,47 @@ function glow(c, x, y, R, col, alpha = 1, q = 0, to = col) {
   c.drawImage(img, x - R, y - R, R * 2, R * 2);
   c.globalAlpha = a;
 }
+
+// Готовые картинки частей тел (враги — render/foes.js, свои — render/blobs.js): часть рисуется один раз в разрешении
+// холста и дальше только копируется. paintWith(g, paint) — модуль рисует paint() в холст g (подменяя свой ctx).
+// Рамка box — [x0, y0, x1, y1] в долях r вокруг точки привязки, с запасом на обводку; край картинки — на целом пикселе
+// холста. Сменился масштаб — все картинки рисуются заново; набралось больше max — тоже
+function spriteCache(paintWith, max = 900) {
+  const map = new Map();
+  let scale = 0;
+  return {
+    get(key) {
+      const s = G.screen.pixelScale();
+      if (s !== scale) { map.clear(); scale = s; }
+      return map.get(key);
+    },
+    bake(key, r, box, paint) {
+      if (map.size > max) map.clear();
+      const s = scale, x0 = Math.floor((box[0] * r - 3) * s) / s, y0 = Math.floor((box[1] * r - 3) * s) / s;
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.ceil((box[2] * r + 3 - x0) * s));
+      c.height = Math.max(1, Math.ceil((box[3] * r + 3 - y0) * s));
+      const g = c.getContext('2d');
+      g.setTransform(s, 0, 0, s, -x0 * s, -y0 * s);
+      g.strokeStyle = '#2a1d0d'; g.lineWidth = 2; g.lineJoin = 'round'; g.lineCap = 'round';
+      paintWith(g, paint);
+      const sp = { c, x0, y0, w: c.width / s, h: c.height / s };
+      map.set(key, sp);
+      return sp;
+    },
+  };
+}
+// картинка с точкой привязки в (x, y), растянутая на sx × sy; без растяжки — сдвинута на целый пиксель холста
+// (копия пиксель в пиксель, без размытия; холст без поворота)
+function stamp(sp, x, y, sx, sy) {
+  if (sx === undefined) ctx.drawImage(sp.c, snap(x) + sp.x0, snap(y) + sp.y0, sp.w, sp.h);
+  else ctx.drawImage(sp.c, x + sp.x0 * sx, y + sp.y0 * sy, sp.w * sx, sp.h * sy);
+}
+function snap(v) { const s = G.screen.pixelScale(); return Math.round(v * s) / s; }
+// кадр n-кадрового цикла длиной period, в котором сейчас значение v
+function frameAt(v, period, n) { return Math.floor(((v / period) % 1 + 1) % 1 * n) % n; }
+// направление угла a — одно из n
+function dirOf(a, n) { return ((Math.round(a / (Math.PI * 2) * n) % n) + n) % n; }
 
 function drawRects(list, color) {
   ctx.fillStyle = color;
@@ -92,5 +134,6 @@ function unitName(u) {
   return abilities[u.ability].name + (u.abilityLevel > 1 ? ' ' + u.abilityLevel : '');
 }
 
-G.shapes = { canvas, ctx, screenTransform, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor, unitName, glow };
+G.shapes = { canvas, ctx, screenTransform, visible, drawRects, drawHpBar, drawUnitBody, drawMark, allyColor, unitName, glow,
+  spriteCache, stamp, snap, frameAt, dirOf };
 })(window.Game = window.Game || {});

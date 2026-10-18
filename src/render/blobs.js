@@ -6,7 +6,8 @@
 
 const { state, allyTypes } = G;
 const { clamp } = G.math;
-const { ctx, glow } = G.shapes;
+const { glow, stamp, snap, frameAt, dirOf } = G.shapes;
+let ctx = G.shapes.ctx; // на время рисования готовой картинки — её холст
 
 const TAU = Math.PI * 2;
 // цвета — из палитры fantasy-24 (graphics.md)
@@ -41,6 +42,38 @@ function ell(x, y, rx, ry, rot = 0) {
   ctx.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), rot, 0, TAU);
 }
 function rr(x, y, w, h, rad) { ctx.beginPath(); ctx.roundRect(x, y, w, h, rad); }
+
+// --- готовые картинки частей ---
+// Блоб из 30–60 рисований каждый кадр — дорого, в толпе своих это треть кадра. Поэтому части (тело, глаза, шапка,
+// оружие с рукой, вторая рука, «!» над выбитым) рисуются один раз в готовую картинку и дальше только копируются:
+// сплющивание — растяжкой картинки, прыжок и выпад — сдвигом, наклон — поворотом. Зрачки смотрят в одно из 16
+// направлений, хвосты повязки, кончик колпака, кисточка копья, свет посоха и шара колышутся кадрами
+const sprites = G.shapes.spriteCache((g, paint) => { const main = ctx; ctx = g; paint(); ctx = main; });
+const DIRS = 16, WAVE = 12;
+// рамки в долях r: шапка — вокруг середины тела, оружие с рукой — вокруг руки (для взгляда вправо)
+const BOX = {
+  body: [-1.05, -1.05, 1.05, 1.05], eyes: [-0.85, -0.6, 0.85, 0.3], hand: [-0.4, -0.4, 0.4, 0.4], mark: [-0.45, -1.1, 0.45, 0.3],
+  crown: [-0.95, -1.7, 0.95, -0.5], cap: [-1.5, -1.25, 1.5, -0.35], band: [-1.95, -1, 1.95, 1], nurse: [-0.85, -1.45, 0.85, -0.55],
+  wizard: [-1.1, -2.3, 1.1, -0.45],
+  fist: [-0.4, -0.4, 0.4, 0.4], gun: [-1, -0.8, 2.2, 0.9], spear: [-0.8, -2, 2.4, 0.9], kit: [-1.1, -3, 1.3, 0.9], orb: [-1.4, -3.1, 1.6, 0.9],
+};
+const mirror = (b, face) => (face > 0 ? b : [-b[2], b[1], -b[0], b[3]]);
+function part(key, r, box, paint) { return sprites.get(key) || sprites.bake(key, r, box, paint); }
+// частота колыхания шапки и оружия (рад/с) — кадр WAVE-кадрового цикла
+const HAT_WAVE = { band: 7, wizard: 2 }, WEAPON_WAVE = { spear2: 6, kit3: 5, orb1: 8, orb2: 8, orb3: 8 };
+
+// тело без сплющивания: тёмный низ, светлый верх, блик; tired — в тени
+function paintBody(r, tired) {
+  const rx = r, ry = r * 0.95;
+  ell(0, 0, rx, ry); ctx.fillStyle = C.shade; ctx.fill();
+  ctx.save();
+  ell(0, 0, rx, ry); ctx.clip();
+  ctx.fillStyle = C.body; ell(-rx * 0.1, -ry * 0.16, rx * 0.95, ry * 0.86); ctx.fill();
+  if (tired) { ctx.fillStyle = 'rgba(42,29,13,0.25)'; ctx.fillRect(-rx, -ry, rx * 2, ry * 2); }
+  ctx.fillStyle = 'rgba(255,244,220,0.5)'; ell(-rx * 0.38, -ry * 0.5, rx * 0.24, ry * 0.13, -0.5); ctx.fill();
+  ctx.restore();
+  ell(0, 0, rx, ry); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke();
+}
 
 // кэш анимации юнита: скорость, сторона взгляда, когда ранен / ударил / обрадовался
 function track(u) {
@@ -173,7 +206,7 @@ function drawAlly(u, mode, alpha = 1) {
   ctx.fill();
 
   ctx.save();
-  ctx.translate(x, by);
+  ctx.translate(lean ? x : snap(x), lean ? by : snap(by));
   ctx.rotate(lean);
   if (buffs.includes('power')) glow(ctx, 0, 0, r * 1.9, '#ef3a0c', 0.55, 0.6 / 1.9);
   if (buffs.includes('speed')) {
@@ -189,7 +222,8 @@ function drawAlly(u, mode, alpha = 1) {
     ctx.globalAlpha = baseA;
   }
   if (buffs.includes('will')) drawWings(rx, ry, r, t);
-  drawHand(-face * r * 0.88, r * 0.3 - swing * r * 0.12, r, weapon);
+  const rk = Math.round(r * 4) / 4, fist = weapon === 'fist' ? 1 : 0;
+  stamp(part(`k|${rk}|${fist}`, r, BOX.hand, () => drawHand(0, 0, r, weapon)), -face * r * 0.88, r * 0.3 - swing * r * 0.12);
   if (buffs.includes('spiky')) {
     ctx.fillStyle = C.blood; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
     for (let i = 0; i < 9; i++) {
@@ -202,31 +236,37 @@ function drawAlly(u, mode, alpha = 1) {
     }
   }
 
-  // тело: тёмный низ, светлый верх, блик
-  ell(0, 0, rx, ry); ctx.fillStyle = C.shade; ctx.fill();
-  ctx.save();
-  ell(0, 0, rx, ry); ctx.clip();
-  ctx.fillStyle = C.body; ell(-rx * 0.1, -ry * 0.16, rx * 0.95, ry * 0.86); ctx.fill();
-  if (eyes === 'tired') { ctx.fillStyle = 'rgba(42,29,13,0.25)'; ctx.fillRect(-rx, -ry, rx * 2, ry * 2); }
-  ctx.fillStyle = 'rgba(255,244,220,0.5)'; ell(-rx * 0.38, -ry * 0.5, rx * 0.24, ry * 0.13, -0.5); ctx.fill();
-  if (flash > 0) { ctx.fillStyle = `rgba(255,250,240,${0.9 * flash})`; ctx.fillRect(-rx, -ry, rx * 2, ry * 2); }
-  ctx.restore();
-  ell(0, 0, rx, ry); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke();
+  // тело: тёмный низ, светлый верх, блик — готовой картинкой, растянутой на сплющивание; вспышка от удара — поверх
+  const tired = eyes === 'tired' ? 1 : 0;
+  stamp(part(`b|${rk}|${tired}`, r, BOX.body, () => paintBody(r, tired)), 0, 0, sx, sy);
+  if (flash > 0) { ctx.globalAlpha = baseA * 0.9 * flash; ctx.fillStyle = 'rgb(255,250,240)'; ell(0, 0, rx - 1, ry - 1); ctx.fill(); ctx.globalAlpha = baseA; }
 
   // зрачки смотрят по-настоящему: туда, куда едет Герой или целится звено; ждущий смотрит на Героя
-  let lx = Math.cos(a.look), ly = Math.sin(a.look);
+  let look = a.look;
   const lead = state.party[0];
-  if (mode === 'neutral' && lead) {
-    const L = Math.hypot(lead.x - u.x, lead.y - u.y) || 1;
-    lx = (lead.x - u.x) / L; ly = (lead.y - u.y) / L;
+  if (mode === 'neutral' && lead) look = Math.atan2(lead.y - u.y, lead.x - u.x);
+  const pupils = eyes === 'normal' || eyes === 'tired' || eyes === 'focus';
+  const dir = pupils ? dirOf(look, DIRS) : 0, blink = eyes === 'normal' && ((t + a.seed * 1.7) % 3.3) < 0.12 ? 1 : 0;
+  const lx = Math.cos(dir / DIRS * TAU), ly = Math.sin(dir / DIRS * TAU);
+  stamp(part(`e|${rk}|${face}|${eyes}|${dir}|${blink}`, r, BOX.eyes, () => drawEyes(eyes, r, face, lx, ly, t, blink)), 0, 0);
+  if (hat) {
+    const k = HAT_WAVE[hat], fr = k ? frameAt(t * k, TAU, WAVE) : 0, tf = k ? fr / WAVE * TAU / k : 0;
+    stamp(part(`h|${hat}|${rk}|${face}|${fr}`, r, BOX[hat], () => drawHat(hat, r, r * 0.95, r, face, tf)), 0, 0, sx, sy);
   }
-  drawEyes(eyes, r, face, lx, ly, t, a.seed);
-  drawHat(hat, rx, ry, r, face, t);
   if (buffs.includes('will')) drawHalo(ry, r, t);
   else if (mode === 'chain' && state.party[0] && state.party[0].buffs && state.party[0].buffs.will > 0) drawMiniHalo(ry, r, t, a.seed);
-  const hx = face * (r * 0.95 + handFx), hy = r * 0.22 + swing * r * 0.12;
-  drawWeapon(weapon, lvl, hx, hy, r, face, t, sa >= 0 && sa < 0.15);
-  drawHand(hx, hy, r, weapon);
+  // оружие в передней руке и сама рука — готовой картинкой; искры шара — живьём
+  const hx = face * (r * 0.95 + handFx), hy = r * 0.22 + swing * r * 0.12, firing = sa >= 0 && sa < 0.15 ? 1 : 0;
+  const wk = WEAPON_WAVE[weapon + lvl], wf = wk ? frameAt(t * wk, TAU, WAVE) : 0, wt = wk ? wf / WAVE * TAU / wk : 0;
+  stamp(part(`w|${weapon}|${lvl}|${rk}|${face}|${firing}|${wf}`, r, mirror(BOX[weapon || 'fist'], face), () => {
+    drawWeapon(weapon, lvl, 0, 0, r, face, wt, firing, false);
+    drawHand(0, 0, r, weapon);
+  }), hx, hy);
+  if (weapon === 'orb' && lvl === 3) {
+    ctx.save(); ctx.translate(hx, hy); ctx.scale(face * 1.2, 1.2);
+    orbSparks(r * 0.1, -r * 1.35, r * 0.42, t);
+    ctx.restore();
+  }
   ctx.restore();
 
   if (eyes === 'tired') {
@@ -257,11 +297,13 @@ function drawAlly(u, mode, alpha = 1) {
   if (mode !== 'neutral' && u.hp < u.maxHp) { hpBar(x, top - 5, r, u.hp / u.maxHp); top -= 9; }
   // выбитый или брошенный: «!» над головой — он один, его можно подобрать
   if (mode === 'downed') {
-    const bob = Math.sin(t * 5) * 2, ey = top - 8 + bob;
-    ctx.font = `bold ${Math.round(r * 1.1)}px "Trebuchet MS", system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.lineWidth = 4; ctx.strokeStyle = C.ink; ctx.lineJoin = 'round';
-    ctx.strokeText('!', x, ey); ctx.fillStyle = C.gold; ctx.fillText('!', x, ey);
+    const bob = Math.sin(t * 5) * 2, ey = top - 8 + bob, px = Math.round(r * 1.1);
+    stamp(part(`x|${px}`, r, BOX.mark, () => {
+      ctx.font = `bold ${px}px "Trebuchet MS", system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.lineWidth = 4; ctx.strokeStyle = C.ink; ctx.lineJoin = 'round';
+      ctx.strokeText('!', 0, 0); ctx.fillStyle = C.gold; ctx.fillText('!', 0, 0);
+    }), x, ey);
     top -= r * 1.1;
   }
   if (buffs.length) {
@@ -318,9 +360,8 @@ function drawHand(hx, hy, r, weapon) {
   ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.stroke();
 }
 
-function drawEyes(mode, r, face, lx, ly, t, seed) {
+function drawEyes(mode, r, face, lx, ly, t, blink) {
   const cx = face * r * 0.14, cy = -r * 0.1, sp = r * 0.36;
-  const blink = mode === 'normal' && ((t + seed * 1.7) % 3.3) < 0.12;
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   for (const s of [-1, 1]) {
     const x = cx + s * sp, y = cy;
@@ -413,7 +454,7 @@ function hatIcon(ability, x, y, r, face = 1) {
 }
 
 // оружие в передней руке, растёт с уровнем профессии; рисуется в системе руки, смотрит по face
-function drawWeapon(w, lvl, hx, hy, r, face, t, firing) {
+function drawWeapon(w, lvl, hx, hy, r, face, t, firing, sparks = true) {
   if (!w || w === 'fist') return;
   const lw = 1.3;
   ctx.save(); ctx.translate(hx, hy); ctx.scale(face * 1.2, 1.2);
@@ -487,19 +528,21 @@ function drawWeapon(w, lvl, hx, hy, r, face, t, firing) {
     glow(ctx, ox, oy, orr * 2.6, C.teal, 0.8);
     ctx.fillStyle = C.teal; ctx.strokeStyle = C.ink; ctx.lineWidth = lw; ell(ox, oy, orr * p, orr * p); ctx.fill(); ctx.stroke();
     ctx.fillStyle = C.eye; ell(ox - orr * 0.25, oy - orr * 0.25, orr * 0.35, orr * 0.35); ctx.fill();
-    if (lvl === 3) {
-      ctx.strokeStyle = C.cream; ctx.lineWidth = 1.2;
-      for (let i = 0; i < 3; i++) {
-        const n = Math.floor(t * 12) + i * 7;
-        if (Math.abs(Math.sin(n * 91.7)) < 0.4) continue;
-        const ang = Math.sin(n * 13.3) * TAU;
-        ctx.beginPath(); ctx.moveTo(ox + Math.cos(ang) * orr, oy + Math.sin(ang) * orr);
-        ctx.lineTo(ox + Math.cos(ang + 0.3) * orr * 1.7, oy + Math.sin(ang + 0.3) * orr * 1.7);
-        ctx.lineTo(ox + Math.cos(ang - 0.1) * orr * 2.3, oy + Math.sin(ang - 0.1) * orr * 2.3); ctx.stroke();
-      }
-    }
+    if (lvl === 3 && sparks) orbSparks(ox, oy, orr, t);
   }
   ctx.restore();
+}
+// искры вокруг шара Spark Mate 3-го уровня — в системе оружия
+function orbSparks(ox, oy, orr, t) {
+  ctx.strokeStyle = C.cream; ctx.lineWidth = 1.2;
+  for (let i = 0; i < 3; i++) {
+    const n = Math.floor(t * 12) + i * 7;
+    if (Math.abs(Math.sin(n * 91.7)) < 0.4) continue;
+    const ang = Math.sin(n * 13.3) * TAU;
+    ctx.beginPath(); ctx.moveTo(ox + Math.cos(ang) * orr, oy + Math.sin(ang) * orr);
+    ctx.lineTo(ox + Math.cos(ang + 0.3) * orr * 1.7, oy + Math.sin(ang + 0.3) * orr * 1.7);
+    ctx.lineTo(ox + Math.cos(ang - 0.1) * orr * 2.3, oy + Math.sin(ang - 0.1) * orr * 2.3); ctx.stroke();
+  }
 }
 
 function star(x, y, s, col) {

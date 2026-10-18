@@ -7,7 +7,7 @@
 'use strict';
 
 const { state } = G;
-const { glow } = G.shapes;
+const { glow, stamp, snap, frameAt, dirOf } = G.shapes;
 let ctx = G.shapes.ctx; // на время рисования готовой картинки — её холст (bake)
 
 const TAU = Math.PI * 2;
@@ -140,42 +140,8 @@ function has(type) { return !!LOOK[type] || !!SPECIAL[type]; }
 // Колыхание края — BODY_FRAMES кадров на цикл: за BODY_CYCLE секунд обе волны края проходят целое число раз,
 // так что кадры зацикливаются без скачка
 const BODY_FRAMES = 32, BODY_CYCLE = 4 * Math.PI / 3, LEG_FRAMES = 12, BOB_FRAMES = 12, MOUTH_FRAMES = 8, DIRS = 16;
-const SPRITES_MAX = 900;
-const sprites = new Map();
-let spriteScale = 0;
-
-// кадр n-кадрового цикла длиной period, в котором сейчас значение v
-function frameAt(v, period, n) { return Math.floor(((v / period) % 1 + 1) % 1 * n) % n; }
-
-function cached(key) {
-  const s = G.screen.pixelScale();
-  if (s !== spriteScale) { sprites.clear(); spriteScale = s; }
-  return sprites.get(key);
-}
-
-// рисует paint() в новую картинку; box — [x0, y0, x1, y1] в долях r вокруг центра тела (с запасом на обводку).
-// Край картинки — на целом пикселе экрана: нерастянутая картинка копируется пиксель в пиксель, без размытия
-function bake(key, r, box, paint) {
-  if (sprites.size > SPRITES_MAX) sprites.clear();
-  const s = spriteScale, x0 = Math.floor((box[0] * r - 3) * s) / s, y0 = Math.floor((box[1] * r - 3) * s) / s;
-  const c = document.createElement('canvas');
-  c.width = Math.max(1, Math.ceil((box[2] * r + 3 - x0) * s));
-  c.height = Math.max(1, Math.ceil((box[3] * r + 3 - y0) * s));
-  const g = c.getContext('2d'), main = ctx;
-  g.setTransform(s, 0, 0, s, -x0 * s, -y0 * s);
-  g.strokeStyle = C.ink; g.lineWidth = 2; g.lineJoin = 'round'; g.lineCap = 'round';
-  ctx = g; paint(); ctx = main;
-  const sp = { c, x0, y0, w: c.width / s, h: c.height / s };
-  sprites.set(key, sp);
-  return sp;
-}
-
-// картинка с центром тела в (x, y), растянутая на sx × sy; без растяжки — сдвинута на целый пиксель экрана
-function stamp(sp, x, y, sx, sy) {
-  if (sx === undefined) ctx.drawImage(sp.c, snap(x) + sp.x0, snap(y) + sp.y0, sp.w, sp.h);
-  else ctx.drawImage(sp.c, x + sp.x0 * sx, y + sp.y0 * sy, sp.w * sx, sp.h * sy);
-}
-function snap(v) { return Math.round(v * spriteScale) / spriteScale; }
+const sprites = G.shapes.spriteCache((g, paint) => { const main = ctx; ctx = g; paint(); ctx = main; });
+const cached = sprites.get, bake = sprites.bake;
 
 // рамки картинок в долях r; лицо — для взгляда вправо, влево отражается
 const BOX = {
@@ -376,7 +342,7 @@ function draw(e) {
   const fx = face * r * 0.22, box = mirror(BOX[type], face);
   let kl;
   if (type === 'shooter') {
-    const dir = ((Math.round((e.facing || 0) / TAU * DIRS) % DIRS) + DIRS) % DIRS, rec = sa >= 0 && sa < 0.12;
+    const dir = dirOf(e.facing || 0, DIRS), rec = sa >= 0 && sa < 0.12;
     kl = `s|${rk}|${face}|${dir}|${rec ? 1 : 0}`;
     stamp(cached(kl) || bake(kl, r, box, () => paintShooter(L, r, face, dir / DIRS * TAU, rec)), 0, 0);
   } else if (type === 'bull' || type === 'chariot') {

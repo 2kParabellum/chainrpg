@@ -22,22 +22,25 @@ const PREFETCH_EVERY = 3;    // кусок про запас — не чаще, 
 const SPARE_MAX = 8;
 
 let tiles = new Map();       // 'tx,ty' → { tx, ty, lower, upper, split }; порядок — от давно нужного к свежему
-const spare = [];            // холсты выброшенных кусков — под новые
+// холсты выброшенных кусков — под новые. Низ куска непрозрачный (под ним ничего нет): такой холст копируется как есть,
+// без смешивания с тем, что под ним, — заметно быстрее; верх — прозрачный
+const spare = { lower: [], upper: [] };
 let scale = 0, src = null, doorKey = '', frame = 0, lastBuilt = -99;
 
 const hit = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 function tileArea(tx, ty) { return { x: tx * TILE / scale, y: ty * TILE / scale, w: TILE / scale, h: TILE / scale }; }
 
 function recycle(t) {
-  for (const c of [t.lower, t.upper]) if (c && spare.length < SPARE_MAX) spare.push(c);
+  if (spare.lower.length < SPARE_MAX) spare.lower.push(t.lower);
+  if (t.upper && spare.upper.length < SPARE_MAX) spare.upper.push(t.upper);
 }
 function dropAll() { for (const t of tiles.values()) recycle(t); tiles.clear(); }
 
 // нарисовать слой куска
 function paint(tx, ty, area, part) {
-  const c = spare.pop() || document.createElement('canvas');
+  const top = part === 'upper', c = (top ? spare.upper : spare.lower).pop() || document.createElement('canvas');
   if (c.width !== TILE || c.height !== TILE) { c.width = TILE; c.height = TILE; }
-  const x = c.getContext('2d');
+  const x = c.getContext('2d', { alpha: top });
   x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, TILE, TILE);
   x.setTransform(scale, 0, 0, scale, -tx * TILE, -ty * TILE);
   T.paintGround(x, area, part);
