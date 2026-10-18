@@ -12,13 +12,23 @@ const { allyTypes, enemyTypes } = G;
 
 // --- цели и урон ---
 
+// ближайшая из list цель ближе range, которую видно (не за стеной). Сначала только расстояния — это дёшево;
+// стены проверяются от ближнего к дальнему до первой видимой цели (обычно одна проверка, а не у каждого, кто
+// ближе предыдущего). При равных расстояниях — первая в списке, как при простом переборе
+const candD = [], candT = [];
 function nearestTarget(from, list, range) {
-  let best = null, bestD = range;
+  candD.length = 0; candT.length = 0;
   for (const t of list) {
     const d = dist(from, t);
-    if (d < bestD && hasLineOfSight(from, t)) { bestD = d; best = t; }
+    if (d < range) { candD.push(d); candT.push(t); }
   }
-  return best;
+  for (let n = candD.length; n > 0; n--) {
+    let k = 0;
+    for (let i = 1; i < candD.length; i++) if (candD[i] < candD[k]) k = i;
+    if (hasLineOfSight(from, candT[k])) return candT[k];
+    candD[k] = Infinity;
+  }
+  return null;
 }
 
 // улучшение «прикрытие»: оба соседа копейщика в цепочке (не он сам) получают меньше урона — от любых атак.

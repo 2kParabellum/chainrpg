@@ -311,9 +311,16 @@ function drawBurn(e) {
   ctx.globalAlpha = 1;
 }
 
+// враг в кадре: тело (с запасом drawReach) или то, что он тянет далеко от себя (лапа Скорпиона, линия разгона Бычка)
+function enemyInView(e) {
+  if (onScreen(e, enemyTypes[e.type].drawReach || 0)) return true;
+  const p = G.foes.has(e.type) && G.foes.farPoint(e), pad = e.r * 3;
+  return !!p && visible({ x: Math.min(e.x, p.x) - pad, y: Math.min(e.y, p.y) - pad, w: Math.abs(p.x - e.x) + pad * 2, h: Math.abs(p.y - e.y) + pad * 2 });
+}
+
 function drawEnemies() {
   for (const e of state.enemies) {
-    if (!onScreen(e, enemyTypes[e.type].drawReach || 0)) continue;
+    if (!enemyInView(e)) continue;
     if (!isSpotted(e)) continue;
     drawEnemy(e);
     drawBurn(e);

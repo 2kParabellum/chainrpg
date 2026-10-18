@@ -41,19 +41,40 @@ function separate(a, b) {
   if (kb) shove(b, nx * overlap * kb, ny * overlap * kb, !ia);
 }
 
+// Враги разложены по клеткам CELL: перекрыться могут только тела в той же или соседней клетке (CELL больше
+// суммы радиусов самых крупных), остальные пары не проверяются. Порядок пар — как при полном переборе
+const CELL = 128;
+const cellKey = (cx, cy) => (cx + 32768) * 65536 + (cy + 32768);
+// враги рядом с точкой (номера в foes по возрастанию, больше after); массив один на всех — пользоваться сразу
+const near = [];
+function neighbours(grid, x, y, after) {
+  const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL);
+  near.length = 0;
+  for (let i = cx - 1; i <= cx + 1; i++) for (let j = cy - 1; j <= cy + 1; j++) {
+    const cell = grid.get(cellKey(i, j));
+    if (cell) for (const k of cell) if (k > after) near.push(k);
+  }
+  return near.length > 1 ? near.sort((a, b) => a - b) : near;
+}
+
 // один проход расталкивания за кадр (после ходов врагов): за пару кадров толпа расходится.
 // Связанные между собой (e.linked — колесница и её катапульта) друг друга не толкают: упряжь держит их сама
 function separateBodies() {
-  const foes = state.enemies.filter(isSpotted);
+  const foes = state.enemies.filter(isSpotted), grid = new Map();
+  foes.forEach((e, k) => {
+    const key = cellKey(Math.floor(e.x / CELL), Math.floor(e.y / CELL));
+    const cell = grid.get(key);
+    if (cell) cell.push(k); else grid.set(key, [k]);
+  });
   for (let i = 0; i < foes.length; i++) {
-    for (let j = i + 1; j < foes.length; j++) {
+    for (const j of neighbours(grid, foes[i].x, foes[i].y, i)) {
       if (foes[i].linked === foes[j] || foes[j].linked === foes[i]) continue;
       separate(foes[i], foes[j]);
     }
   }
   // Бычок в рывке проезжает сквозь цепочку (его таран бьёт всех на линии), остальные упираются
   for (const a of state.party) {
-    for (const e of foes) if (!e.passThrough) separate(a, e);
+    for (const k of neighbours(grid, a.x, a.y, -1)) if (!foes[k].passThrough) separate(a, foes[k]);
   }
 }
 

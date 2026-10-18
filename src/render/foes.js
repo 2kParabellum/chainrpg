@@ -131,6 +131,17 @@ function drawPaw(px, py, pr, face, L) {
 
 function drawsHook(owner) { return owner && owner.type === 'scorpion' && state.enemies.includes(owner); }
 
+// докуда тянется рисунок врага, кроме тела: лапа Скорпиона на пружине (летит гарпуном или тащит пойманного),
+// линия разгона целящегося Бычка. Сцена рисует врага, если в кадр попадает хоть что-то от тела до этой точки
+function farPoint(e) {
+  if (e.type === 'scorpion') return armTarget(e);
+  if ((e.type === 'bull' || e.type === 'chariot') && e.state === 'telegraph') {
+    const f = e.facing || 0, d = e.cfg.chargeMaxDist * 0.4;
+    return { x: e.x + Math.cos(f) * d, y: e.y + Math.sin(f) * d };
+  }
+  return null;
+}
+
 function has(type) { return !!LOOK[type] || !!SPECIAL[type]; }
 
 // --- готовые картинки частей тела ---
@@ -846,5 +857,5 @@ function sweep() {
   lastDrawn = now;
 }
 
-G.foes = { has, draw, drawsHook, sweep, maw, mawSpikeShot, kraken, swallowed, shieldRing };
+G.foes = { has, draw, drawsHook, farPoint, sweep, maw, mawSpikeShot, kraken, swallowed, shieldRing };
 })(window.Game = window.Game || {});

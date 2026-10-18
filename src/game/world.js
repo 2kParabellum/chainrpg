@@ -7,7 +7,7 @@
 
 const { clamp } = G.math;
 const { CONFIG } = G;
-const { circleRectOverlap, segmentHitsRect } = G.collision;
+const { circleRectOverlap, segmentHitsRect, indexRects } = G.collision;
 
 const world = {
   walls: [], pillars: [], pits: [], spikes: [], floors: [], warnings: [],
@@ -189,11 +189,13 @@ function addRoomContent(plan, i) {
 // и обзор как колонна, открытая — не блокирует ничего. Единственное место в игре, где мир
 // меняется по ходу партии, а не только при сбросе; вызывается при сбросе и при каждом
 // переключении хотя бы одной двери
+// Каждый список разложен по клеткам карты (index): проверки видимости, пути и столкновения смотрят только то, что рядом
 function rebuildBlockers() {
   const closedDoors = world.doors.filter((d) => !d.open);
   world.sightBlockers = world.walls.concat(world.pillars, closedDoors);
   world.pathBlockers = world.sightBlockers.concat(world.pits);
   world.moveBlockers = world.pathBlockers.concat(world.solids);
+  for (const list of [world.sightBlockers, world.pathBlockers, world.moveBlockers]) list.index = indexRects(list);
 }
 
 // применить новое состояние дверей (id открытых); перестраивает блокеры, только если что-то изменилось
@@ -367,32 +369,42 @@ function buildNav() {
 }
 
 // поле путей к ближайшей из целей: points — точки ({ x, y }) или прямоугольники ({ x, y, w, h }:
-// источником становятся все клетки под ним и вплотную к нему). Источник может лежать и в закрытой клетке
-function buildFlowField(points) {
+// источником становятся все клетки под ним и вплотную к нему). Источник может лежать и в закрытой клетке.
+// prev — прошлое поле тех же целей: если они стоят на тех же клетках, поле то же самое — оно и возвращается.
+// Очередь — кольцо из RING корзин (шаг стоит 10 или 14, так что в очереди всегда не больше 15 разных расстояний)
+const RING = 15, ring = Array.from({ length: RING }, () => []);
+function buildFlowField(points, prev) {
   const { S, cols, rows, open } = nav;
-  const dist = new Int32Array(cols * rows).fill(0x3fffffff);
-  const buckets = [[]];
-  const push = (k, d) => { (buckets[d] || (buckets[d] = [])).push(k); };
   const cellOf = (x, y) => clamp(Math.floor(y / S), 0, rows - 1) * cols + clamp(Math.floor(x / S), 0, cols - 1);
+  const sources = [];
   for (const p of points) {
-    if (p.w === undefined) { const k = cellOf(p.x, p.y); dist[k] = 0; push(k, 0); continue; }
+    if (p.w === undefined) { sources.push(cellOf(p.x, p.y)); continue; }
     for (let y = p.y - S / 2; y < p.y + p.h + S; y += S) {
-      for (let x = p.x - S / 2; x < p.x + p.w + S; x += S) { const k = cellOf(x, y); dist[k] = 0; push(k, 0); }
+      for (let x = p.x - S / 2; x < p.x + p.w + S; x += S) sources.push(cellOf(x, y));
     }
   }
-  const passable = (i, j) => i >= 0 && j >= 0 && i < cols && j < rows && open[j * cols + i] === 1;
-  for (let d = 0; d < buckets.length; d++) {
-    for (const k of buckets[d] || []) {
+  const key = sources.join(',');
+  if (prev && prev.key === key) return prev;
+  const dist = new Int32Array(cols * rows).fill(0x3fffffff);
+  dist.key = key;
+  let pending = 0;
+  for (const k of sources) { dist[k] = 0; ring[0].push(k); pending++; }
+  for (let d = 0; pending > 0; d++) {
+    const b = ring[d % RING];
+    for (let q = 0; q < b.length; q++) {
+      const k = b[q];
+      pending--;
       if (dist[k] !== d) continue;
       const i = k % cols, j = (k - i) / cols;
-      for (const [di, dj, cost] of FLOW_STEPS) {
-        const ni = i + di, nj = j + dj;
-        if (!passable(ni, nj)) continue;
-        if (di && dj && !(passable(ni, j) && passable(i, nj))) continue;
-        const nk = nj * cols + ni, nd = d + cost;
-        if (nd < dist[nk]) { dist[nk] = nd; push(nk, nd); }
+      for (let s = 0; s < 8; s++) {
+        const di = FLOW_STEPS[s][0], dj = FLOW_STEPS[s][1], ni = i + di, nj = j + dj;
+        if (ni < 0 || nj < 0 || ni >= cols || nj >= rows || open[nj * cols + ni] !== 1) continue;
+        if (di && dj && !(open[j * cols + ni] === 1 && open[nj * cols + i] === 1)) continue;
+        const nk = nj * cols + ni, nd = d + FLOW_STEPS[s][2];
+        if (nd < dist[nk]) { dist[nk] = nd; ring[nd % RING].push(nk); pending++; }
       }
     }
+    b.length = 0;
   }
   return dist;
 }
@@ -434,6 +446,7 @@ function buildWorld(level) {
   else if (level.geometry.kind === 'rect') buildRect(level);
   else buildLine(level);
   rebuildBlockers();
+  world.spikes.index = indexRects(world.spikes);
   buildNav();
   world.baseFlow = world.base ? buildFlowField([world.base]) : null;
 }
@@ -443,15 +456,16 @@ function buildWorld(level) {
 function pathClear(a, b, r) {
   const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
   const nx = (-dy / d) * r, ny = (dx / d) * r;
+  const near = world.pathBlockers.index.near(Math.min(a.x, b.x) - r, Math.min(a.y, b.y) - r, Math.max(a.x, b.x) + r, Math.max(a.y, b.y) + r);
   for (const k of [0, 1, -1]) {
     const x1 = a.x + nx * k, y1 = a.y + ny * k, x2 = b.x + nx * k, y2 = b.y + ny * k;
-    for (const rect of world.pathBlockers) if (segmentHitsRect(x1, y1, x2, y2, rect)) return false;
+    for (const rect of near) if (segmentHitsRect(x1, y1, x2, y2, rect)) return false;
   }
   return true;
 }
 
 function hasLineOfSight(a, b) {
-  for (const rect of world.sightBlockers) {
+  for (const rect of world.sightBlockers.index.near(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y))) {
     if (segmentHitsRect(a.x, a.y, b.x, b.y, rect)) return false;
   }
   return true;
@@ -459,7 +473,8 @@ function hasLineOfSight(a, b) {
 
 // шипы, на которых стоит юнит (или null); касаются только «ноги» — 0.6 радиуса
 function spikeRectAt(u) {
-  for (const rect of world.spikes) {
+  const r = u.r * 0.6;
+  for (const rect of world.spikes.index.near(u.x - r, u.y - r, u.x + r, u.y + r)) {
     if (circleRectOverlap(u.x, u.y, u.r * 0.6, rect)) return rect;
   }
   return null;

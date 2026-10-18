@@ -71,12 +71,13 @@ function siegeTarget(e) {
   return nearestTarget(e, chainUnits().concat(state.downed), state.level.waves.sight) || state.base;
 }
 
-// поле путей к союзникам (цепочка и лежачие — к ближайшему из них): одно на всех врагов, пересчитывается
-// не чаще раза в NAV.allyEvery; после сброса партии (state.allyFlow === null) — сразу
+// поле путей к союзникам (цепочка и лежачие — к ближайшему из них): одно на всех врагов, обновляется
+// не чаще раза в NAV.allyEvery и только если кто-то из них перешёл в другую клетку; после сброса партии
+// (state.allyFlow === null) — сразу
 function allyFlow() {
   const f = state.allyFlow;
   if (f && state.time - f.at < CONFIG.NAV.allyEvery) return f.field;
-  const field = buildFlowField(chainUnits().concat(state.downed));
+  const field = buildFlowField(chainUnits().concat(state.downed), f && f.field);
   state.allyFlow = { at: state.time, field };
   return field;
 }
