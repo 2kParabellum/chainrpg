@@ -6,7 +6,8 @@
 (function (G) {
 'use strict';
 
-const { ctx } = G.shapes;
+const { stamp, frameAt } = G.shapes;
+let ctx = G.shapes.ctx; // на время рисования готовой картинки — её холст
 const { COLORS, state } = G;
 const TAU = Math.PI * 2;
 const INK = '#2a1d0d';
@@ -14,58 +15,77 @@ function hexA(h, a) { const n = parseInt(h.slice(1), 16); return `rgba(${n >> 16
 function ell(x, y, rx, ry) { ctx.beginPath(); ctx.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), 0, 0, TAU); }
 const hash = (n) => { const s = Math.sin(n * 127.1) * 43758.5; return s - Math.floor(s); };
 
+// Плита — готовые картинки: зад (передняя грань с кладкой, каменный верх), узор вставки (у бегущих шевронов,
+// пламени и лучей — кадрами) и перед (рамки вставки, неподвижный узор, трещинки, болты, контур). Живьём —
+// свечение вокруг, мерцание вставки, парящий значок (сам значок — картинкой) и частицы
+const sprites = G.shapes.spriteCache((g, paint) => { const main = ctx; ctx = g; paint(); ctx = main; });
+function part(key, box, paint) { return sprites.get(key) || sprites.bake(key, 1, box, paint); }
+const FACE = 11;
+// узор вставки, который движется: период (с) и сколько кадров на него (лучи «воли» тянутся далеко — кадров больше)
+const DECOR_CYCLE = { speed: [0.7, 12], power: [Math.PI / 4, 12], will: [Math.PI * 2 / 0.3 / 8, 32] };
+
+// передняя грань с кладкой и каменный верх; (0, 0) — левый верхний угол плиты
+function paintBack(w, h) {
+  const topH = h - FACE;
+  ctx.fillStyle = '#45230d'; ctx.fillRect(2, topH, w - 4, FACE);
+  ctx.strokeStyle = '#36170c'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); for (const k of [0.33, 0.66]) { ctx.moveTo(w * k, topH); ctx.lineTo(w * k, h); } ctx.stroke();
+  const tg = ctx.createLinearGradient(0, 0, w, topH);
+  tg.addColorStop(0, '#927e6a'); tg.addColorStop(1, '#684c3c');
+  ctx.fillStyle = tg; ctx.fillRect(2, 2, w - 4, topH - 2);
+}
+// рамки вставки (у погасшей — тусклая), неподвижный узор, трещинки, болты по углам, контур
+function paintFront(key, col, w, h, dormant) {
+  const topH = h - FACE;
+  ctx.strokeStyle = dormant ? hexA(col, 0.5) : col; ctx.lineWidth = 2.5; ctx.strokeRect(8, 7, w - 16, topH - 12);
+  ctx.strokeStyle = hexA('#efd8a1', 0.35); ctx.lineWidth = 1; ctx.strokeRect(5, 4.5, w - 10, topH - 7);
+  if (!dormant && !DECOR_CYCLE[key]) decor(key, 9, 8, w - 18, topH - 14, col, 0);
+  ctx.strokeStyle = hexA(INK, 0.6); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(3, topH * 0.3); ctx.lineTo(7, topH * 0.38); ctx.lineTo(5, topH * 0.5);
+  ctx.moveTo(w - 4, topH * 0.7); ctx.lineTo(w - 8, topH * 0.62); ctx.stroke();
+  for (const [bx, by] of [[5, 5], [w - 5, 5], [5, topH - 4], [w - 5, topH - 4]]) {
+    ctx.fillStyle = '#efd8a1'; ell(bx, by, 2.2, 2.2); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke();
+  }
+  ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(2, 2, w - 4, h - 4);
+  ctx.beginPath(); ctx.moveTo(2, topH); ctx.lineTo(w - 2, topH); ctx.stroke();
+}
+
 // каменная плита с деталями: болты по углам, гравировка-рамка, трещинки, свечение верха, украшение под усиление,
 // над плитой парит значок (у «воли» — крылья с нимбом)
 function drawPad(pad, key, alpha, opt = {}) {
   const def = G.buffs[key], col = key === 'will' ? '#fff4dc' : def.color, t = state.time;
-  const x = pad.x, y = pad.y + (opt.dy || 0), w = pad.w, h = pad.h, face = 11, topH = h - face;
-  const cx = x + w / 2, cy = y + topH / 2, wave = Math.sin(t * 4);
+  const x = pad.x, y = pad.y + (opt.dy || 0), w = pad.w, h = pad.h, topH = h - FACE;
+  const cx = x + w / 2, cy = y + topH / 2, wave = Math.sin(t * 4), box = [0, 0, w, h];
   ctx.save();
   ctx.globalAlpha = alpha;
   if (opt.sx) { ctx.translate(cx, y + h); ctx.scale(opt.sx, opt.sy); ctx.translate(-cx, -(y + h)); }
   const dormant = opt.charge !== undefined;
   // свечение вокруг
   if (!dormant) G.shapes.glow(ctx, cx, cy, w, col, 0.35 + 0.08 * wave, 0.3);
-  // передняя грань с кладкой
-  ctx.fillStyle = '#45230d'; ctx.fillRect(x + 2, y + topH, w - 4, face);
-  ctx.strokeStyle = '#36170c'; ctx.lineWidth = 1.5;
-  ctx.beginPath(); for (const k of [0.33, 0.66]) { ctx.moveTo(x + w * k, y + topH); ctx.lineTo(x + w * k, y + h); } ctx.stroke();
-  // верх: камень со светлым углом
-  const tg = ctx.createLinearGradient(x, y, x + w, y + topH);
-  tg.addColorStop(0, '#927e6a'); tg.addColorStop(1, '#684c3c');
-  ctx.fillStyle = tg; ctx.fillRect(x + 2, y + 2, w - 4, topH - 2);
+  stamp(part(`back|${w}|${h}`, box, () => paintBack(w, h)), x, y);
   // светящаяся вставка цвета усиления
   if (dormant) { // погасла: тёмная вставка, снизу набирается цвет усиления
     const ih = topH - 14, fh = ih * opt.charge;
     ctx.fillStyle = hexA(INK, 0.75); ctx.fillRect(x + 9, y + 8, w - 18, ih);
     ctx.fillStyle = hexA(col, 0.55); ctx.fillRect(x + 9, y + 8 + ih - fh, w - 18, fh);
     ctx.fillStyle = hexA('#fff4dc', 0.5); ctx.fillRect(x + 9, y + 8 + ih - fh, w - 18, Math.min(2, fh));
-    ctx.strokeStyle = hexA(col, 0.5); ctx.lineWidth = 2.5; ctx.strokeRect(x + 8, y + 7, w - 16, topH - 12);
   } else {
-  ctx.fillStyle = hexA(col, 0.32 + 0.1 * wave); ctx.fillRect(x + 9, y + 8, w - 18, topH - 14);
-  ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.strokeRect(x + 8, y + 7, w - 16, topH - 12);
+    ctx.fillStyle = col; ctx.globalAlpha = alpha * (0.32 + 0.1 * wave); ctx.fillRect(x + 9, y + 8, w - 18, topH - 14);
+    ctx.globalAlpha = alpha;
+    const cyc = DECOR_CYCLE[key];
+    if (cyc) {
+      const [period, n] = cyc, f = frameAt(t, period, n);
+      stamp(part(`decor|${key}|${w}|${h}|${f}`, box, () => decor(key, 9, 8, w - 18, topH - 14, col, f / n * period)), x, y);
+    }
   }
-  ctx.strokeStyle = hexA('#efd8a1', 0.35); ctx.lineWidth = 1; ctx.strokeRect(x + 5, y + 4.5, w - 10, topH - 7);
-  // украшение вставки
-  if (!dormant) decor(key, x + 9, y + 8, w - 18, topH - 14, col, t);
-  // трещинки
-  ctx.strokeStyle = hexA(INK, 0.6); ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(x + 3, y + topH * 0.3); ctx.lineTo(x + 7, y + topH * 0.38); ctx.lineTo(x + 5, y + topH * 0.5);
-  ctx.moveTo(x + w - 4, y + topH * 0.7); ctx.lineTo(x + w - 8, y + topH * 0.62); ctx.stroke();
-  // болты по углам
-  for (const [bx, by] of [[x + 5, y + 5], [x + w - 5, y + 5], [x + 5, y + topH - 4], [x + w - 5, y + topH - 4]]) {
-    ctx.fillStyle = '#efd8a1'; ell(bx, by, 2.2, 2.2); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke();
-  }
-  // контур
-  ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(x + 2, y + 2, w - 4, h - 4);
-  ctx.beginPath(); ctx.moveTo(x + 2, y + topH); ctx.lineTo(x + w - 2, y + topH); ctx.stroke();
+  stamp(part(`front|${key}|${w}|${h}|${dormant ? 1 : 0}`, box, () => paintFront(key, col, w, h, dormant)), x, y);
   // парящий значок со светлым пятном за ним
   if (!opt.noIcon && !dormant) {
     const fy = cy - 8 + Math.sin(t * 2.5) * 3 + (opt.iconDy || 0);
     ctx.globalAlpha = alpha * (opt.iconA === undefined ? 1 : opt.iconA);
     G.shapes.glow(ctx, cx, fy, w * 0.42, '#fff4dc', 0.35, 2 / (w * 0.42));
     if (key === 'will') G.blobs.drawWingsAt(cx, fy + 12, w * 0.33, t);
-    else G.blobs.glyph(key, cx, fy, w * 0.26);
+    else G.blobs.glyphAt(key, cx, fy, w * 0.26);
   }
   ctx.restore();
   if (!dormant) particles(key, cx, cy, w, col, t, alpha);
@@ -231,7 +251,7 @@ function drawPermanent(pad) {
     const e = t - s.offAt;
     if (e < 0.5) {
       drawPad(pad, key, 1, { charge: 1 - e / 0.5 });
-      ctx.globalAlpha = 1 - e / 0.5; G.blobs.glyph(key, cx, cy - 12 - e * 120, pad.w * 0.26); ctx.globalAlpha = 1;
+      ctx.globalAlpha = 1 - e / 0.5; G.blobs.glyphAt(key, cx, cy - 12 - e * 120, pad.w * 0.26); ctx.globalAlpha = 1;
       return;
     }
     drawPad(pad, key, 1, { charge: 1 - pad.cooldown / (pad.cooldownTime || 1) });

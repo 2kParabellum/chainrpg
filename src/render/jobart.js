@@ -9,7 +9,8 @@
 'use strict';
 
 const { COLORS, state } = G;
-const { ctx } = G.shapes;
+const { stamp } = G.shapes;
+let ctx = G.shapes.ctx; // на время рисования готовой картинки — её холст
 const TAU = Math.PI * 2, INK = '#2a1d0d';
 function hexA(h, a) { const n = parseInt(h.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
 function ell(x, y, rx, ry) { ctx.beginPath(); ctx.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), 0, 0, TAU); }
@@ -19,6 +20,22 @@ const hash = (n) => { const s = Math.sin(n * 127.1) * 43758.5; return s - Math.f
 function geo(pad) {
   const r = pad.w / 2, cx = pad.x + r, cy = pad.y + r;
   return { r, cx, cy, rx: r * 0.9, ry: r * 0.45, top: cy + r * 0.15, h: r * 0.28 };
+}
+
+// Постамент и подпись — готовые картинки, шапка с оружием над ним — тоже (render/blobs.js); живьём — свечение,
+// тень шапки, трещины
+const sprites = G.shapes.spriteCache((g, paint) => { const main = ctx; ctx = g; paint(); ctx = main; });
+function part(key, box, paint) { return sprites.get(key) || sprites.bake(key, 1, box, paint); }
+
+// боковина, верх и ободок цвета профессии; (0, 0) — середина верха
+function paintBase(rx, ry, h, color) {
+  ctx.strokeStyle = COLORS.floorLine; ctx.lineWidth = 2;
+  ctx.fillStyle = COLORS.wallSide;
+  ctx.beginPath(); ctx.ellipse(0, h, rx, ry, 0, 0, Math.PI); ctx.lineTo(-rx, 0);
+  ctx.ellipse(0, 0, rx, ry, 0, Math.PI, 0, true); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = COLORS.wall; ell(0, 0, rx, ry); ctx.fill();
+  ctx.strokeStyle = color; ctx.lineWidth = 4; ell(0, 0, rx - 3, ry - 2); ctx.stroke();
+  ctx.strokeStyle = COLORS.floorLine; ctx.lineWidth = 2; ell(0, 0, rx, ry); ctx.stroke();
 }
 
 // постамент: opt.dy — сдвиг (падение), opt.sx/sy — сплющивание, opt.noIcon / iconA / iconDy — шапка,
@@ -34,15 +51,7 @@ function drawBase(pad, key, alpha, opt = {}) {
     G.shapes.glow(ctx, cx, top, r * 1.4, color, 1, 0.3 / 1.4, '#000000');
   }
   ctx.globalAlpha = (active ? 1 : 0.55) * alpha;
-  ctx.strokeStyle = COLORS.floorLine; ctx.lineWidth = 2;
-  // боковина
-  ctx.fillStyle = COLORS.wallSide;
-  ctx.beginPath(); ctx.ellipse(cx, top + h, rx, ry, 0, 0, Math.PI); ctx.lineTo(cx - rx, top);
-  ctx.ellipse(cx, top, rx, ry, 0, Math.PI, 0, true); ctx.closePath(); ctx.fill(); ctx.stroke();
-  // верх и ободок цвета профессии
-  ctx.fillStyle = COLORS.wall; ell(cx, top, rx, ry); ctx.fill();
-  ctx.strokeStyle = color; ctx.lineWidth = 4; ell(cx, top, rx - 3, ry - 2); ctx.stroke();
-  ctx.strokeStyle = COLORS.floorLine; ctx.lineWidth = 2; ell(cx, top, rx, ry); ctx.stroke();
+  stamp(part(`base|${key}|${r}|${active ? 1 : 0}`, [-rx, -ry, rx, h + ry], () => paintBase(rx, ry, h, color)), cx, top);
   if (opt.crack) {
     const k = opt.crack;
     ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.beginPath();
@@ -56,12 +65,14 @@ function drawBase(pad, key, alpha, opt = {}) {
     const float = active ? Math.sin(state.time * 2.5) * 3 : 0;
     ctx.globalAlpha = (active ? 1 : 0.55) * alpha * (opt.iconA === undefined ? 1 : opt.iconA);
     ctx.fillStyle = 'rgba(20,10,5,0.35)'; ell(cx, top, rx * 0.45, ry * 0.4); ctx.fill();
-    G.blobs.hatIcon(key, cx, top - r * 0.2 + float + (opt.iconDy || 0), r * 0.55);
+    G.blobs.hatIconAt(key, cx, top - r * 0.2 + float + (opt.iconDy || 0), r * 0.55);
   }
   if (!opt.noLabel) {
-    ctx.fillStyle = color; ctx.globalAlpha = (active ? 0.95 : 0.7) * alpha * (opt.labelA === undefined ? 1 : opt.labelA);
-    ctx.font = 'bold 12px "Trebuchet MS", "Segoe UI", system-ui, sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(def.name, cx, pad.y + pad.h + 16 + (opt.dy || 0));
+    ctx.globalAlpha = (active ? 0.95 : 0.7) * alpha * (opt.labelA === undefined ? 1 : opt.labelA);
+    stamp(part(`label|${key}|${active ? 1 : 0}`, [-80, -14, 80, 5], () => {
+      ctx.fillStyle = color; ctx.font = 'bold 12px "Trebuchet MS", "Segoe UI", system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(def.name, 0, 0);
+    }), cx, pad.y + pad.h + 16 + (opt.dy || 0));
   }
   ctx.restore();
 }

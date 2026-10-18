@@ -256,7 +256,7 @@ function drawBackpack(x, y, w) {
   ctx.font = `bold 12px ${UI_FONT}`;
   ctx.textAlign = 'center';
   if (bag.stored) {
-    G.blobs.glyph(bag.stored, x + 15, y + 13, 7);
+    G.blobs.glyphAt(bag.stored, x + 15, y + 13, 7);
     ctx.fillStyle = G.buffs[bag.stored].color;
     ctx.fillText(keyLabel('pack'), x + 15 + (w - 15) / 2, y + 19);
   } else if (bag.open) {
@@ -287,7 +287,7 @@ function drawBuffTimers(cx, y, leftRight, leftBottom) {
     const left = lead.buffs[k], def = G.buffs[k], ix = x + i * (itemW + gap);
     if (left < 4 && Math.floor(state.time * 6) % 2) ctx.globalAlpha = 0.45;
     panel(ix, y, itemW, 30);
-    G.blobs.glyph(k, ix + 15, y + 13, 7);
+    G.blobs.glyphAt(k, ix + 15, y + 13, 7);
     ctx.font = `bold 15px ${UI_FONT}`;
     ctx.textAlign = 'left';
     ctx.fillStyle = UI.text;

@@ -310,7 +310,7 @@ function drawAlly(u, mode, alpha = 1) {
     const gap = 17, y0 = top - 8;
     buffs.forEach((b, i) => {
       if (u.buffs[b] < 4 && Math.floor(t * 6) % 2) return;
-      glyph(b, x + (i - (buffs.length - 1) / 2) * gap, y0, 6);
+      glyphAt(b, x + (i - (buffs.length - 1) / 2) * gap, y0, 6);
     });
   }
   ctx.globalAlpha = 1;
@@ -439,6 +439,19 @@ function drawHatShape(hat, rx, ry, r, face, t) {
     ctx.fillStyle = C.tealD; ell(0, -ry * 0.64, rx * 0.85, ry * 0.12); ctx.fill(); ctx.stroke();
     star(rx * 0.05, -ry * 1.05, r * 0.18, C.cream);
   }
+}
+
+// то же готовыми картинками (шапка и оружие колышутся кадрами), без поворота холста
+function hatIconAt(ability, x, y, r, face = 1) {
+  const p = PROF[ability];
+  if (!p) return;
+  const t = state.time, rk = Math.round(r * 4) / 4;
+  const hk = HAT_WAVE[p.hat], hf = hk ? frameAt(t * hk, TAU, WAVE) : 0, ht = hk ? hf / WAVE * TAU / hk : 0;
+  stamp(part(`h|${p.hat}|${rk}|${face}|${hf}`, r, BOX[p.hat], () => drawHat(p.hat, r, r * 0.95, r, face, ht)), x, y);
+  const wr = r * 1.15, wx = p.weapon === 'spear' ? -r * 0.55 : p.weapon === 'gun' ? -r * 0.45 : -r * 0.2;
+  const wk = WEAPON_WAVE[p.weapon + 1], wf = wk ? frameAt(t * wk, TAU, WAVE) : 0, wt = wk ? wf / WAVE * TAU / wk : 0;
+  stamp(part(`i|${p.weapon}|${Math.round(wr * 4) / 4}|${face}|${wf}`, wr, mirror(BOX[p.weapon], face),
+    () => drawWeapon(p.weapon, 1, 0, 0, wr, face, wt, false, false)), x + wx, y + r * 0.05);
 }
 
 // шапка профессии отдельно, без тела (подиум профессии): x, y — где была бы середина тела радиуса r
@@ -580,6 +593,12 @@ function glyph(b, x, y, s) {
   }
 }
 
+// значок усиления готовой картинкой (над Героем, на подиуме, в интерфейсе): то же, что glyph
+function glyphAt(b, x, y, s) {
+  const e = s + 3;
+  stamp(part(`g|${b}|${s}`, 1, [-e, -e, e, e], () => glyph(b, 0, 0, s)), x, y);
+}
+
 // «крепкость»: стальная цепь между соседними звеньями цепочки
 function drawLinks(pts) {
   for (let i = 0; i + 1 < pts.length; i++) {
@@ -602,5 +621,5 @@ function drawWingsAt(x, y, r, t) {
   ctx.restore();
 }
 
-G.blobs = { drawWingsAt, drawAlly, drawLinks, drawBits, sweep, pop, hatIcon, glyph, BUFF_COL };
+G.blobs = { drawWingsAt, drawAlly, drawLinks, drawBits, sweep, pop, hatIcon, hatIconAt, glyph, glyphAt, BUFF_COL };
 })(window.Game = window.Game || {});

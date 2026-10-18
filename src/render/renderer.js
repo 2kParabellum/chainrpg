@@ -633,6 +633,13 @@ function drawWeapons() {
   }
 }
 
+// пули, плевки и плюсики лечения — готовые картинки (render/shapes.js: spriteCache), пуля и плевок повёрнуты по полёту
+const fxSprites = shapes.spriteCache((g, paint) => paint(g));
+function fxPart(key, r, box, paint) { return fxSprites.get(key) || fxSprites.bake(key, r, box, paint); }
+function stampTurned(sp, x, y, a) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(a); shapes.stamp(sp, 0, 0, 1, 1); ctx.restore();
+}
+
 function drawProjectiles() {
   for (const p of state.projectiles) {
     if (p.kind === 'mortar' || p.kind === 'bigMortar') { drawMortar(p); continue; }
@@ -645,39 +652,34 @@ function drawProjectiles() {
 
 // пуля своих: кремовая капсула вдоль полёта с тёмной обводкой и золотым следом; огненная — оранжевая
 function drawBullet(p) {
-  const a = Math.atan2(p.vy, p.vx), r = p.r;
-  ctx.save();
-  ctx.translate(p.x, p.y);
-  ctx.rotate(a);
-  ctx.strokeStyle = p.burn ? COLORS.fire : COLORS.speed;
-  ctx.globalAlpha = 0.45;
-  ctx.lineCap = 'round';
-  ctx.lineWidth = r * 1.2;
-  ctx.beginPath(); ctx.moveTo(-r * 1.5, 0); ctx.lineTo(-r * 5, 0); ctx.stroke();
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = p.burn ? COLORS.fire : COLORS.allyShot;
-  ctx.strokeStyle = COLORS.floorLine;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.roundRect(-r * 1.8, -r * 0.8, r * 3.2, r * 1.6, r * 0.8); ctx.fill(); ctx.stroke();
-  ctx.restore();
-  ctx.lineCap = 'butt';
+  const r = p.r, burn = p.burn ? 1 : 0;
+  stampTurned(fxPart(`bullet|${r}|${burn}`, r, [-5.6, -0.8, 1.4, 0.8], (c) => {
+    c.strokeStyle = burn ? COLORS.fire : COLORS.speed;
+    c.globalAlpha = 0.45;
+    c.lineCap = 'round';
+    c.lineWidth = r * 1.2;
+    c.beginPath(); c.moveTo(-r * 1.5, 0); c.lineTo(-r * 5, 0); c.stroke();
+    c.globalAlpha = 1;
+    c.fillStyle = burn ? COLORS.fire : COLORS.allyShot;
+    c.strokeStyle = COLORS.floorLine;
+    c.lineWidth = 1.5;
+    c.beginPath(); c.roundRect(-r * 1.8, -r * 0.8, r * 3.2, r * 1.6, r * 0.8); c.fill(); c.stroke();
+  }), p.x, p.y, Math.atan2(p.vy, p.vx));
 }
 
 // плевок врага: ком тёмно-красной слизи, вытянутый по полёту, со светящейся серединкой и каплями позади
 function drawSpit(p) {
-  const a = Math.atan2(p.vy, p.vx), r = p.r * 1.3;
-  ctx.save();
-  ctx.translate(p.x, p.y);
-  ctx.rotate(a);
-  ctx.fillStyle = COLORS.portal;
-  for (const [d, k] of [[-r * 1.9, 0.45], [-r * 3.1, 0.3]]) { ctx.beginPath(); ctx.arc(d, 0, r * k, 0, Math.PI * 2); ctx.fill(); }
-  ctx.fillStyle = COLORS.boss;
-  ctx.strokeStyle = COLORS.floorLine;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.ellipse(0, 0, r * 1.35, r, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = COLORS.enemyShot;
-  ctx.beginPath(); ctx.ellipse(r * 0.2, -r * 0.15, r * 0.55, r * 0.4, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
+  const r = p.r * 1.3;
+  stampTurned(fxPart(`spit|${r}`, r, [-3.4, -1, 1.35, 1], (c) => {
+    c.fillStyle = COLORS.portal;
+    for (const [d, k] of [[-r * 1.9, 0.45], [-r * 3.1, 0.3]]) { c.beginPath(); c.arc(d, 0, r * k, 0, Math.PI * 2); c.fill(); }
+    c.fillStyle = COLORS.boss;
+    c.strokeStyle = COLORS.floorLine;
+    c.lineWidth = 1.5;
+    c.beginPath(); c.ellipse(0, 0, r * 1.35, r, 0, 0, Math.PI * 2); c.fill(); c.stroke();
+    c.fillStyle = COLORS.enemyShot;
+    c.beginPath(); c.ellipse(r * 0.2, -r * 0.15, r * 0.55, r * 0.4, 0, 0, Math.PI * 2); c.fill();
+  }), p.x, p.y, Math.atan2(p.vy, p.vx));
 }
 
 // удар копейщика: яркая вспышка зоны удара и расходящееся толстое кольцо; на ходу — ещё и выпад копья
@@ -700,26 +702,9 @@ function drawSpearHit(fx) {
   ctx.beginPath();
   ctx.arc(fx.x, fx.y, fx.r * (0.9 + 0.5 * t), a0, a1);
   ctx.stroke();
-  ctx.lineCap = 'round';
-  const thrust = (x0, y0, a, len) => {
-    const x1 = x0 + Math.cos(a) * len, y1 = y0 + Math.sin(a) * len;
-    const col = ctx.strokeStyle, lw = ctx.lineWidth;
-    ctx.strokeStyle = COLORS.floorLine; ctx.lineWidth = lw + 3;
-    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-    ctx.strokeStyle = col; ctx.lineWidth = lw;
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x1 + Math.cos(a) * 9, y1 + Math.sin(a) * 9);
-    ctx.lineTo(x1 + Math.cos(a + 2.6) * 7, y1 + Math.sin(a + 2.6) * 7);
-    ctx.lineTo(x1 + Math.cos(a - 2.6) * 7, y1 + Math.sin(a - 2.6) * 7);
-    ctx.closePath();
-    ctx.fill();
-  };
-  ctx.fillStyle = fx.color;
-  ctx.lineWidth = 3;
+  // уколы: древко с тёмной обводкой и наконечник; все уколы — одним рисованием на слой (обводка, древко, наконечники)
+  const thrusts = [];
+  const thrust = (x0, y0, a, len) => thrusts.push([x0, y0, a, x0 + Math.cos(a) * len, y0 + Math.sin(a) * len]);
   // копьё выбрасывается за первую четверть эффекта и дальше держится, пока гаснет
   const reach = Math.min(1, t * 4);
   if (fx.from) {
@@ -731,6 +716,22 @@ function drawSpearHit(fx) {
       thrust(fx.x + Math.cos(a) * fx.r * 0.35, fx.y + Math.sin(a) * fx.r * 0.35, a, fx.r * 0.55 * reach);
     }
   }
+  ctx.lineCap = 'round';
+  for (const [lw, col] of [[6, COLORS.floorLine], [3, fx.color]]) {
+    ctx.strokeStyle = col; ctx.lineWidth = lw;
+    ctx.beginPath();
+    for (const [x0, y0, , x1, y1] of thrusts) { ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); }
+    ctx.stroke();
+  }
+  ctx.fillStyle = fx.color;
+  ctx.beginPath();
+  for (const [, , a, x1, y1] of thrusts) {
+    ctx.moveTo(x1 + Math.cos(a) * 9, y1 + Math.sin(a) * 9);
+    ctx.lineTo(x1 + Math.cos(a + 2.6) * 7, y1 + Math.sin(a + 2.6) * 7);
+    ctx.lineTo(x1 + Math.cos(a - 2.6) * 7, y1 + Math.sin(a - 2.6) * 7);
+    ctx.closePath();
+  }
+  ctx.fill();
   ctx.lineCap = 'butt';
   ctx.globalAlpha = 1;
 }
@@ -750,14 +751,16 @@ function drawImpact(x, y, color, k, size) {
   ctx.lineCap = 'butt';
 }
 
-// плюсик лечения
+// плюсик лечения — готовой картинкой
 function plusMark(x, y, s, color) {
-  const w = s * 0.38;
-  ctx.fillStyle = color; ctx.strokeStyle = COLORS.floorLine; ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.moveTo(x - w, y - s); ctx.lineTo(x + w, y - s); ctx.lineTo(x + w, y - w); ctx.lineTo(x + s, y - w); ctx.lineTo(x + s, y + w);
-  ctx.lineTo(x + w, y + w); ctx.lineTo(x + w, y + s); ctx.lineTo(x - w, y + s); ctx.lineTo(x - w, y + w); ctx.lineTo(x - s, y + w);
-  ctx.lineTo(x - s, y - w); ctx.lineTo(x - w, y - w); ctx.closePath(); ctx.fill(); ctx.stroke();
+  shapes.stamp(fxPart(`plus|${s}|${color}`, s, [-1, -1, 1, 1], (c) => {
+    const w = s * 0.38;
+    c.fillStyle = color; c.strokeStyle = COLORS.floorLine; c.lineWidth = 1.2;
+    c.beginPath();
+    c.moveTo(-w, -s); c.lineTo(w, -s); c.lineTo(w, -w); c.lineTo(s, -w); c.lineTo(s, w);
+    c.lineTo(w, w); c.lineTo(w, s); c.lineTo(-w, s); c.lineTo(-w, w); c.lineTo(-s, w);
+    c.lineTo(-s, -w); c.lineTo(-w, -w); c.closePath(); c.fill(); c.stroke();
+  }), x, y);
 }
 
 function drawEffects() {
