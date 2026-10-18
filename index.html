@@ -117,7 +117,6 @@
             border: 2px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.05); pointer-events: none; }
   #tStick .knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px;
                   border-radius: 50%; background: rgba(255,255,255,0.28); border: 2px solid rgba(255,255,255,0.45); }
-  #tStick.ghost { opacity: 0.4; }
   /* кнопки: место и размер ставит core/touch.js (их можно переставить в «Управлении») */
   .tPad { position: absolute; inset: 0; pointer-events: none; }
   .tBtn { position: absolute; border-radius: 50%; padding: 0; background: rgba(255,255,255,0.07); border: 2px solid rgba(255,255,255,0.28);
@@ -216,13 +215,9 @@
   .opts span { color: #fff4dc; text-align: right; }
   .panel .opts button { width: 150px; font-size: 14px; }
   body.touch .panel .opts button { width: 200px; min-height: 42px; font-size: 14px; }
-  /* «Управление»: вкладки «Компьютер» / «Телефон» */
+  /* «Управление»: настройки своего устройства — компьютера (kbd-only) или телефона (touch-only) */
   #panelControls { max-width: 760px; padding: 10px 16px; }
-  .tabs { display: flex; gap: 8px; }
-  #panelControls .tabs button { width: 150px; min-height: 40px; padding: 6px 12px; }
-  .tabs button.sel { border-color: #efac28; color: #efac28; background: #45230d; }
-  .ctlTab { display: none; flex-direction: column; align-items: center; gap: 10px; }
-  .ctlTab.active { display: flex; }
+  .ctlTab { display: flex; flex-direction: column; align-items: center; gap: 10px; }
   .ctlHint { margin: 0; max-width: 640px; font-size: 12px; color: #927e6a; text-align: center; }
   /* назначения клавиш: два места на действие; ждёт клавишу — мигает */
   .binds td:first-child { text-align: left; white-space: normal; color: #efd8a1; }
@@ -240,11 +235,8 @@
     .binds td { padding: 1px 8px; }
     .binds td.k { padding: 1px 3px; }
     .panel .binds button.key { padding: 2px 8px; }
-    #ctlMobile.active { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; align-items: center; }
-    #ctlMobile .controls { grid-row: span 2; font-size: 12px; }
     #ctlMobile .controls td { padding: 2px 6px; }
-    body.touch .panel .opts button, .panel .opts button { width: 110px; min-height: 36px; padding: 4px 8px; }
-    #modeHint { max-width: 360px; }
+    body.touch .panel .opts button, .panel .opts button { min-height: 34px; padding: 4px 8px; }
   }
   .opts button.sel { border-color: #efd8a1; color: #efd8a1; background: #45230d; }
   </style>
@@ -308,40 +300,39 @@
         <h1>PAUSED</h1>
         <button id="resumeBtn">Resume</button>
         <button id="pauseRestartBtn">Restart</button>
+        <button id="pauseControlsBtn">Controls</button>
         <button id="pauseMenuBtn">Main Menu</button>
       </div>
       <div id="panelControls" class="panel">
         <h2>Controls</h2>
-        <div class="tabs">
-          <button data-tab="pc">PC</button><button data-tab="mobile">Mobile</button>
-        </div>
-        <div id="ctlPc" class="ctlTab">
+        <div id="ctlPc" class="ctlTab kbd-only">
           <table class="controls binds" id="bindTable"></table>
+          <div class="opts">
+            <span>Mouse</span><button data-hold="0">click to go</button><button data-hold="1">hold to go</button>
+          </div>
           <p class="ctlHint">Click a box and press a key. For a mouse button, click the box again with that button.
             ESC — cancel, Delete — clear. Always: ESC — pause, 1 / 2 / 3 — pick an upgrade card.</p>
         </div>
-        <div id="ctlMobile" class="ctlTab">
+        <div id="ctlMobile" class="ctlTab touch-only">
           <table class="controls">
-            <tr><td>JOYSTICK</td><td>touch your half of the screen and drag — the joystick appears where you touch</td></tr>
+            <tr><td>JOYSTICK</td><td>touch your half of the screen and drag — the Hero turns where you drag and drives
+              that way; let go to brake</td></tr>
             <tr><td>GRAB</td><td>recruit a mate or pick up a knocked-out one (pads are picked up by driving over them)</td></tr>
             <tr><td>DROP</td><td>drop the last mate; if the Hero is on a button, the mate stays to hold it down</td></tr>
             <tr><td>BAG</td><td>backpack (with its upgrade): open it — the next boost pad goes inside; tap again to use the boost</td></tr>
             <tr><td>❚❚ &nbsp; ↻</td><td>pause; restart (tap twice)</td></tr>
           </table>
           <div class="opts">
-            <span>Joystick</span><button data-mode="aim">Steer</button><button data-mode="tank">Tank</button>
-            <span>Side</span><button data-mirror="0">right</button><button data-mirror="1">left</button>
-            <span>Auto-drive</span><button data-cruise="0">off</button><button data-cruise="1">on</button>
+            <span>Joystick</span><button data-mirror="0">right</button><button data-mirror="1">left</button>
           </div>
-          <p id="modeHint" class="ctlHint"></p>
         </div>
         <div class="btnRow">
-          <button id="bindResetBtn" data-for="pc">Reset to defaults</button>
-          <button id="layoutBtn" data-for="mobile">Arrange buttons</button>
+          <button id="bindResetBtn" class="kbd-only">Reset to defaults</button>
+          <button id="layoutBtn" class="touch-only">Arrange buttons</button>
           <button id="backBtn">Back</button>
         </div>
       </div>
-      <div id="build">build 16</div>
+      <div id="build">build 17</div>
     </div>
   </div>
   <script src="src/core/debug.js"></script>

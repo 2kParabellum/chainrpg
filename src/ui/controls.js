@@ -1,23 +1,23 @@
-// Панель «Управление» главного меню: вкладки «Компьютер» и «Телефон» (открывается та, на чём играют).
+// Панель «Управление» (из главного меню и из паузы): сразу настройки своего устройства — на компьютере клавиши
+// и мышь, на телефоне кнопки и джойстик (что показывать, решает CSS по классу touch у body, его ставит core/screen.js).
 // Компьютер — таблица действий, у каждого два места под клавишу или кнопку мыши: щелчок по месту — ждёт клавишу
-// (core/input.js captureBinding), «Сбросить» — назначения по умолчанию. Телефон — кнопки и джойстик, режим джойстика,
-// сторона, «Автоход» и расстановка кнопок (core/touch.js editLayout). Знает только про core/ — про игру ничего.
+// (core/input.js captureBinding), «Сбросить» — назначения по умолчанию; мышь — «щелчок — едет в точку» или «едет,
+// пока держишь». Телефон — сторона джойстика и расстановка кнопок (core/touch.js editLayout). Знает только про core/.
 //
-// open() — перед показом панели: выбрать вкладку, обновить таблицу и выбор; close() — при уходе с панели.
+// open() — перед показом панели: обновить таблицу и выбор; close() — при уходе с панели.
 (function (G) {
 'use strict';
 
 const input = G.input;
 const touchUI = G.touch;
-const { isTouch } = G.screen;
 
 // строки таблицы клавиш: действие и что оно делает
 const ROWS = [
+  ['cursor', 'Drive to the cursor'],
   ['forward', 'Drive forward — the Hero can’t reverse, let go to brake'],
   ['back', 'Brake'],
   ['left', 'Turn left'],
   ['right', 'Turn right'],
-  ['cursor', 'Hold — drive toward the mouse cursor'],
   ['recruit', 'Recruit a mate or pick up a knocked-out one'],
   ['drop', 'Drop the last mate (on a button it stays and holds it down)'],
   ['pack', 'Backpack (with its upgrade): open / use the boost'],
@@ -25,24 +25,8 @@ const ROWS = [
   ['pause', 'Pause'],
 ];
 
-const MODE_HINTS = {
-  aim: 'Steer: the Hero turns toward where you drag and drives that way. No reverse — drag back and the Hero turns around in an arc.',
-  tank: 'Tank: up — throttle, left / right — turn (like W / A / D). The Hero can’t reverse.',
-};
-const CRUISE_HINT = ' Auto-drive: let go of the joystick and the Hero keeps going; tap without dragging to stop.';
-
-const tabButtons = document.querySelectorAll('.tabs button');
-const tabs = { pc: document.getElementById('ctlPc'), mobile: document.getElementById('ctlMobile') };
 const table = document.getElementById('bindTable');
-const optButtons = document.querySelectorAll('#ctlMobile .opts button');
-
-function showTab(name) {
-  for (const b of tabButtons) b.classList.toggle('sel', b.dataset.tab === name);
-  for (const [key, el] of Object.entries(tabs)) el.classList.toggle('active', key === name);
-  // кнопки внизу — только своей вкладки («Сбросить» / «Расставить кнопки»)
-  for (const el of document.querySelectorAll('#panelControls [data-for]')) el.style.display = el.dataset.for === name ? '' : 'none';
-  input.cancelCapture();
-}
+const optButtons = document.querySelectorAll('#panelControls .opts button');
 
 // --- клавиши ---
 let waiting = null; // { name, slot } — это место ждёт клавишу
@@ -91,24 +75,25 @@ document.getElementById('bindResetBtn').addEventListener('click', (ev) => {
   ev.currentTarget.blur();
   input.cancelCapture();
   input.resetBindings();
+  input.setMouseHold(false);
   renderBinds();
+  syncOpts();
 });
 
-// --- телефон ---
+// --- выбор: мышь (компьютер), сторона джойстика (телефон) ---
 function syncOpts() {
-  const { mode, mirror, cruise } = touchUI.getSettings();
+  const { mirror } = touchUI.getSettings();
+  const hold = input.getMouseHold();
   for (const b of optButtons) {
     const d = b.dataset;
-    b.classList.toggle('sel', d.mode ? d.mode === mode : d.mirror ? (d.mirror === '1') === mirror : (d.cruise === '1') === cruise);
+    b.classList.toggle('sel', d.hold ? (d.hold === '1') === hold : (d.mirror === '1') === mirror);
   }
-  document.getElementById('modeHint').textContent = MODE_HINTS[mode] + (cruise ? CRUISE_HINT : '');
 }
 for (const b of optButtons) {
   b.addEventListener('click', () => {
-    const d = b.dataset;
-    if (d.mode) touchUI.setSetting('mode', d.mode);
-    else if (d.mirror) touchUI.setSetting('mirror', d.mirror === '1');
-    else touchUI.setSetting('cruise', d.cruise === '1');
+    b.blur();
+    if (b.dataset.hold) input.setMouseHold(b.dataset.hold === '1');
+    else touchUI.setSetting('mirror', b.dataset.mirror === '1');
     syncOpts();
   });
 }
@@ -117,13 +102,11 @@ document.getElementById('layoutBtn').addEventListener('click', (ev) => {
   touchUI.editLayout(() => {});
 });
 
-for (const b of tabButtons) b.addEventListener('click', () => { b.blur(); showTab(b.dataset.tab); });
-
 function open() {
   waiting = null;
+  input.cancelCapture();
   renderBinds();
   syncOpts();
-  showTab(isTouch() ? 'mobile' : 'pc');
 }
 function close() { input.cancelCapture(); }
 

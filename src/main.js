@@ -7,7 +7,7 @@
 // «вы прошли игру»). Прохождение — это цепочка уровней подряд через этот экран; уровень, выбранный из меню,
 // начинает новое прохождение: с первого — без улучшений, с N-го — сперва N−1 раз выбор карточки (как будто
 // предыдущие уровни пройдены), потом сам уровень. Пауза (ESC, кнопка паузы, свернули вкладку, телефон повернули
-// вертикально) — тот же оверлей с панелью «Продолжить / Заново / В меню»; пока пауза, игра стоит.
+// вертикально) — тот же оверлей с панелью «Продолжить / Заново / Управление / В меню»; пока пауза, игра стоит.
 (function (G) {
 'use strict';
 
@@ -43,6 +43,8 @@ initInput(canvas, {
       else if (name.startsWith('pick')) pickCard(Number(name.slice(4)) - 1);
       return;
     }
+    // ESC (пауза) на панели «Управление» — назад, туда, откуда её открыли
+    if (name === 'pause' && controlsFrom) { closeControls(); return; }
     if (name === 'pause') { if (state.status === 'pause') resume(); else pause(); return; }
     if (state.status === 'menu' || state.status === 'pause' || name.startsWith('pick')) return;
     if (name === 'restart') resetGame(state.level);
@@ -283,8 +285,21 @@ onClick('winMenuBtn', toMenu);
 onClick('startBtn', () => { startRun(); startLevel(LEVELS[0]); });
 onClick('levelsBtn', () => showPanel('levels'));
 onClick('levelsBackBtn', () => showPanel('main'));
-onClick('controlsBtn', () => { controlsPanel.open(); showPanel('controls'); });
-onClick('backBtn', () => { controlsPanel.close(); showPanel('main'); });
+// «Управление» — из главного меню и из паузы; «Назад» возвращает туда же
+let controlsFrom = null; // 'main' | 'pause' — откуда открыта панель «Управление»; null — она закрыта
+function openControls(from) {
+  controlsFrom = from;
+  controlsPanel.open();
+  showPanel('controls');
+}
+function closeControls() {
+  controlsPanel.close();
+  showPanel(controlsFrom);
+  controlsFrom = null;
+}
+onClick('controlsBtn', () => openControls('main'));
+onClick('pauseControlsBtn', () => openControls('pause'));
+onClick('backBtn', closeControls);
 
 // свернули вкладку, заблокировали телефон или повернули его вертикально — пауза
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });

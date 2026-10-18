@@ -39,7 +39,7 @@ const game = {
   spawnEnemy, freeSpotNear, pickChaser,
 };
 
-// джойстик в режиме «Направление»: куда тянут (aim), туда Герой поворачивает с обычной скоростью поворота
+// джойстик: куда тянут (aim), туда Герой поворачивает с обычной скоростью поворота
 // и всё время едет вперёд — тянут назад, он разворачивается дугой
 function aimSteer(lead, aim, maxTurn) {
   const diff = angleDiff(aim, lead.heading);
@@ -49,13 +49,13 @@ function aimSteer(lead, aim, maxTurn) {
   };
 }
 
-// мышь: Герой поворачивает к точке курсора (x, y в мире) и едет к ней. У самой точки (CONFIG.MOUSE.stopRadius) — стоит;
+// мышь: Герой поворачивает к точке (x, y в мире) и едет к ней. У самой точки (CONFIG.MOUSE.stopRadius) — приехал (reached);
 // если точка внутри круга разворота (на этой скорости до неё не довернуть — Герой кружил бы вокруг) или близко за спиной,
 // газ отпущен: Герой притормаживает и доворачивает. Точка на расстоянии d под углом diff внутри круга радиуса R = v/ω,
 // если d < 2R·|sin diff|
 function pointSteer(lead, x, y, maxTurn, turnSpeed) {
   const dx = x - lead.x, dy = y - lead.y, d = Math.hypot(dx, dy);
-  if (d < CONFIG.MOUSE.stopRadius) return { turn: 0, throttle: 0 };
+  if (d < CONFIG.MOUSE.stopRadius) return { turn: 0, throttle: 0, reached: true };
   const angle = Math.atan2(dy, dx), diff = angleDiff(angle, lead.heading);
   const steer = aimSteer(lead, angle, maxTurn);
   const R = Math.hypot(lead.vx, lead.vy) / Math.max(turnSpeed, 1e-6);
@@ -63,12 +63,21 @@ function pointSteer(lead, x, y, maxTurn, turnSpeed) {
   return steer;
 }
 
+// точка, куда Герой едет мышью (state.moveTarget, в мире): пока кнопка зажата — под курсором; отпустили — остаётся
+// (с настройкой «ехать, пока держишь» — забыта). Клавиши движения и джойстик её отменяют
+function updateMoveTarget() {
+  const { throttle, turn, aim, toward, holdOnly } = state.moveInput;
+  if (throttle || turn || (aim !== null && aim !== undefined)) state.moveTarget = null;
+  else if (toward) state.moveTarget = { x: state.camera.x + toward.x, y: state.camera.y + toward.y };
+  else if (holdOnly) state.moveTarget = null;
+}
+
 // «танковое» движение Героя с инерцией: A/D поворачивают направление (heading), W даёт газ вперёд вдоль него.
-// Заднего хода нет: Герой ездит только вперёд, S (или джойстик вниз в «Танке») — просто без газа.
+// Заднего хода нет: Герой ездит только вперёд, S — просто без газа.
 // Скорость тянется к желаемой с разгоном, без газа — накат и торможение.
 // heading отдельно от facing: оружие поворачивает facing к цели, но не должно разворачивать Героя.
-// Джойстик в режиме «Направление» задаёт угол aim, из которого получаются те же газ и поворот (aimSteer), мышь — точку
-// toward на экране (pointSteer).
+// Джойстик задаёт угол aim, из которого получаются те же газ и поворот (aimSteer), мышь — точку state.moveTarget
+// (pointSteer; доехал — точка снята).
 // Длинная цепочка тяжелее (масса M, см. CHAIN.heft): разгон делится на M (торможение — на меньшую массу), а поворот на ходу упирается
 // в предел сцепления — боковое ускорение v·ω не больше, чем у Героя налегке на полной скорости:
 // ω ≤ turnSpeed·mv·min(1, speed·mv / (M·v)). Медленно тяжёлая цепочка поворачивает круто, на полном ходу — дугой
@@ -81,9 +90,13 @@ function updateLeader(dt) {
   const v = Math.hypot(lead.vx, lead.vy);
   const turnSpeed = cfg.turnSpeed * mv * Math.min(1, (cfg.speed * mv) / (mass * Math.max(v, 1)));
   let { throttle, turn } = state.moveInput;
-  const { aim, toward } = state.moveInput;
-  if (toward) {
-    ({ throttle, turn } = pointSteer(lead, state.camera.x + toward.x, state.camera.y + toward.y, turnSpeed * dt, turnSpeed));
+  const aim = state.moveInput.aim;
+  updateMoveTarget();
+  const target = state.moveTarget;
+  if (target) {
+    const steer = pointSteer(lead, target.x, target.y, turnSpeed * dt, turnSpeed);
+    ({ throttle, turn } = steer);
+    if (steer.reached) state.moveTarget = null;
   } else if (aim !== null && aim !== undefined) ({ throttle, turn } = aimSteer(lead, aim, turnSpeed * dt));
 
   // в экранных координатах (y вниз) уменьшение угла — поворот налево

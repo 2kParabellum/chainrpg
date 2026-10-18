@@ -5,12 +5,8 @@
 // можно ехать джойстиком и одновременно жать «ВЗЯТЬ».
 //
 // Джойстик появляется там, где палец коснулся своей половины экрана, и ведётся от этой точки; отпустил — исчез.
-// Два режима джойстика (настройка mode):
-//   'tank' — как клавиатура: вверх — газ (по порогу), влево/вправо — плавный поворот;
-//   'aim'  — «Направление»: куда тянут, туда Герой разворачивается и едет (что из угла получается газ и поворот,
-//            решает движение Героя в game/update.js).
-// Настройка cruise — «Автоход»: отпустил джойстик — Герой едет дальше, как ехал (в «Танке» — прямо); коснулся
-// и отпустил без сдвига — стоп.
+// Куда тянут, туда Герой разворачивается и едет: в input.setStick уходит угол (что из него получается газ и поворот,
+// решает движение Героя в game/update.js); в мёртвой зоне у центра — null.
 // Настройка mirror — зеркально: джойстик слева, кнопки справа. Настройка layout — где стоят кнопки (центр в пикселях
 // от левого края — от правого, если зеркально, — и от нижнего; кнопка у края экрана не уходит за него), size — их
 // размер (доля обычного). Настройки хранятся в localStorage.
@@ -48,10 +44,12 @@ function defaultLayout() {
   for (const [id, b] of Object.entries(PAD_BUTTONS)) layout[id] = { x: b.x, y: b.y };
   return layout;
 }
-const settings = { mode: 'aim', mirror: false, cruise: false, size: 1, layout: defaultLayout() };
+const settings = { mirror: false, size: 1, layout: defaultLayout() };
 try {
   const saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
-  Object.assign(settings, saved, { layout: { ...defaultLayout(), ...(saved.layout || {}) } });
+  if (typeof saved.mirror === 'boolean') settings.mirror = saved.mirror;
+  if (SIZES.includes(saved.size)) settings.size = saved.size;
+  Object.assign(settings.layout, saved.layout || {});
 } catch (e) { /* без хранилища — по умолчанию */ }
 
 function getSettings() { return { ...settings }; }
@@ -117,18 +115,7 @@ function press(el) {
 // --- джойстик ---
 let stickId = null;            // палец, который ведёт джойстик
 let originX = 0, originY = 0;  // где палец коснулся — центр джойстика (в координатах слоя)
-let lastAxes = null;           // последнее отклонение джойстика — для «Автохода»
 const pressed = new Map();     // палец -> нажатая им кнопка
-
-function stickAxes(nx, ny) {
-  const T = CONFIG.TOUCH;
-  const m = Math.hypot(nx, ny);
-  if (m < T.deadZone) return { throttle: 0, turn: 0, aim: null };
-  if (settings.mode === 'aim') return { throttle: 0, turn: 0, aim: Math.atan2(ny, nx) };
-  const turn = Math.sign(nx) * clamp((Math.abs(nx) - T.deadZone) / (1 - T.deadZone), 0, 1);
-  const throttle = ny < -T.throttleZone ? 1 : ny > T.throttleZone ? -1 : 0;
-  return { throttle, turn, aim: null };
-}
 
 function moveStick(x, y) {
   const R = CONFIG.TOUCH.stickRadius;
@@ -136,24 +123,13 @@ function moveStick(x, y) {
   const d = Math.hypot(dx, dy);
   if (d > R) { dx *= R / d; dy *= R / d; }
   knobEl.style.transform = `translate(${dx}px, ${dy}px)`;
-  lastAxes = stickAxes(dx / R, dy / R);
-  setStick(lastAxes);
+  setStick(Math.hypot(dx, dy) < CONFIG.TOUCH.deadZone * R ? null : Math.atan2(dy, dx));
 }
 
-// палец отпущен. С «Автоходом» (и не сброс всего: keep) Герой едет дальше: в «Направлении» — туда же, в «Танке» —
-// прямо с газом, если газ был; джойстик остаётся на месте бледным. Отпустил, не сдвинув, — стоп
-function releaseStick(keep) {
+function releaseStick() {
   stickId = null;
-  const a = lastAxes;
-  lastAxes = null;
-  if (keep && settings.cruise && a && (a.aim !== null || a.throttle > 0)) {
-    setStick(a.aim !== null ? a : { throttle: 1, turn: 0, aim: null });
-    stickEl.classList.add('ghost');
-    return;
-  }
-  setStick(null);
   stickEl.style.display = 'none';
-  stickEl.classList.remove('ghost');
+  setStick(null);
 }
 
 // точка касания в координатах слоя
@@ -243,7 +219,6 @@ layer.addEventListener('pointerdown', (ev) => {
   stickEl.style.left = p.x + 'px';
   stickEl.style.top = p.y + 'px';
   stickEl.style.display = 'block';
-  stickEl.classList.remove('ghost');
   layer.setPointerCapture(ev.pointerId);
   moveStick(p.x, p.y);
 });
@@ -257,7 +232,7 @@ layer.addEventListener('pointermove', (ev) => {
 
 function onUp(ev) {
   if (drag && ev.pointerId === drag.id) endDrag();
-  if (ev.pointerId === stickId) releaseStick(true);
+  if (ev.pointerId === stickId) releaseStick();
   const btn = pressed.get(ev.pointerId);
   if (btn) { btn.classList.remove('pressed'); pressed.delete(ev.pointerId); }
 }
@@ -274,9 +249,9 @@ window.addEventListener('pointercancel', onUp);
 layer.addEventListener('lostpointercapture', onUp);
 for (const el of [layer, corner]) el.addEventListener('contextmenu', (ev) => ev.preventDefault());
 
-// все пальцы отпущены: свернули вкладку, слой спрятан — Герой не должен ехать сам (и с «Автоходом»)
+// все пальцы отпущены: свернули вкладку, слой спрятан — Герой не должен ехать сам
 function releaseAll() {
-  releaseStick(false);
+  releaseStick();
   endDrag();
   for (const btn of pressed.values()) btn.classList.remove('pressed');
   pressed.clear();

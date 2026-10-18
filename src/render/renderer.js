@@ -898,6 +898,23 @@ function drawSlimeBlast(fx) {
   ctx.globalAlpha = 1;
 }
 
+// метка на земле, куда Герой едет мышью: кольцо сжимается к точке и снова, под ним крестик
+function drawMoveTarget() {
+  const t = state.moveTarget;
+  if (!t) return;
+  const ph = (state.time * 2.5) % 1;
+  ctx.strokeStyle = COLORS.hero;
+  ctx.lineWidth = 2.5;
+  ctx.globalAlpha = 0.9 * (1 - ph * 0.6);
+  ctx.beginPath(); ctx.arc(t.x, t.y, 18 - 9 * ph, 0, Math.PI * 2); ctx.stroke();
+  ctx.globalAlpha = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(t.x - 5, t.y - 5); ctx.lineTo(t.x + 5, t.y + 5);
+  ctx.moveTo(t.x + 5, t.y - 5); ctx.lineTo(t.x - 5, t.y + 5);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
 // сцена целиком, слой за слоем; камера остаётся применённой до конца кадра. Фон не заливается: куски земли
 // закрывают весь холст (за краем уровня — скала)
 function drawScene() {
@@ -917,6 +934,7 @@ function drawScene() {
   drawPads();
   drawPadLinks();
   drawExit();
+  drawMoveTarget();
   // облака и стенки огня лежат на земле: под всеми телами, иначе огонь закрывает стоящих в нём врагов
   drawClouds();
   drawFirewalls();

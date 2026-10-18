@@ -9,7 +9,8 @@
 // сколько пикселей канваса в одной единице.
 //
 // Режим касаний: ?touch=1 — включить (так сенсорный интерфейс проверяют мышью), ?touch=0 — выключить;
-// иначе — если устройство сенсорное, или с первого касания экрана.
+// иначе — если устройство сенсорное (основной указатель — палец, или есть касания и нет наведения мышью),
+// или с первого касания экрана.
 // onChange(fn) — fn() после любого пересчёта (поворот, размер окна, смена режима).
 (function (G) {
 'use strict';
@@ -21,7 +22,8 @@ const canvas = document.getElementById('c');
 const stage = document.getElementById('stage');
 const params = new URLSearchParams(location.search);
 const forced = params.get('touch');
-let touch = forced === '1' || (forced !== '0' && matchMedia('(pointer: coarse)').matches);
+let touch = forced === '1' || (forced !== '0' && (matchMedia('(pointer: coarse)').matches
+  || (navigator.maxTouchPoints > 0 && matchMedia('(hover: none)').matches)));
 let scale = 1;
 const listeners = [];
 

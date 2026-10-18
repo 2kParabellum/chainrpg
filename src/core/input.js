@@ -10,12 +10,15 @@
 // handlers:
 //   onCommand(name)   'restart' | 'recruit' | 'drop' | 'pack' (рюкзак Героя) | 'pause' | 'pick1' | 'pick2' | 'pick3'
 //                     (выбор карточки улучшения)
-// moveAxes() -> { throttle, turn, aim, toward } — опрос зажатых клавиш движения, мыши и джойстика:
+// moveAxes() -> { throttle, turn, aim, toward, holdOnly } — опрос зажатых клавиш движения, мыши и джойстика:
 //   throttle  +1 вперёд, -1 «назад» (Герой назад не ездит, для него это просто без газа), 0 — ни одной или обе
-//   turn      -1 налево, +1 направо, 0 — ни одной или обе; от джойстика — дробное (плавный поворот)
-//   aim       угол, куда тянут джойстик в режиме «Направление» (Герой разворачивается туда и едет), иначе null
+//   turn      -1 налево, +1 направо, 0 — ни одной или обе
+//   aim       угол, куда тянут джойстик (Герой разворачивается туда и едет), иначе null
 //   toward    точка курсора в единицах вида { x, y } (от левого верхнего угла экрана), пока зажата кнопка «ехать
-//             к курсору», иначе null; как из неё получается движение, решает game/update.js
+//             к курсору», иначе null
+//   holdOnly  настройка мыши «ехать, пока держишь»: отпустил кнопку — точка забыта; иначе (по умолчанию) Герой едет
+//             в точку щелчка и после отпускания. Как из точки получается движение, решает game/update.js
+// getMouseHold() / setMouseHold(on) — эта настройка (в localStorage)
 // keyLabel(command) — как назвать игроку кнопку команды: на клавиатуре — первая назначенная («SPACE»), при касаниях «GRAB»
 // captureBinding(fn, el) — следующая клавиша не действует, а уходит в fn(code): ESC — fn(undefined) (отмена),
 // Delete / Backspace — fn(null) (очистить); кнопка мыши — только нажатая над элементом el, нажатие мимо — отмена
@@ -115,44 +118,55 @@ function keyLabel(name) {
 // «{recruit} — взять» -> «SPACE — взять» или «GRAB — взять» по способу ввода
 function withKeys(text) { return text.replace(/\{(\w+)\}/g, (m, name) => (TOUCH_LABELS[name] ? keyLabel(name) : m)); }
 
+// мышь: «ехать, пока держишь» вместо «щелчок — едет в точку»
+const MOUSE_KEY = 'chain.mouse';
+let mouseHold = false;
+try { mouseHold = JSON.parse(localStorage.getItem(MOUSE_KEY) || '{}').hold === true; } catch (e) { /* по умолчанию */ }
+function getMouseHold() { return mouseHold; }
+function setMouseHold(on) {
+  mouseHold = !!on;
+  try { localStorage.setItem(MOUSE_KEY, JSON.stringify({ hold: mouseHold })); } catch (e) { /* не запомнится */ }
+}
+
 // --- опрос ---
 const held = new Set();   // зажатые клавиши и кнопки мыши ('Mouse0')
 let handlers = null;
 let canvasEl = null;
 let pointer = null;       // где курсор: { x, y } в координатах окна; null — ещё не двигали
-// джойстик: { throttle, turn, aim } от core/touch.js; null — не тянут
+let clicked = null;       // где нажали «ехать к курсору» — до ближайшего опроса: короткий щелчок мог уложиться между кадрами
+// джойстик: угол от core/touch.js; null — не тянут
 let stick = null;
 let capture = null;       // ждём клавишу для назначения: fn(code)
 let captureEl = null;     // над ним нажатая кнопка мыши назначается
 
 function holding(name) { return bindings[name].some((c) => c && held.has(c)); }
 
-// курсор в единицах вида
-function cursorView() {
-  if (!pointer || !canvasEl) return null;
+// точка окна в единицах вида
+function toView(p) {
+  if (!p || !canvasEl) return null;
   const r = canvasEl.getBoundingClientRect();
   if (!r.width || !r.height) return null;
-  return { x: (pointer.x - r.left) / r.width * CONFIG.VIEW.w, y: (pointer.y - r.top) / r.height * CONFIG.VIEW.h };
+  return { x: (p.x - r.left) / r.width * CONFIG.VIEW.w, y: (p.y - r.top) / r.height * CONFIG.VIEW.h };
 }
 
 function moveAxes() {
-  const keys = {
+  const axes = {
     throttle: (holding('forward') ? 1 : 0) - (holding('back') ? 1 : 0),
     turn: (holding('right') ? 1 : 0) - (holding('left') ? 1 : 0),
     aim: null,
     toward: null,
+    holdOnly: mouseHold,
   };
   // клавиши движения зажаты — им и слушаемся; иначе мышь, иначе джойстик
-  if (keys.throttle || keys.turn) return keys;
-  if (holding('cursor') && !isTouch()) {
-    const toward = cursorView();
-    if (toward) return { throttle: 0, turn: 0, aim: null, toward };
-  }
-  if (!stick) return keys;
-  return { throttle: stick.throttle, turn: stick.turn, aim: stick.aim, toward: null };
+  if (axes.throttle || axes.turn) return axes;
+  if (holding('cursor') && !isTouch()) axes.toward = toView(pointer);
+  else if (clicked && !isTouch()) axes.toward = toView(clicked);
+  else axes.aim = stick;
+  clicked = null;
+  return axes;
 }
 
-function setStick(axes) { stick = axes; }
+function setStick(angle) { stick = angle; }
 
 function command(name) { if (handlers) handlers.onCommand(name); }
 
@@ -204,6 +218,8 @@ function initInput(canvas, h) {
     ev.preventDefault();
     const code = 'Mouse' + ev.button;
     held.add(code);
+    pointer = { x: ev.clientX, y: ev.clientY };
+    if (actionOf(code) === 'cursor') clicked = pointer;
     press(code, false);
   });
   window.addEventListener('mouseup', (ev) => held.delete('Mouse' + ev.button));
@@ -230,6 +246,6 @@ function initInput(canvas, h) {
 
 G.input = {
   ACTIONS, initInput, moveAxes, setStick, command, keyLabel, withKeys, codeLabel,
-  getBindings, setBinding, resetBindings, captureBinding, cancelCapture,
+  getBindings, setBinding, resetBindings, captureBinding, cancelCapture, getMouseHold, setMouseHold,
 };
 })(window.Game = window.Game || {});
