@@ -77,6 +77,13 @@ function drawEdgeMarkers() {
   if (state.base && state.base.regenTimer < 1) drawEdgeMarker(state.base.x, state.base.y, COLORS.baseEdge, 'BASE');
 }
 
+// «Hit the Count»: дружочков в цепочке хватает, Под готов, а он за экраном — метка к нему
+function drawPodMarker() {
+  const pod = world.pod, p = state.pod;
+  if (!pod || !p || state.cleared || state.status !== 'play' || p.cooldown > 0 || G.pod.podMates() < pod.goal) return;
+  drawEdgeMarker(pod.x, pod.y, COLORS.exitGlow, 'POD');
+}
+
 // яркость надписи, которая видна duration секунд с момента age = 0: быстро проявляется, в конце гаснет
 function bannerAlpha(age, duration) {
   return clamp(age / 0.25, 0, 1) * clamp((duration - age) / 0.6, 0, 1);
@@ -329,8 +336,19 @@ function drawHud() {
     chips.push({ text: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`, color: UI.gold, icon: 'clock' });
     if (state.base) chips.push({ text: 'BASE', bar: state.base.hp / state.base.maxHp, color: UI.teal });
   }
+  // «Hit the Count»: дружочков в цепочке из нужных Поду (хватает — золотом) и готов ли Под; общий счётчик цепочки
+  // (вместе с Героем) здесь не нужен — сбивал бы с толку
+  const podRule = rule.kind === 'podCount' && state.pod;
+  if (podRule) {
+    const goal = world.pod.goal, mates = G.pod.podMates(), cd = state.pod.cooldown;
+    chips.push({ text: `${mates}/${goal}`, icon: 'mate', color: mates >= goal ? UI.gold : UI.text });
+    if (!state.cleared) {
+      chips.push(cd > 0 ? { text: `${rule.label} ${Math.ceil(cd)}s`, icon: 'clock', color: UI.muted }
+        : { text: `${rule.label} READY`, color: UI.teal });
+    }
+  }
   const speed = Math.round(leaderSpeedMul() * 100);
-  chips.push({ text: `${state.party.length}`, icon: 'mate' });
+  if (!podRule) chips.push({ text: `${state.party.length}`, icon: 'mate' });
   if (speed < 100) chips.push({ text: `SPEED ${speed}%`, color: UI.orange }); // медленнее обычного — длинная цепочка
 
   let x = 10, y = 10, right = 10;
@@ -381,6 +399,7 @@ function drawHud() {
   drawBuffTimers(V.w / 2, topY, boss ? -1 : right, bottom);
 
   drawEdgeMarkers();
+  drawPodMarker();
   drawBanners();
   drawNotice();
   ctx.font = `bold 14px ${UI_FONT}`;

@@ -16,7 +16,8 @@ const world = {
   bridges: [],       // проходимые тропы и островки комнат-пропастей (только для рисования)
   // уровень «Оборона»: база (прямоугольник здания с запасом HP), двор вокруг неё и гнёзда врагов (точки)
   base: null, home: null, nests: [],
-  solids: [],        // твёрдые постройки (база): держат движение, но не обзор и не выстрелы
+  pod: null,         // «Hit the Count»: Под — круг на полу { x, y, r } и его числа из плана (см. game/pod.js)
+  solids: [],       // твёрдые постройки (база): держат движение, но не обзор и не выстрелы
   moveBlockers: [], sightBlockers: [],
   pathBlockers: [],  // мешают идти по прямой: стены, колонны, двери и пропасти (без построек — база бывает целью)
   baseFlow: null,    // поле путей к базе «Обороны» (строится один раз при сборке мира)
@@ -183,6 +184,11 @@ function addRoomContent(plan, i) {
     world.solids.push(r);
   }
   for (const [cx, cy] of plan.nests || []) world.nests.push(localToWorld(i, cx, cy));
+  // Под («Hit the Count»): круглый механизм на полу, ничего не блокирует; его счёт и перезарядка — в state.pod
+  if (plan.pod) {
+    const c = localToWorld(i, plan.pod.at[0], plan.pod.at[1]);
+    world.pod = { ...plan.pod, x: c.x, y: c.y, r: plan.pod.radius * s.w };
+  }
 }
 
 // сплошные препятствия и пропасти пересобираются заново: закрытая дверь блокирует движение
@@ -439,7 +445,7 @@ function buildWorld(level) {
   world.walls = []; world.pillars = []; world.pits = []; world.spikes = [];
   world.floors = []; world.warnings = [];
   world.doors = []; world.buttons = []; world.cannons = []; world.finish = null; world.bridges = [];
-  world.base = null; world.home = null; world.nests = []; world.solids = [];
+  world.base = null; world.home = null; world.nests = []; world.solids = []; world.pod = null;
   roomPx = level.rooms.map((p) => p.units === 'px');
   if (level.geometry.kind === 'field') buildField(level);
   else if (level.geometry.kind === 'arena') buildArena(level);

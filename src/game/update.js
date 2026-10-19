@@ -12,6 +12,7 @@ const { freeSpotNear } = G.world;
 const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly, displaceAlly, cutChain, canBeDisplaced } = G.chain;
 const { updatePads, updateAllySpawns } = G.pads;
 const { updateWaves } = G.waves;
+const { updatePod } = G.pod;
 const combat = G.combat;
 const { updateProjectiles, updateBurns, updateClouds, applySpikes, applyFirewalls, updateEffects, updateCannons } = combat;
 const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
@@ -260,6 +261,8 @@ function isVictory() {
   // продержаться заданное время (база цела — иначе партия уже проиграна)
   if (rule.kind === 'survive') return state.time >= rule.time;
   if (rule.kind === 'destroyType') return !state.enemies.some((e) => e.type === rule.type);
+  // «Hit the Count»: за один проезд по Поду прошло столько дружочков, сколько он просит (см. game/pod.js)
+  if (rule.kind === 'podCount') return !!state.pod && state.pod.count >= world.pod.goal;
   // дойти до финишной зоны уровня (см. world.finish)
   if (rule.kind === 'reachPoint') {
     const lead = leader();
@@ -297,6 +300,7 @@ function update(dt) {
   updateBuffs(dt);
   updatePads(dt);
   updateAllySpawns(dt);
+  updatePod(dt);
   for (const d of state.downed) updateDowned(d, dt);
   // выбитые союзники не выходят из боя: стреляют, рубят и лечат лёжа
   for (const d of state.downed.slice()) updateWeapons(d, dt);
