@@ -2,8 +2,8 @@
 // одно деление; goal дружочков за один проезд — условие победы (game/update.js). Проезд начинается, когда Пода
 // коснулось любое звено цепочки (и Герой), и кончается, когда gap секунд его никто из цепочки не касается; после этого
 // Под cooldown секунд отматывается назад и не взводится. По готовому Поду каждое звено лечится на heal своего HP —
-// раз за проезд. Начало проезда выдаёт dropCount дружочков у одной из стен зала (полосы drops): у Пода загорается
-// стрелка к ней и горит, пока их не забрали. Числа — у уровня (world.pod), счёт, таймер и выданные группы — в state.pod.
+// раз за проезд. Начало проезда выдаёт dropCount дружочков в одном из углов зала (drops): у Пода загорается
+// стрелка к нему и горит, пока их не забрали. Числа — у уровня (world.pod), счёт, таймер и выданные группы — в state.pod.
 (function (G) {
 'use strict';
 
@@ -11,7 +11,7 @@ const { COLORS, state } = G;
 const { dist, shuffled } = G.math;
 const { world } = G.world;
 const { leader } = G.session;
-const { spawnMateGroup } = G.pads;
+const { spawnMates } = G.pads;
 
 // звено на Поде: середина тела над кругом
 function onPod(u, pod) { return !u.absorbed && dist(u, pod) < pod.r; }
@@ -29,16 +29,15 @@ function passOver(u, p, pod) {
   state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 8, life: 0.35, color: COLORS.exitGlow });
 }
 
-// проезд начался: dropCount дружочков у одной из стен — сторона случайная из тех, где ещё никто не ждёт (если ждут
-// везде — любая), не ближе nestGap к гнёздам; не нашлось места у этой стены — у следующей
+// проезд начался: dropCount дружочков, раскиданных по одному из углов — случайному из тех, где ещё никто не ждёт
+// (если ждут везде — любому); не нашлось места в этом углу — в следующем. x, y группы — середина угла
 function dropMates(p, pod) {
   const sides = pod.drops.map((_, i) => i);
   const free = sides.filter((i) => !p.drops.some((d) => d.side === i));
-  const avoid = world.nests.map((n) => ({ x: n.x, y: n.y, r: pod.nestGap }));
   for (const side of shuffled(free.length ? free : sides)) {
-    const g = spawnMateGroup(pod.drops[side], pod.dropCount, avoid);
-    if (!g) continue;
-    p.drops.push({ side, x: g.x, y: g.y, mates: g.mates, at: state.time });
+    const area = pod.drops[side], mates = spawnMates(area, pod.dropCount);
+    if (!mates.length) continue;
+    p.drops.push({ side, x: area.x + area.w / 2, y: area.y + area.h / 2, mates, at: state.time });
     return;
   }
 }

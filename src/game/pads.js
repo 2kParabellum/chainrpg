@@ -201,20 +201,20 @@ function spawnAlly(cfg, atStart) {
   return true;
 }
 
-// группа из count дружочков, ждущих вербовки, в свободном месте прямоугольника area (её выдаёт Под «Hit the Count»):
-// стоят кружком и сами не уходят. avoid — ещё круги, куда не ставить ([{ x, y, r }]). null — места не нашлось
-function spawnMateGroup(area, count, avoid = []) {
-  const spot = freeSquareIn(area, 130, occupied().concat(avoid));
-  if (!spot) return null;
+// count дружочков, ждущих вербовки, каждый — в своём случайном свободном месте прямоугольника area (их выдаёт Под
+// «Hit the Count»): раскиданы, друг на друга и на подиумы не встают, сами не уходят. Возвращает поставленных
+// (меньше count, если места не хватило)
+function spawnMates(area, count) {
   const mates = [];
   for (let i = 0; i < count; i++) {
-    const a = (i / count) * Math.PI * 2 - Math.PI / 2;
-    const u = makeAlly('neutral', 'buddy', spot.x + Math.cos(a) * 32, spot.y + Math.sin(a) * 32);
+    const spot = freeSquareIn(area, 40, occupied());
+    if (!spot) continue;
+    const u = makeAlly('neutral', 'buddy', spot.x, spot.y);
     state.neutrals.push(u);
     state.effects.push({ type: 'ring', x: u.x, y: u.y, r: 24, life: 0.5, color: COLORS.buddy });
     mates.push(u);
   }
-  return { x: spot.x, y: spot.y, mates };
+  return mates;
 }
 
 // ждущие вербовки дружочки уходят по таймеру; новые появляются, как подиумы.
@@ -233,5 +233,5 @@ function updateAllySpawns(dt) {
   runSpawner('allySpawnIn', cfg, state.neutrals.length, spawnAlly, dt);
 }
 
-G.pads = { padKind, padUnder, markPadUsed, consumePad, updatePads, settings, updateAllySpawns, allySettings, spawnMateGroup };
+G.pads = { padKind, padUnder, markPadUsed, consumePad, updatePads, settings, updateAllySpawns, allySettings, spawnMates };
 })(window.Game = window.Game || {});
