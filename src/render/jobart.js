@@ -130,6 +130,7 @@ function drawVanish(pad, key, s, noIcon) {
 // --- подиум в игре: падение в первые секунды, исчезновение, когда пропал из state.pads ---
 const seen = new WeakMap();       // подиум → когда впервые нарисован
 let shown = new Set(), gone = [];  // пропавшие подиумы, которые ещё рассыпаются: { pad, at, taken }
+let run = null;                    // state.pads прошлого кадра: новая партия заводит новый список
 function drawLive(pad, alpha, grey) {
   const t = state.time;
   let at = seen.get(pad);
@@ -141,8 +142,11 @@ function drawLive(pad, alpha, grey) {
 }
 // обещанный подиум (метка): k 0..1 — пунктир и тень
 function drawMark(m, k) { drawSpawn(m, m.ability, Math.min(G.padArt.MARK, k * G.padArt.MARK)); }
-// после основного прохода: пропавшие подиумы профессий рассыпаются; взятый — без шапки (она улетела к звену)
+// после основного прохода: пропавшие подиумы профессий рассыпаются; взятый — без шапки (она улетела к звену).
+// Новая партия (другой список state.pads, время с нуля) забывает подиумы прошлой — иначе их призраки висели бы
+// на старых местах, пока новое время не догонит старое
 function drawGone(pads) {
+  if (pads !== run) { run = pads; shown = new Set(); gone = []; }
   const t = state.time, now = new Set(pads);
   for (const p of shown) if (!now.has(p)) {
     gone.push({ pad: p, at: t, taken: state.effects.some((fx) => fx.type === 'jobGet' && fx.pad === p) });

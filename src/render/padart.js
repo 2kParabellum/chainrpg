@@ -211,6 +211,7 @@ function drawVanish(pad, key, s) {
 // подиум усиления в игре: падение и пыль в первые секунды, исчезновение — как только его взяли
 const seen = new WeakMap();      // подиум → когда впервые нарисован и когда начал исчезать
 let shown = new Set(), gone = []; // исчезнувшие из игры подиумы, которые ещё рассыпаются: { pad, at }
+let run = null;                   // state.pads прошлого кадра: новая партия заводит новый список
 function drawLive(pad, alpha) {
   const t = state.time;
   let s = seen.get(pad);
@@ -224,8 +225,11 @@ function drawLive(pad, alpha) {
 }
 // обещанный подиум (метка): k 0..1 — пунктир и тень, которая из круга становится квадратом
 function drawMark(m, k) { drawSpawn(m, m.ability, Math.min(MARK, k * MARK)); }
-// после основного прохода: подиумы, которые пропали из state.pads, рассыпаются ещё VANISH + 0.6 с
+// после основного прохода: подиумы, которые пропали из state.pads, рассыпаются ещё VANISH + 0.6 с.
+// Новая партия (другой список state.pads, время с нуля) забывает подиумы прошлой — иначе их призраки висели бы
+// на старых местах, пока новое время не догонит старое
 function drawGone(pads) {
+  if (pads !== run) { run = pads; shown = new Set(); gone = []; }
   const t = state.time, now = new Set(pads);
   for (const p of shown) if (!now.has(p) && !p.permanent && G.buffs[p.ability]) {
     const s = seen.get(p);
