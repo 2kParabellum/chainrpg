@@ -37,7 +37,8 @@ const state = {
   nests: [],         // гнёзда врагов: таймер следующей волны и сколько волн уже вышло (см. game/waves.js)
   // «Hit the Count»: Под (см. game/pod.js) — count: сколько дружочков за текущий или последний проезд, passing: идёт
   // проезд, touched: кто из цепочки уже проехал за него, lastTouch: когда цепочка последний раз касалась, cooldown: секунд
-  // до того, как Под снова взведётся, countAt: когда прибавился последний (по state.time). null на других уровнях
+  // до того, как Под снова взведётся, countAt: когда прибавился последний (по state.time), drops: выданные Подом группы
+  // дружочков, которых ещё не забрали — { side, x, y, mates, at } (к каждой у Пода горит стрелка). null на других уровнях
   pod: null,
   allyFlow: null,    // поле путей к союзникам и когда оно посчитано (см. game/roaming.js); null — посчитать заново
   notice: null,      // надпись на экране о взятом усилении: { key, at, packed } — что взято, когда (по state.time)
@@ -165,7 +166,7 @@ function resetGame(level) {
   state.time = 0;
   state.targetableEnemies = [];
   state.base = world.base ? makeBase(world.base) : null;
-  state.pod = world.pod ? { count: 0, passing: false, touched: [], lastTouch: 0, cooldown: 0, countAt: -99 } : null;
+  state.pod = world.pod ? { count: 0, passing: false, touched: [], lastTouch: 0, cooldown: 0, countAt: -99, drops: [] } : null;
   state.allyFlow = null;
   state.notice = null;
   state.backpack = { open: false, stored: null };

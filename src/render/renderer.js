@@ -930,7 +930,7 @@ function drawScene() {
   drawDoors();
   drawButtons();
   drawCannons();
-  if (world.pod && onScreen({ x: world.pod.x, y: world.pod.y, r: world.pod.r + 60 })) G.podArt.draw(); // Под «Hit the Count»
+  if (world.pod && onScreen({ x: world.pod.x, y: world.pod.y, r: world.pod.r + 170 })) G.podArt.draw(); // Под «Hit the Count»
   drawPadMarks();
   drawPads();
   drawPadLinks();

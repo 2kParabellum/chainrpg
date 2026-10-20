@@ -77,10 +77,15 @@ function drawEdgeMarkers() {
   if (state.base && state.base.regenTimer < 1) drawEdgeMarker(state.base.x, state.base.y, COLORS.baseEdge, 'BASE');
 }
 
-// «Hit the Count»: дружочков в цепочке хватает, Под готов, а он за экраном — метка к нему
+// «Hit the Count»: метки к выданным Подом дружочкам, которые ждут за экраном («×N» — сколько их там),
+// и к самому Поду, когда дружочков в цепочке хватает и он готов
 function drawPodMarker() {
   const pod = world.pod, p = state.pod;
-  if (!pod || !p || state.cleared || state.status !== 'play' || p.cooldown > 0 || G.pod.podMates() < pod.goal) return;
+  if (!pod || !p || state.cleared || state.status !== 'play') return;
+  for (const d of p.drops) {
+    drawEdgeMarker(d.x, d.y, COLORS.buddy, `×${d.mates.filter((m) => state.neutrals.includes(m)).length}`);
+  }
+  if (p.cooldown > 0 || G.pod.podMates() < pod.goal) return;
   drawEdgeMarker(pod.x, pod.y, COLORS.exitGlow, 'POD');
 }
 

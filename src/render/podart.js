@@ -3,7 +3,8 @@
 // посередине — счёт «N/15». Готовый Под обведён бегущим пунктиром, мерцает бирюзой, над ним всплывают плюсики (лечит).
 // В проезде огоньки загораются по одному, новый подпрыгивает. После проезда дуга и огоньки отматываются назад, Под
 // тёмный, над ним плашка с секундами. Взведён до конца — всё горит золотом (портал выхода renderer рисует поверх).
-// Над Подом плашка: сколько дружочков нужно или сколько секунд до готовности. Состояние только читается
+// Над Подом плашка: сколько дружочков нужно или сколько секунд до готовности. Снаружи — стрелки к стенам, где ждут
+// выданные Подом дружочки (загораются со вспышкой, по ним бегут шевроны, у острия — «×N»). Состояние только читается
 // (state.pod, world.pod).
 (function (G) {
 'use strict';
@@ -13,7 +14,7 @@ const { ctx, glow } = G.shapes;
 const { world } = G.world;
 const { clamp } = G.math;
 
-const TAU = Math.PI * 2, INK = '#2a1d0d', GOLD = '#efac28', CREAM = '#efd8a1', TEAL = '#3c9f9c';
+const TAU = Math.PI * 2, INK = '#2a1d0d', GOLD = '#efac28', CREAM = '#efd8a1', TEAL = '#3c9f9c', MATE = '#efb775';
 const FONT = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
 
 function circle(x, y, r) { ctx.beginPath(); ctx.arc(x, y, Math.max(0.1, r), 0, TAU); }
@@ -95,6 +96,38 @@ function chip(x, y, p, pod) {
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillStyle = cooling ? '#927e6a' : enough ? GOLD : CREAM;
   ctx.fillText(txt, ix + 11, y + 1);
+  ctx.textBaseline = 'alphabetic';
+}
+
+// стрелка от края Пода (центр — x, y, радиус r) под углом a к стене, где ждут n выданных дружочков; age — секунд,
+// как загорелась
+function arrow(x, y, r, a, n, age) {
+  const t = state.time, k = 1 + 0.4 * clamp(1 - age / 0.4, 0, 1), d0 = r + 56, len = 64;
+  ctx.save();
+  ctx.translate(x + Math.cos(a) * d0, y + Math.sin(a) * d0);
+  ctx.rotate(a);
+  ctx.scale(k, k);
+  glow(ctx, len * 0.45, 0, 58, MATE, 0.3 + 0.15 * Math.sin(t * 5));
+  ctx.fillStyle = MATE; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(0, -9); ctx.lineTo(len - 26, -9); ctx.lineTo(len - 26, -22); ctx.lineTo(len, 0);
+  ctx.lineTo(len - 26, 22); ctx.lineTo(len - 26, 9); ctx.lineTo(0, 9); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  // бегущий к острию шеврон
+  const q = (t * 1.4) % 1, cx = 8 + q * (len - 20);
+  ctx.strokeStyle = CREAM; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.globalAlpha = Math.sin(q * Math.PI);
+  ctx.beginPath(); ctx.moveTo(cx - 6, -6); ctx.lineTo(cx, 0); ctx.lineTo(cx - 6, 6); ctx.stroke();
+  ctx.globalAlpha = 1; ctx.lineCap = 'butt';
+  ctx.restore();
+  // у острия — сколько их там ждёт
+  const lx = x + Math.cos(a) * (d0 + len + 26), ly = y + Math.sin(a) * (d0 + len + 22);
+  mateIcon(lx - 11, ly);
+  ctx.font = `bold 15px ${FONT}`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 4; ctx.strokeStyle = INK; ctx.lineJoin = 'round';
+  ctx.strokeText(`×${n}`, lx - 1, ly + 1);
+  ctx.fillStyle = MATE; ctx.fillText(`×${n}`, lx - 1, ly + 1);
   ctx.textBaseline = 'alphabetic';
 }
 
@@ -184,7 +217,12 @@ function draw() {
     }
     ctx.globalAlpha = 1;
   }
-  if (!done) chip(x, y - r - 34, p, pod);
+  if (done) return;
+  chip(x, y - r - 34, p, pod);
+  for (const d of p.drops) {
+    const area = pod.drops[d.side], n = d.mates.filter((m) => state.neutrals.includes(m)).length;
+    arrow(x, y, r, Math.atan2(area.y + area.h / 2 - y, area.x + area.w / 2 - x), n, t - d.at);
+  }
 }
 
 G.podArt = { draw };

@@ -187,7 +187,7 @@ function addRoomContent(plan, i) {
   // Под («Hit the Count»): круглый механизм на полу, ничего не блокирует; его счёт и перезарядка — в state.pod
   if (plan.pod) {
     const c = localToWorld(i, plan.pod.at[0], plan.pod.at[1]);
-    world.pod = { ...plan.pod, x: c.x, y: c.y, r: plan.pod.radius * s.w };
+    world.pod = { ...plan.pod, x: c.x, y: c.y, r: plan.pod.radius * s.w, drops: (plan.pod.drops || []).map(toRect) };
   }
 }
 
