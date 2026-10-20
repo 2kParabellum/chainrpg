@@ -126,9 +126,9 @@ function spawnSpot(cfg, size, atStart) {
   return freeSquareNear(lead.x, lead.y, cfg.ringMin, cfg.ringMax, size, occupied(), placeRule(atStart));
 }
 
-// новый подиум группы kind ('jobs' | 'buffs') около Героя: сперва на его месте появляется метка-тень,
-// через telegraph секунд — сам подиум (на старте партии — сразу). false, если места не нашлось
-function spawnPad(cfg, kind, atStart) {
+// новый подиум группы kind ('jobs' | 'buffs') около Героя (или в прямоугольнике area): сперва на его месте появляется
+// метка-тень, через telegraph секунд — сам подиум (на старте партии — сразу). false, если места не нашлось
+function spawnPad(cfg, kind, atStart, area) {
   const size = CONFIG.PADS.size;
   const group = cfg[kind];
   // тип — по весам группы, по возможности не тот, что уже лежит на карте или вот-вот появится
@@ -136,7 +136,7 @@ function spawnPad(cfg, kind, atStart) {
   const fresh = all.filter((k) => !state.pads.concat(state.padMarks).some((p) => p.ability === k));
   const ability = pickWeighted(fresh.length ? fresh : all, group.weights);
 
-  const spot = spawnSpot(cfg, size, atStart);
+  const spot = area ? freeSquareIn(area, size, occupied()) : spawnSpot(cfg, size, atStart);
   if (!spot) return false;
 
   const mark = { x: spot.x - size / 2, y: spot.y - size / 2, w: size, h: size, ability,
@@ -202,20 +202,25 @@ function spawnAlly(cfg, atStart) {
 }
 
 // count дружочков, ждущих вербовки, каждый — в своём случайном свободном месте прямоугольника area (их выдаёт Под
-// «Hit the Count»): раскиданы, друг на друга и на подиумы не встают, сами не уходят. Возвращает поставленных
-// (меньше count, если места не хватило)
+// «Hit the Count»): раскиданы, друг на друга и на подиумы не встают, ждут, как обычные (allySettings().lifetime).
+// Возвращает поставленных (меньше count, если места не хватило)
 function spawnMates(area, count) {
-  const mates = [];
+  const mates = [], cfg = allySettings();
   for (let i = 0; i < count; i++) {
     const spot = freeSquareIn(area, 40, occupied());
     if (!spot) continue;
     const u = makeAlly('neutral', 'buddy', spot.x, spot.y);
+    u.life = u.maxLife = rand(cfg.lifetime);
     state.neutrals.push(u);
     state.effects.push({ type: 'ring', x: u.x, y: u.y, r: 24, life: 0.5, color: COLORS.buddy });
     mates.push(u);
   }
   return mates;
 }
+
+// подиум профессии в прямоугольнике area (вместе с дружочками его выдаёт Под «Hit the Count»): как случайный — сперва
+// тень, потом падает; в предел maxActive входит, но и сам его не спрашивает. false, если места не нашлось
+function spawnJobPad(area) { return spawnPad(settings(), 'jobs', false, area); }
 
 // ждущие вербовки дружочки уходят по таймеру; новые появляются, как подиумы.
 // Завербованного это больше не касается: он уже не в state.neutrals
@@ -233,5 +238,5 @@ function updateAllySpawns(dt) {
   runSpawner('allySpawnIn', cfg, state.neutrals.length, spawnAlly, dt);
 }
 
-G.pads = { padKind, padUnder, markPadUsed, consumePad, updatePads, settings, updateAllySpawns, allySettings, spawnMates };
+G.pads = { padKind, padUnder, markPadUsed, consumePad, updatePads, settings, updateAllySpawns, allySettings, spawnMates, spawnJobPad };
 })(window.Game = window.Game || {});

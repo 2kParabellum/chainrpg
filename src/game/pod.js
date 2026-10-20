@@ -2,8 +2,9 @@
 // одно деление; goal дружочков за один проезд — условие победы (game/update.js). Проезд начинается, когда Пода
 // коснулось любое звено цепочки (и Герой), и кончается, когда gap секунд его никто из цепочки не касается; после этого
 // Под cooldown секунд отматывается назад и не взводится. По готовому Поду каждое звено лечится на heal своего HP —
-// раз за проезд. Начало проезда выдаёт dropCount дружочков в одном из углов зала (drops): у Пода загорается
-// стрелка к нему и горит, пока их не забрали. Числа — у уровня (world.pod), счёт, таймер и выданные группы — в state.pod.
+// раз за проезд. Когда по Поду проехал хвост цепочки (или проезд кончился, а хвост так и не доехал), Под выдаёт
+// dropCount дружочков и подиум профессии в одном из углов зала (drops): у Пода загорается стрелка к нему и горит, пока
+// там ждёт хоть один из выданных (их забрали или они ушли — гаснет). Числа — у уровня (world.pod), счёт, таймер и выданные группы — в state.pod.
 (function (G) {
 'use strict';
 
@@ -11,7 +12,7 @@ const { COLORS, state } = G;
 const { dist, shuffled } = G.math;
 const { world } = G.world;
 const { leader } = G.session;
-const { spawnMates } = G.pads;
+const { spawnMates, spawnJobPad } = G.pads;
 
 // звено на Поде: середина тела над кругом
 function onPod(u, pod) { return !u.absorbed && dist(u, pod) < pod.r; }
@@ -29,14 +30,17 @@ function passOver(u, p, pod) {
   state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 8, life: 0.35, color: COLORS.exitGlow });
 }
 
-// проезд начался: dropCount дружочков, раскиданных по одному из углов — случайному из тех, где ещё никто не ждёт
-// (если ждут везде — любому); не нашлось места в этом углу — в следующем. x, y группы — середина угла
+// выдача за проезд (один раз): dropCount дружочков, раскиданных по одному из углов — случайному из тех, где ещё никто
+// не ждёт (если ждут везде — любому), и там же подиум профессии; не нашлось места в этом углу — в следующем.
+// x, y группы — середина угла
 function dropMates(p, pod) {
+  p.dropped = true;
   const sides = pod.drops.map((_, i) => i);
   const free = sides.filter((i) => !p.drops.some((d) => d.side === i));
   for (const side of shuffled(free.length ? free : sides)) {
     const area = pod.drops[side], mates = spawnMates(area, pod.dropCount);
     if (!mates.length) continue;
+    spawnJobPad(area);
     p.drops.push({ side, x: area.x + area.w / 2, y: area.y + area.h / 2, mates, at: state.time });
     return;
   }
@@ -45,7 +49,7 @@ function dropMates(p, pod) {
 function updatePod(dt) {
   const p = state.pod, pod = world.pod;
   if (!p) return;
-  // группа, которую забрали целиком (никого из неё не осталось среди ждущих), гасит свою стрелку
+  // группа, которую забрали или которая ушла целиком (никого из неё не осталось среди ждущих), гасит свою стрелку
   p.drops = p.drops.filter((d) => d.mates.some((m) => state.neutrals.includes(m)));
   if (state.cleared) return; // взведён до конца: портал открыт, Под больше не нужен
   if (p.cooldown > 0) {
@@ -59,12 +63,15 @@ function updatePod(dt) {
   for (const u of state.party) {
     if (!onPod(u, pod)) continue;
     touching = true;
-    if (!p.passing) { p.passing = true; p.count = 0; p.touched = []; dropMates(p, pod); }
+    if (!p.passing) { p.passing = true; p.count = 0; p.touched = []; p.dropped = false; }
     if (!p.touched.includes(u)) passOver(u, p, pod);
   }
+  // по Поду проехал хвост цепочки — выдача
+  if (p.passing && !p.dropped && p.touched.includes(state.party[state.party.length - 1])) dropMates(p, pod);
   if (touching) { p.lastTouch = state.time; return; }
   if (!p.passing || state.time - p.lastTouch < pod.gap) return;
-  // цепочка съехала: проезд кончился, Под отматывается
+  // цепочка съехала: проезд кончился (хвост так и не доехал — выдача всё равно), Под отматывается
+  if (!p.dropped) dropMates(p, pod);
   p.passing = false;
   p.touched = [];
   p.cooldown = pod.cooldown;
