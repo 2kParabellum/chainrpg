@@ -1357,7 +1357,7 @@ const kraken = {
            suckRadius: 320, suckSpeed: 37, suckAccel: 2.5, eatTime: 0.6, suckCooldown: 2,
            // пук: Герой ближе fartTrigger от края тела — раз в fartCooldown fartCount облаков вокруг Героя (в пределах
            // fartSpread), каждое радиусом fartRadius, fartDps урона в секунду, висит fartLife секунд
-           fartTrigger: 110, fartCooldown: 14, fartCount: 5, fartSpread: 110, fartRadius: 70, fartDps: 6, fartLife: 4.5,
+           fartTrigger: 110, fartCooldown: 14, fartCount: 5, fartSpread: 110, fartRadius: 70, fartDps: 4, fartLife: 4.5,
            // плевок слизью: раз в globEvery, на дальность globRange по видимой цели; летит globFlight секунд, целится
            // с упреждением (globLead — доля предсказанного смещения цели) и мажет на случайные globError px.
            // Промах — лужа (мина): лежит mineLife секунд, луж не больше mineMax; mineArm — сколько растекается
