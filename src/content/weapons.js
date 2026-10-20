@@ -48,16 +48,14 @@ function shootUpdate(fire) {
   };
 }
 
-// стрела; усиление «сила» пробивает выстрелом щит (босса, турели) насквозь (см. game/combat.js).
-// Улучшения стрелка: «тройной выстрел» — каждый every-й выстрел ещё два снаряда веером (± spread от основного);
+// стрела. Улучшения стрелка: «тройной выстрел» — каждый every-й выстрел ещё два снаряда веером (± spread от основного);
 // «огненные стрелы» — попадание поджигает цель: за time секунд она теряет share урона стрелы;
 // «Piercing Shots» — стрела с шансом passChance летит дальше сквозь врага (см. game/combat.js)
 function arrow(u, w, foe, game) {
   const dmg = w.dmg * (u.dmgMul || 1);
   const fire = game.upgrade('fireArrows'), triple = game.upgrade('tripleShot');
   const pierce = game.upgrade('piercing');
-  const extra = { pierceShield: !!(u.buffs && u.buffs.power > 0),
-                  burn: fire ? { dps: (dmg * fire.share) / fire.time, time: fire.time } : null };
+  const extra = { burn: fire ? { dps: (dmg * fire.share) / fire.time, time: fire.time } : null };
   if (pierce) extra.passChance = pierce.chance;
   w.shots = (w.shots || 0) + 1;
   const spread = triple && w.shots % triple.every === 0 ? [0, -triple.spread, triple.spread] : [0];
@@ -124,7 +122,7 @@ const spear = {
 // молнией, которая держится на цели и жжёт её непрерывно (dps в секунду). Чем цель ближе, тем больнее:
 // ближе fullRange — полный урон, к краю дальности падает до farMul и дальше не меняется. Цель ушла
 // дальше breakMul·range или погибла — молния рвётся, искра ищет новую цель и снова целится.
-// Щит босса молнию не гасит, но босс всегда получает от неё только bossMul урона (с «силой» или без).
+// Босс (Демон) получает от молнии только bossMul урона.
 // Разгон: каждая полная секунда непрерывного удара по одной цели прибавляет rampStep базового урона
 // (через 1 с — 120%, через 2 с — 140% …), но не дольше rampMax секунд (дальше — 180%, не растёт);
 // новая цель или разрыв молнии сбрасывают разгон.

@@ -1,4 +1,4 @@
-// Данные обучающего уровня «Обучение»: шесть комнат в линию, каждая учит одной вещи.
+// Данные обучающего уровня «Обучение»: пять комнат в линию, каждая учит одной вещи.
 // Выход из комнаты закрыт дверью: в первой её открывает кнопка (на неё надо бросить дружочка), в остальных —
 // зачистка комнаты.
 // Здесь только данные — никакой игровой логики.
@@ -44,15 +44,7 @@ const ROOMS = [
     pads: [[300, 170, 'medic']],
     enemies: { spots: [[760, 170], [780, 560], [980, 300], [990, 470]], kinds: 1, pool: ['shooter'] },
   },
-  { // 4 — турель под щитом и «сила», которая его пробивает
-    units: 'px', size: [1100, 800],
-    hint: 'Grab “power” — it lets shots break through the shield',
-    task: 'TASK: grab “power” and destroy the turret',
-    pillars: [[470, 190, 40, 130], [470, 530, 40, 130]],
-    pads: [[170, 150, 'power']],
-    enemies: { spots: [[770, 360]], kinds: 1, pool: ['turret'] },
-  },
-  { // 5 — катапульты и «скорость»
+  { // 4 — катапульты и «скорость»
     units: 'px', size: [1400, 900],
     hint: 'Keep moving — catapults fire where you were',
     task: 'TASK: destroy all the catapults',
@@ -60,7 +52,7 @@ const ROOMS = [
     pads: [[720, 240, 'speed']], // в глубине комнаты, между катапультами: за ним надо съездить под обстрелом
     enemies: { spots: [[520, 140], [520, 680], [920, 410], [1180, 150], [1180, 670]], kinds: 1, pool: ['tower'] },
   },
-  { // 6 — большая финальная комната: свой отряд, профессии, случайные подиумы и дружочки, 13 врагов
+  { // 5 — большая финальная комната: свой отряд, профессии, случайные подиумы и дружочки, 13 врагов
     units: 'px', size: [2000, 1400],
     hint: 'Build a squad and take out every enemy',
     task: 'TASK: take out every enemy to open the exit portal',
@@ -81,21 +73,21 @@ const ROOMS = [
 
 G.level1 = {
   name: 'Tutorial',
-  blurb: 'Six rooms: a button, Gun Mate, Doc, a shielded turret, catapults and a final fight',
-  goal: 'Get through six rooms and beat everyone in the last one',
+  blurb: 'Five rooms: a button, Gun Mate, Doc, catapults and a final fight',
+  goal: 'Get through five rooms and beat everyone in the last one',
   // комнаты в линию; gates — выход из каждой комнаты закрыт, пока в ней есть враги
   geometry: { kind: 'line', wall: 40, corridorLen: 80, corridorH: 120, gates: true },
   spawn: { room: 0, at: [110, 280], heading: 0 }, // слева в первой комнате, лицом к двери
   enemyPool: ['shooter'],
   // случайные подиумы и дружочки — только в последней комнате (пока Герой в ней)
-  spawnRooms: [5],
+  spawnRooms: [4],
   // в последней комнате стартовой порции нет: всё появляется по таймерам, начиная с первого входа
   padSpawn: { jobs: { startCount: 0 }, buffs: { startCount: 0 } },
   allySpawn: { startCount: 0 },
   // победа: дойти до последней комнаты и перебить всех
-  victory: { kind: 'clearFinalRoom', finalRoom: 5 },
+  victory: { kind: 'clearFinalRoom', finalRoom: 4 },
   // светлый портал выхода: открывается после победы, в него надо заехать
-  exit: { room: 5, at: [1720, 660] }, // у дальней стены последней комнаты
+  exit: { room: 4, at: [1720, 660] }, // у дальней стены последней комнаты
   rooms: ROOMS,
 };
 })(window.Game = window.Game || {});

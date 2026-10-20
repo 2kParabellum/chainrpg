@@ -605,36 +605,7 @@ function drawPortal(e, a) {
   ctx.restore();
 }
 
-// кольцо щита (турель, Демон): пульсирует, пока щит включён
-function shieldRing(e, extra) {
-  ctx.strokeStyle = '#3c9f9c'; ctx.lineWidth = 3;
-  ctx.globalAlpha = 0.6 + 0.25 * Math.sin((e.age || state.time) * 4);
-  ell(e.x, e.y, e.r + extra, e.r + extra); ctx.stroke();
-  ctx.globalAlpha = 1;
-}
-
-// турель: каменная восьмигранная башня, наверху тёмный купол с одним светящимся глазом и стволом к цели
-function drawTurret(e, a) {
-  const r = e.r, f = e.facing || 0, fl = hurtFlash(a), shot = state.time - a.atkAt < 0.08;
-  ctx.fillStyle = 'rgba(20,10,5,0.5)'; ell(e.x, e.y + r * 0.8, r * 1.1, r * 0.35); ctx.fill();
-  const oct = (cx, cy, rr) => { ctx.beginPath(); for (let i = 0; i < 8; i++) { const ang = i / 8 * TAU + Math.PI / 8; ctx.lineTo(cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr * 0.85); } ctx.closePath(); };
-  ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
-  oct(e.x, e.y + 6, r); ctx.fillStyle = '#684c3c'; ctx.fill(); ctx.stroke();
-  oct(e.x, e.y, r); ctx.fillStyle = C.stone; ctx.fill(); ctx.stroke();
-  ctx.save(); ctx.translate(e.x, e.y - 2);
-  for (const [lw, col] of [[9, C.ink], [5, '#45230d']]) {
-    ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(f) * r * (shot ? 1.05 : 1.25), Math.sin(f) * r * (shot ? 1.05 : 1.25)); ctx.stroke();
-  }
-  if (shot) star(Math.cos(f) * r * 1.4, Math.sin(f) * r * 1.4, r * 0.3, C.orange);
-  edgePath(r * 0.55, r * 0.5, state.time + a.seed, 'wobble', a.seed); ctx.fillStyle = '#550f0a'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.stroke();
-  if (fl > 0) { ctx.save(); edgePath(r * 0.55, r * 0.5, state.time + a.seed, 'wobble', a.seed); ctx.clip(); flashOver(r * 0.6, r * 0.6, fl); ctx.restore(); }
-  glowEye(Math.cos(f) * r * 0.12, Math.sin(f) * r * 0.1 - r * 0.05, r * 0.2, C.gold);
-  ctx.restore(); ctx.lineCap = 'butt';
-  if (e.shielded) shieldRing(e, e.cfg.shieldAuraExtra);
-}
-
-const SPECIAL = { tower: drawCatapult, mine: drawMine, portal: drawPortal, turret: drawTurret };
+const SPECIAL = { tower: drawCatapult, mine: drawMine, portal: drawPortal };
 
 function drawSpecial(e) {
   const a = track(e);
@@ -858,5 +829,5 @@ function sweep() {
   lastDrawn = now;
 }
 
-G.foes = { has, draw, drawsHook, farPoint, sweep, maw, mawSpikeShot, kraken, swallowed, shieldRing };
+G.foes = { has, draw, drawsHook, farPoint, sweep, maw, mawSpikeShot, kraken, swallowed };
 })(window.Game = window.Game || {});

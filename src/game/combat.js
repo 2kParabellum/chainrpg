@@ -90,7 +90,7 @@ function blast(center, radius, dmg, victims, fxAt = center, edgeDmg = dmg, look)
 
 // --- снаряды ---
 
-// extra — необязательные дополнительные поля снаряда (например, pierceShield — пробивает щит босса)
+// extra — необязательные дополнительные поля снаряда (например, burn — поджигает цель)
 function spawnProjectile(from, tx, ty, speed, dmg, team, radius, extra) {
   const a = Math.atan2(ty - from.y, tx - from.x);
   state.projectiles.push({
@@ -196,21 +196,16 @@ function updateProjectiles(dt) {
       for (const t of targets.slice()) {
         // пробивающая стрела каждого задевает один раз
         if (dist(p, t) >= p.r + t.r || (p.hit && p.hit.includes(t))) continue;
-        // щит (босса, турели) гасит выстрелы, пока активен; усиление «сила» пробивает его насквозь
-        if (t.shielded && !p.pierceShield) {
-          state.effects.push({ type: 'ring', x: t.x, y: t.y, r: t.r + 6, life: 0.2, color: COLORS.shield });
-        } else {
-          damageUnit(t, p.dmg);
-          // огненная стрела поджигает: повторное попадание горение обновляет, не складывает
-          if (p.burn && t.kind === 'enemy' && t.hp > 0) {
-            t.burn = { left: p.burn.time, dps: Math.max(p.burn.dps, t.burn && t.burn.left > 0 ? t.burn.dps : 0) };
-          }
+        damageUnit(t, p.dmg);
+        // огненная стрела поджигает: повторное попадание горение обновляет, не складывает
+        if (p.burn && t.kind === 'enemy' && t.hp > 0) {
+          t.burn = { left: p.burn.time, dps: Math.max(p.burn.dps, t.burn && t.burn.left > 0 ? t.burn.dps : 0) };
         }
         // игрока гарпун только ранит, а вот союзника (в цепочке или лежачего) уносит к Скорпиону
         if (p.kind === 'hook' && (t.kind === 'ally' || t.kind === 'downed') && t.hp > 0) hookAlly(t, p.owner);
         // «Piercing Shots»: с шансом passChance стрела летит дальше (на каждого врага — бросок заново);
-        // о щит и о босса гаснет
-        if (p.passChance && !t.shielded && !enemyTypes[t.type].boss && Math.random() < p.passChance) {
+        // о босса гаснет
+        if (p.passChance && !enemyTypes[t.type].boss && Math.random() < p.passChance) {
           (p.hit = p.hit || []).push(t);
           continue;
         }
