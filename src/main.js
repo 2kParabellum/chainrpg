@@ -21,6 +21,7 @@ const { buttonUnder } = G.world;
 const { leader, upgrade } = G.session;
 const touchUI = G.touch;
 const controlsPanel = G.controlsPanel;
+const tuner = G.tuner;
 const { update } = G.update;
 const { canvas } = G.shapes;
 const { drawScene, drawCannonShots } = G.renderer;
@@ -31,7 +32,7 @@ const screenInfo = G.screen;
 const LEVELS = [G.level1, G.level2, G.level3, G.level6, G.level4, G.level5];
 const START_LEVEL = LEVELS[0];
 // тестовые уровни: только из меню выбора уровней, в прохождение не входят; стартуют с улучшениями level.upgrades
-const TEST_LEVELS = [G.levelTestRam];
+const TEST_LEVELS = [G.levelTestRam, G.levelTestChain];
 
 // --- ввод: намерения игрока ---
 
@@ -314,6 +315,8 @@ function syncTouch() {
   const playing = state.status === 'play';
   document.body.classList.toggle('playing', playing);
   touchUI.setVisible(playing);
+  // ползунки параметров цепочки — только на уровне с панелью (tuner); на остальных параметры по умолчанию
+  tuner.sync(!!state.level.tuner, playing);
   if (!playing) return;
   const btn = buttonUnder(leader());
   touchUI.setGlow('recruit', !state.leaving && nearestPickup());
