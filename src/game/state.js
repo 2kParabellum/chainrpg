@@ -38,7 +38,7 @@ const state = {
   // «Hit the Count»: Под (см. game/pod.js) — count: сколько дружочков за текущий или последний проезд, passing: идёт
   // проезд, touched: кто из цепочки уже проехал за него, lastTouch: когда цепочка последний раз касалась, cooldown: секунд
   // до того, как Под снова взведётся, countAt: когда прибавился последний (по state.time), dropped: выдача за этот проезд
-  // уже была, drops: выданные Подом группы
+  // уже была, lastSide / streak: в какой угол была последняя выдача и сколько раз подряд, drops: выданные Подом группы
   // дружочков, которых ещё не забрали — { side, x, y, mates, at } (к каждой у Пода горит стрелка). null на других уровнях
   pod: null,
   allyFlow: null,    // поле путей к союзникам и когда оно посчитано (см. game/roaming.js); null — посчитать заново
@@ -167,7 +167,7 @@ function resetGame(level) {
   state.time = 0;
   state.targetableEnemies = [];
   state.base = world.base ? makeBase(world.base) : null;
-  state.pod = world.pod ? { count: 0, passing: false, touched: [], lastTouch: 0, cooldown: 0, countAt: -99, dropped: false, drops: [] } : null;
+  state.pod = world.pod ? { count: 0, passing: false, touched: [], lastTouch: 0, cooldown: 0, countAt: -99, dropped: false, lastSide: -1, streak: 0, drops: [] } : null;
   state.allyFlow = null;
   state.notice = null;
   state.backpack = { open: false, stored: null };

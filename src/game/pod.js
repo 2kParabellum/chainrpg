@@ -32,16 +32,18 @@ function passOver(u, p, pod) {
 
 // выдача за проезд (один раз): dropCount дружочков, раскиданных по одному из углов — случайному из тех, где ещё никто
 // не ждёт (если ждут везде — любому), и там же подиум профессии; не нашлось места в этом углу — в следующем.
-// x, y группы — середина угла
+// Угол, выбранный maxRepeat раз подряд, в этот раз не выбирается. x, y группы — середина угла
 function dropMates(p, pod) {
   p.dropped = true;
-  const sides = pod.drops.map((_, i) => i);
+  const sides = pod.drops.map((_, i) => i).filter((i) => !(i === p.lastSide && p.streak >= pod.maxRepeat));
   const free = sides.filter((i) => !p.drops.some((d) => d.side === i));
   for (const side of shuffled(free.length ? free : sides)) {
     const area = pod.drops[side], mates = spawnMates(area, pod.dropCount);
     if (!mates.length) continue;
     spawnJobPad(area);
     p.drops.push({ side, x: area.x + area.w / 2, y: area.y + area.h / 2, mates, at: state.time });
+    p.streak = side === p.lastSide ? p.streak + 1 : 1;
+    p.lastSide = side;
     return;
   }
 }
