@@ -336,6 +336,33 @@ function drawSpikes(r) {
   }
 }
 
+// «Dead Race»: линия старта-финиша поперёк дороги — шахматная полоса в два ряда клеток, концы уходят под стены
+// (ворота шире дороги). Невидимые чекпоинты не рисуются
+const LINE_CELL = 14;
+function startLineBox() {
+  const g = world.track && world.track.gates[0];
+  if (!g) return null;
+  const d = g.half + LINE_CELL * 2;
+  return { x: g.x - d, y: g.y - d, w: d * 2, h: d * 2 };
+}
+function drawStartLine(area) {
+  const box = startLineBox();
+  if (!box || !hit(box, area)) return;
+  const g = world.track.gates[0], n = Math.ceil((g.half * 2) / LINE_CELL);
+  ctx.save();
+  ctx.translate(g.x, g.y);
+  ctx.rotate(Math.atan2(g.ty, g.tx));   // ось x — по ходу гонки, ось y — поперёк дороги
+  ctx.fillStyle = 'rgba(20,10,5,0.4)';
+  ctx.fillRect(-LINE_CELL - 3, -g.half, LINE_CELL * 2 + 6, g.half * 2);
+  for (let j = 0; j < n; j++) {
+    for (let row = 0; row < 2; row++) {
+      ctx.fillStyle = (j + row) % 2 ? COLORS.raceDark : COLORS.raceLight;
+      ctx.fillRect(-LINE_CELL + row * LINE_CELL, -g.half + j * LINE_CELL, LINE_CELL, LINE_CELL);
+    }
+  }
+  ctx.restore();
+}
+
 // ===================== СТЕНЫ И КОЛОННЫ =====================
 // Рисунок поднят на WALL_H вверх: верх — (x, y - H, w, h), передняя грань высотой H с кладкой кончается ровно
 // по низу прямоугольника; у подножия тень на полу
@@ -494,7 +521,8 @@ function layoutDecor() {
   const name = (state.level && state.level.name) || '';
   let seed = 7; for (const ch of name) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
   const rand = rng(seed), items = [];
-  const busy = world.walls.map(lifted).concat(world.pillars.map(lifted), world.pits, world.spikes, world.bridges, world.doors || [], world.buttons || []);
+  const busy = world.walls.map(lifted).concat(world.pillars.map(lifted), world.pits, world.spikes, world.bridges, world.doors || [], world.buttons || [],
+    startLineBox() || []);
   const free = (x, y) => !busy.some((r) => x > r.x - 50 && x < r.x + r.w + 50 && y > r.y - 30 && y < r.y + r.h + 30);
   for (const f of world.floors) {
     if (f.w * f.h < 200000) continue;   // коридоры и закутки — без декора
@@ -570,6 +598,7 @@ function paintGround(c, area, part) {
       c.fillStyle = COLORS.zoneTint[f.tint];
       c.fillRect(f.x, f.y, f.w, f.h);
     }
+    drawStartLine(area);
     drawDecor(area);
     for (const r of pitRects()) if (hit(grow(r, 4), area)) drawPitStatic(r);
   }

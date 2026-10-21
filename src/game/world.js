@@ -17,6 +17,11 @@ const world = {
   // уровень «Оборона»: база (прямоугольник здания с запасом HP), двор вокруг неё и гнёзда врагов (точки)
   base: null, home: null, nests: [],
   pod: null,         // «Hit the Count»: Под — круг на полу { x, y, r } и его числа из плана (см. game/pod.js)
+  // «Dead Race»: дорога-кольцо — осевая линия path ([{ x, y, hw, tx, ty }] с шагом TRACK_STEP по ходу гонки, path[0] — на
+  // линии старта), её длина length и ворота gates ([0] — старт-финиш, дальше невидимые чекпоинты по ходу:
+  // { x, y, tx, ty, half } — середина, направление гонки, полудлина поперёк дороги). См. game/race.js
+  track: null,
+  ice: null,         // скользкий пол уровня ({ brake, drift } поверх CONFIG.LEADER) или null — пол обычный
   solids: [],       // твёрдые постройки (база): держат движение, но не обзор и не выстрелы
   moveBlockers: [], sightBlockers: [],
   pathBlockers: [],  // мешают идти по прямой: стены, колонны, двери и пропасти (без построек — база бывает целью)
@@ -130,6 +135,169 @@ function addChasm(chasm, i, toRect) {
   for (const rect of open.values()) world.pits.push(rect);
 }
 
+// --- дорога-кольцо («Dead Race») ---
+// План (plan.track) задаёт осевую линию: замкнутую ломаную points ([x, y, ширина] по ходу гонки), которая сглаживается
+// срезанием углов (прямые участки ломаной так и остаются прямыми) и раскладывается на точки через TRACK_STEP px.
+// Проходимо всё, что ближе половины ширины к оси, и круглые карманы сбоку (pockets: [доля круга от старта, сторона:
+// 1 — справа по ходу, −1 — слева, радиус]; в каждом кармане — гнездо врагов). Остальное в комнате — стена: полосы по
+// строкам высотой rowStep, как у круглой арены (столкновения — обычные прямоугольники). start — точка плана на линии
+// старта-финиша, checkpoints — невидимые ворота на этих долях круга. Шипы (spikes) раскладываются вдоль дороги сами:
+// у стен через каждые wall px пути (доля мест с шипами — outer на внешней стороне поворота, inner — на внутренней,
+// straight — на прямой) и посреди дороги через middle px; у линии старта (clear px в обе стороны) и в карманах шипов нет.
+// Раскладка не случайная — каждую партию одна и та же (трассу можно выучить)
+const TRACK_STEP = 12;
+
+// сгладить замкнутую ломаную срезанием углов (Чайкин): каждый проход заменяет ребро двумя точками на его четвертях
+function smoothLoop(pts, passes) {
+  for (let k = 0; k < passes; k++) {
+    pts = pts.flatMap((a, j) => {
+      const b = pts[(j + 1) % pts.length];
+      const at = (t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, hw: a.hw + (b.hw - a.hw) * t });
+      return [at(0.25), at(0.75)];
+    });
+  }
+  return pts;
+}
+
+// разложить замкнутую ломаную на точки, равномерно через ~step px по её длине
+function resampleLoop(pts, step) {
+  const n = pts.length;
+  const lens = pts.map((a, j) => Math.hypot(pts[(j + 1) % n].x - a.x, pts[(j + 1) % n].y - a.y));
+  const total = lens.reduce((sum, l) => sum + l, 0), count = Math.round(total / step), out = [];
+  let j = 0, from = 0;   // ребро j начинается на длине from
+  for (let k = 0; k < count; k++) {
+    const s = (k / count) * total;
+    while (j < n - 1 && from + lens[j] < s) { from += lens[j]; j++; }
+    const a = pts[j], b = pts[(j + 1) % n], t = lens[j] ? (s - from) / lens[j] : 0;
+    out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, hw: a.hw + (b.hw - a.hw) * t });
+  }
+  return out;
+}
+
+// точка осевой линии на расстоянии s по ходу гонки от линии старта (по кругу)
+function trackAt(track, s) {
+  const n = track.path.length;
+  return track.path[((Math.round((s / track.length) * n) % n) + n) % n];
+}
+
+// пересечение двух упорядоченных списков непересекающихся отрезков
+function intersectRuns(A, B) {
+  const out = [];
+  for (let i = 0, j = 0; i < A.length && j < B.length;) {
+    const a = Math.max(A[i][0], B[j][0]), b = Math.min(A[i][1], B[j][1]);
+    if (a < b) out.push([a, b]);
+    if (A[i][1] < B[j][1]) i++; else j++;
+  }
+  return out;
+}
+
+// стены вокруг дороги: всё в прямоугольнике area, что не покрыто кругами disks ({ x, y, r }), — полосами по строкам
+// высотой rowH; полоса свободна там, где свободны её верх, середина и низ. Одинаковые куски соседних строк склеиваются.
+// Щель между хордами соседних кругов уже шага оси — не стена: у самого края дороги круги через TRACK_STEP оставляют
+// «зубцы» в доли пикселя, из них вышла бы гребёнка тонких стенок
+function trackWalls(disks, area, rowH) {
+  const openAt = (y) => {
+    const iv = [];
+    for (const d of disks) {
+      const dy = y - d.y;
+      if (dy > -d.r && dy < d.r) { const h = Math.sqrt(d.r * d.r - dy * dy); iv.push([d.x - h, d.x + h]); }
+    }
+    iv.sort((a, b) => a[0] - b[0]);
+    const out = [];
+    for (const [a, b] of iv) {
+      const last = out[out.length - 1];
+      if (last && a <= last[1] + TRACK_STEP) last[1] = Math.max(last[1], b); else out.push([a, b]);
+    }
+    return out;
+  };
+  const x0 = area.x, x1 = area.x + area.w;
+  let open = new Map();   // куски стены прошлой строки, ещё не закрытые: ключ «x0:x1» -> прямоугольник
+  for (let y = area.y; y < area.y + area.h; y += rowH) {
+    const h = Math.min(rowH, area.y + area.h - y);
+    const free = intersectRuns(intersectRuns(openAt(y), openAt(y + h / 2)), openAt(y + h));
+    const runs = [];
+    let x = x0;
+    for (const [a, b] of free) {
+      const fa = clamp(Math.round(a), x0, x1), fb = clamp(Math.round(b), x0, x1);
+      if (fa > x) runs.push([x, fa]);
+      x = Math.max(x, fb);
+    }
+    if (x < x1) runs.push([x, x1]);
+    const next = new Map();
+    for (const [ra, rb] of runs) {
+      const key = ra + ':' + rb, prev = open.get(key);
+      if (prev) { prev.h = y + h - prev.y; next.set(key, prev); open.delete(key); }
+      else next.set(key, { x: ra, y, w: rb - ra, h });
+    }
+    for (const rect of open.values()) world.walls.push(rect);
+    open = next;
+  }
+  for (const rect of open.values()) world.walls.push(rect);
+}
+
+// шипы вдоль дороги по правилу spec (см. выше): квадраты стороной size; на месте, где уже есть шипы или карман, — нет
+function trackSpikes(spec, track, pockets) {
+  const size = spec.size, half = size / 2, L = track.length;
+  const hash = (k) => { const v = Math.sin(k * 12.9898 + 78.233) * 43758.5453; return v - Math.floor(v); };
+  const nearStart = (s) => s < spec.clear || s > L - spec.clear;
+  const free = (x, y) => !pockets.some((p) => Math.hypot(x - p.x, y - p.y) < p.r + size)
+    && !world.spikes.some((r) => x - half < r.x + r.w + 4 && x + half > r.x - 4 && y - half < r.y + r.h + 4 && y + half > r.y - 4);
+  const put = (p, d) => {
+    const x = p.x - p.ty * d, y = p.y + p.tx * d;   // d — сдвиг от оси вправо по ходу (влево — минус)
+    if (free(x, y)) world.spikes.push({ x: x - half, y: y - half, w: size, h: size });
+  };
+  // поворот дороги около s: на сколько радиан повернёт направление за ±60 px пути (плюс — направо по ходу)
+  const bend = (s) => {
+    const a = trackAt(track, s - 60), b = trackAt(track, s + 60);
+    return Math.atan2(a.tx * b.ty - a.ty * b.tx, a.tx * b.tx + a.ty * b.ty);
+  };
+  for (let k = 0, s = spec.wall / 2; s < L; k++, s += spec.wall) {
+    if (nearStart(s)) continue;
+    const p = trackAt(track, s), b = bend(s);
+    for (const side of [1, -1]) {
+      const turn = side * b;   // плюс — эта стена на внутренней стороне поворота
+      const chance = turn < -0.12 ? spec.outer : turn > 0.12 ? spec.inner : spec.straight;
+      if (hash(k * 2 + (side > 0 ? 1 : 0)) < chance) put(p, side * (p.hw - size * 0.3));
+    }
+  }
+  for (let k = 0, s = spec.middle / 2; s < L; k++, s += spec.middle) {
+    if (nearStart(s)) continue;
+    const p = trackAt(track, s);
+    put(p, (hash(k + 1000) - 0.5) * 1.2 * p.hw);
+  }
+}
+
+function addTrack(spec, i) {
+  const sc = planScale(i).w;
+  const loop = smoothLoop(spec.points.map(([x, y, w]) => ({ ...localToWorld(i, x, y), hw: (w * sc) / 2 })), 5);
+  let path = resampleLoop(loop, TRACK_STEP);
+  // нулевая точка пути — у линии старта
+  const st = localToWorld(i, spec.start[0], spec.start[1]);
+  const d2 = (p) => (p.x - st.x) ** 2 + (p.y - st.y) ** 2;
+  const k0 = path.reduce((best, p, k) => (d2(p) < d2(path[best]) ? k : best), 0);
+  path = path.slice(k0).concat(path.slice(0, k0));
+  const n = path.length;
+  let length = 0;
+  path.forEach((p, k) => {
+    const a = path[(k + n - 1) % n], b = path[(k + 1) % n], len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    p.tx = (b.x - a.x) / len; p.ty = (b.y - a.y) / len;
+    length += Math.hypot(b.x - p.x, b.y - p.y);
+  });
+  const track = { path, length, gates: [] };
+  // карманы сбоку от дороги: круг заходит на дорогу на 0.6 радиуса, в середине — гнездо
+  const pockets = (spec.pockets || []).map(([f, side, r]) => {
+    const p = trackAt(track, f * length), d = side * (p.hw + r * sc * 0.4);
+    return { x: p.x - p.ty * d, y: p.y + p.tx * d, r: r * sc };
+  });
+  for (const p of pockets) world.nests.push({ x: p.x, y: p.y });
+  trackWalls(path.map((p) => ({ x: p.x, y: p.y, r: p.hw })).concat(pockets), roomInterior(i), spec.rowStep || 16);
+  if (spec.spikes) trackSpikes(spec.spikes, track, pockets);
+  // ворота: поперёк дороги, концами уходят в стены
+  const gate = (s) => { const p = trackAt(track, s); return { x: p.x, y: p.y, tx: p.tx, ty: p.ty, half: p.hw + 40 }; };
+  track.gates = [gate(0), ...(spec.checkpoints || []).map((f) => gate(f * length))];
+  world.track = track;
+}
+
 // препятствия и знаки комнаты из её плана; координаты плана — доли внутреннего размера комнаты
 // (или пиксели, если units: 'px')
 function addRoomContent(plan, i) {
@@ -184,6 +352,7 @@ function addRoomContent(plan, i) {
     world.solids.push(r);
   }
   for (const [cx, cy] of plan.nests || []) world.nests.push(localToWorld(i, cx, cy));
+  if (plan.track) addTrack(plan.track, i);
   // Под («Hit the Count»): круглый механизм на полу, ничего не блокирует; его счёт и перезарядка — в state.pod
   if (plan.pod) {
     const c = localToWorld(i, plan.pod.at[0], plan.pod.at[1]);
@@ -368,7 +537,7 @@ function buildNav() {
   for (let j = 0; j < rows; j++) {
     for (let i = 0; i < cols; i++) {
       const x = (i + 0.5) * S, y = (j + 0.5) * S;
-      open[j * cols + i] = world.pathBlockers.some((r) => circleRectOverlap(x, y, C, r)) ? 0 : 1;
+      open[j * cols + i] = world.pathBlockers.index.near(x - C, y - C, x + C, y + C).some((r) => circleRectOverlap(x, y, C, r)) ? 0 : 1;
     }
   }
   nav = { S, cols, rows, open };
@@ -445,7 +614,8 @@ function buildWorld(level) {
   world.walls = []; world.pillars = []; world.pits = []; world.spikes = [];
   world.floors = []; world.warnings = [];
   world.doors = []; world.buttons = []; world.cannons = []; world.finish = null; world.bridges = [];
-  world.base = null; world.home = null; world.nests = []; world.solids = []; world.pod = null;
+  world.base = null; world.home = null; world.nests = []; world.solids = []; world.pod = null; world.track = null;
+  world.ice = level.ice || null;
   roomPx = level.rooms.map((p) => p.units === 'px');
   if (level.geometry.kind === 'field') buildField(level);
   else if (level.geometry.kind === 'arena') buildArena(level);
