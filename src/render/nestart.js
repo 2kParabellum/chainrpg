@@ -2,12 +2,16 @@
 // и скорлупа вокруг. Перед волной (telegraph) комья дрожат, дыра разгорается красным и изнутри глядят глаза;
 // при выходе волны летят земля и пыль. Вокруг — зона, где появляются враги волны (только по полу),
 // над норой — плашка: сколько врагов в следующей волне и через сколько секунд.
+// Нора видна только на полу: стены и их поднятый верх её закрывают. Вырезать это каждый кадр по всем стенам дорого
+// (на трассе «Dead Race» их сотни), поэтому у норы один раз готовятся маска пола вокруг неё, заливка зоны по этой маске
+// и спокойная нора (до волны дальше telegraph, выход давно прошёл) уже по маске; бегущий пунктир зоны — дугами по тем
+// местам круга, что на полу. Перед волной и при выходе нора рисуется заново во временном холсте и обрезается маской.
 // Состояние только читается (state.nests, level.waves).
 (function (G) {
 'use strict';
 
 const { state } = G;
-const { ctx } = G.shapes;
+let { ctx } = G.shapes;      // холст, в который рисуем сейчас (экран, готовая картинка норы или временный холст)
 const { world } = G.world;
 const { clamp } = G.math;
 
@@ -115,50 +119,120 @@ function burrow(x, y, soon, just, p, t, seed) {
   burst(x, y, p, 6);
 }
 
-// плашка над норой: череп, сколько врагов и через сколько секунд; перед волной краснеет и пульсирует
+// плашка над норой: череп, сколько врагов и через сколько секунд; перед волной краснеет и пульсирует.
+// Готовой картинкой на каждый текст (спокойная и красная)
+const chips = G.shapes.spriteCache(paintOn, 200);
+const CHIP_FONT = 'bold 14px "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
 function chip(x, y, n, sec, soon, t) {
-  const txt = `×${n}  ${sec}s`;
-  ctx.font = 'bold 14px "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
-  const w = ctx.measureText(txt).width + 34, k = soon > 0 ? 1 + 0.08 * soon * (0.5 + 0.5 * Math.sin(t * 12)) : 1;
-  ctx.save(); ctx.translate(x, y); ctx.scale(k, k);
-  ctx.fillStyle = soon > 0 ? '#550f0a' : INK; ctx.strokeStyle = soon > 0 ? '#ef3a0c' : '#684c3c'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.roundRect(-w / 2, -12, w, 24, 12); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#efd8a1'; ell(-w / 2 + 13, -1, 6, 5.5); ctx.fill(); ctx.fillRect(-w / 2 + 9.5, 2, 7, 4);
-  ctx.fillStyle = INK; ell(-w / 2 + 10.8, -1, 1.6, 1.8); ctx.fill(); ell(-w / 2 + 15.2, -1, 1.6, 1.8); ctx.fill();
-  ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = soon > 0 ? '#efac28' : '#efd8a1'; ctx.fillText(txt, -w / 2 + 24, 1);
-  ctx.restore(); ctx.textBaseline = 'alphabetic';
+  const txt = `×${n}  ${sec}s`, hot = soon > 0, key = (hot ? 'h' : 'c') + txt;
+  let sp = chips.get(key);
+  if (!sp) {
+    ctx.font = CHIP_FONT;
+    const w = ctx.measureText(txt).width + 34;
+    sp = chips.bake(key, 1, [-w / 2 - 1, -13, w / 2 + 1, 13], () => {
+      ctx.fillStyle = hot ? '#550f0a' : INK; ctx.strokeStyle = hot ? '#ef3a0c' : '#684c3c'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(-w / 2, -12, w, 24, 12); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#efd8a1'; ell(-w / 2 + 13, -1, 6, 5.5); ctx.fill(); ctx.fillRect(-w / 2 + 9.5, 2, 7, 4);
+      ctx.fillStyle = INK; ell(-w / 2 + 10.8, -1, 1.6, 1.8); ctx.fill(); ell(-w / 2 + 15.2, -1, 1.6, 1.8); ctx.fill();
+      ctx.font = CHIP_FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = hot ? '#efac28' : '#efd8a1'; ctx.fillText(txt, -w / 2 + 24, 1);
+    });
+  }
+  if (!hot) { G.shapes.stamp(sp, x, y); return; }
+  const k = 1 + 0.08 * soon * (0.5 + 0.5 * Math.sin(t * 12));
+  G.shapes.stamp(sp, x, y, k, k);
 }
 
-// всё гнездо рисуется только по полу уровня: стены и их поднятый верх — не пол
-function clipFloor(n, R) {
-  ctx.beginPath();
-  for (const f of world.floors) ctx.rect(f.x, f.y, f.w, f.h);
-  ctx.clip();
-  const H = G.terrain.WALL_H;
-  ctx.beginPath();
-  ctx.rect(n.x - R - 1, n.y - R - 1, R * 2 + 2, R * 2 + 2);
-  for (const w of world.walls) ctx.rect(w.x, w.y - H, w.w, w.h + H);
-  ctx.clip('evenodd');
+// --- готовое для норы: квадрат вокруг неё в пикселях холста, маска пола (стены и их поднятый верх — не пол),
+// заливка зоны по маске, спокойная нора по маске и дуги круга зоны, лежащие на полу ---
+const KEEP = 3;              // готовое держится для стольких нор, что были на экране последними
+const prepared = new Map();  // гнездо → готовое; порядок — от давно нужного к свежему
+let scratch = null;          // временный холст для норы перед волной
+const hit = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+const inRect = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+function paintOn(g, paint) { const main = ctx; ctx = g; paint(); ctx = main; }
+
+function prepare(n, R) {
+  const s = G.screen.pixelScale();
+  let P = prepared.get(n);
+  if (P && P.s === s) { prepared.delete(n); prepared.set(n, P); return P; }
+  const B = Math.max(R + 2, 112);   // с запасом на кости вокруг вала
+  const x0 = Math.floor((n.x - B) * s) / s, y0 = Math.floor((n.y - B) * s) / s;
+  const cw = Math.ceil((n.x + B - x0) * s), ch = Math.ceil((n.y + B - y0) * s);
+  const box = { x: x0, y: y0, w: cw / s, h: ch / s }, WH = G.terrain.WALL_H;
+  const walls = world.walls.map((w) => ({ x: w.x, y: w.y - WH, w: w.w, h: w.h + WH })).filter((r) => hit(r, box));
+  const canvas = () => {
+    const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+    const g = c.getContext('2d'); g.setTransform(s, 0, 0, s, -x0 * s, -y0 * s);
+    return [c, g];
+  };
+  const [mask, mg] = canvas();
+  mg.fillStyle = '#000';
+  for (const f of world.floors) mg.fillRect(f.x, f.y, f.w, f.h);
+  mg.globalCompositeOperation = 'destination-out';
+  for (const r of walls) mg.fillRect(r.x, r.y, r.w, r.h);
+  const masked = (paint) => {
+    const [c, g] = canvas();
+    paintOn(g, paint);
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'destination-in'; g.drawImage(mask, 0, 0);
+    return c;
+  };
+  const fill = masked(() => { ctx.fillStyle = '#9b1a0a'; ell(n.x, n.y, R, R); ctx.fill(); });
+  const idle = masked(() => burrow(n.x, n.y, 0, 0, 99, 0, seedOf(n)));
+  // дуги круга зоны на полу: [от, до] по углу, через градус
+  const floorAt = (x, y) => world.floors.some((f) => inRect(f, x, y)) && !walls.some((r) => inRect(r, x, y));
+  const N = 360, on = [];
+  for (let i = 0; i < N; i++) { const a = (i + 0.5) / N * TAU; on.push(floorAt(n.x + Math.cos(a) * R, n.y + Math.sin(a) * R)); }
+  let arcs = [];
+  for (let i = 0; i < N; i++) {
+    if (!on[i]) continue;
+    const last = arcs[arcs.length - 1];
+    if (last && last[1] === i / N * TAU) last[1] = (i + 1) / N * TAU; else arcs.push([i / N * TAU, (i + 1) / N * TAU]);
+  }
+  if (arcs.length > 1 && on[0] && on[N - 1]) { const tail = arcs.pop(); arcs[0][0] = tail[0] - TAU; }
+  P = { s, x0, y0, cw, ch, w: cw / s, h: ch / s, mask, fill, idle, arcs };
+  prepared.set(n, P);
+  for (const k of prepared.keys()) { if (prepared.size <= KEEP) break; prepared.delete(k); }
+  return P;
 }
-// зона выхода волны: заливка и бегущий пунктир
-function zone(n, R, soon, just) {
-  ctx.fillStyle = hexA('#9b1a0a', 0.05 + 0.08 * soon + 0.15 * just); ell(n.x, n.y, R, R); ctx.fill();
+const seedOf = (n) => (n.x * 7 + n.y) % 3;
+
+// зона выхода волны: заливка по полу и бегущий пунктир по дугам на полу
+function zone(n, P, R, soon, just) {
+  ctx.globalAlpha = 0.05 + 0.08 * soon + 0.15 * just;
+  ctx.drawImage(P.fill, P.x0, P.y0, P.w, P.h);
+  ctx.globalAlpha = 1;
   ctx.strokeStyle = hexA('#ef3a0c', 0.35 + 0.45 * soon); ctx.lineWidth = 2;
-  ctx.setLineDash([12, 9]); ctx.lineDashOffset = -state.time * (15 + 60 * soon);
-  ell(n.x, n.y, R, R); ctx.stroke();
+  ctx.setLineDash([12, 9]);
+  const off = -state.time * (15 + 60 * soon);
+  for (const [a0, a1] of P.arcs) {
+    ctx.lineDashOffset = off + a0 * R;
+    ctx.beginPath(); ctx.arc(n.x, n.y, R, a0, a1); ctx.stroke();
+  }
   ctx.setLineDash([]); ctx.lineDashOffset = 0;
+}
+
+// нора перед волной и при выходе: заново во временном холсте, по маске пола
+function liveBurrow(n, P, soon, just, p, t) {
+  if (!scratch) scratch = document.createElement('canvas');
+  if (scratch.width < P.cw || scratch.height < P.ch) { scratch.width = Math.max(scratch.width, P.cw); scratch.height = Math.max(scratch.height, P.ch); }
+  const g = scratch.getContext('2d');
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, P.cw, P.ch);
+  g.setTransform(P.s, 0, 0, P.s, -P.x0 * P.s, -P.y0 * P.s);
+  paintOn(g, () => burrow(n.x, n.y, soon, just, p, t, seedOf(n)));
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = 'destination-in'; g.drawImage(P.mask, 0, 0); g.globalCompositeOperation = 'source-over';
+  ctx.drawImage(scratch, 0, 0, P.cw, P.ch, P.x0, P.y0, P.w, P.h);
 }
 
 // n — гнездо из state.nests, cfg — level.waves
 function draw(n, cfg) {
   const t = state.time, p = t - n.releasedAt;
   const soon = clamp(1 - n.nextIn / cfg.telegraph, 0, 1), just = clamp(1 - p / 1.2, 0, 1);
-  const R = cfg.spawnRadius + 24;
-  ctx.save();
-  clipFloor(n, R);
-  zone(n, R, soon, just);
-  burrow(n.x, n.y, soon, just, p, t, (n.x * 7 + n.y) % 3);
-  ctx.restore();
+  const R = cfg.spawnRadius + 24, P = prepare(n, R);
+  zone(n, P, R, soon, just);
+  if (soon === 0 && just === 0) ctx.drawImage(P.idle, P.x0, P.y0, P.w, P.h);
+  else liveBurrow(n, P, soon, just, p, t);
   chip(n.x, n.y - 74, G.waves.waveSize(cfg, n.wave), Math.max(0, Math.ceil(n.nextIn)), soon, t);
 }
 
