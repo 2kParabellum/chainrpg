@@ -150,7 +150,7 @@ const march = {
   name: 'March',
   who: 'hero',
   desc: 'A long chain is lighter to drive',
-  links: 1,          // столько звеньев сверх обычного не утяжеляют цепочку
+  links: 4,          // столько звеньев сверх обычного не утяжеляют цепочку
   art(ctx, k) {
     k.speedLines(10, 64);
     for (let i = 4; i >= 1; i--) k.ally(170 - i * 30, 68, null, 0);

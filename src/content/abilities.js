@@ -134,7 +134,7 @@ const speed = {
   desc: 'faster movement and attacks',
   color: COLORS.speed,
   duration: 30,
-  move: 1.3, rate: 1.25,
+  move: 1.4, rate: 1.25,
   icon(ctx, x, y, s) {
     ctx.beginPath();
     ctx.moveTo(x + s * 0.15, y - s * 0.6);
