@@ -103,37 +103,25 @@ function updateLeader(dt) {
   } else if (aim !== null && aim !== undefined) ({ throttle, turn } = aimSteer(lead, aim, turnSpeed * dt));
 
   // в экранных координатах (y вниз) уменьшение угла — поворот налево
-  let dh = turn * turnSpeed * dt;
-
-  // сцепление: движение поворачивается вслед за носом, не теряя скорости, но не быстрее Ω = G / v. G — боковое
-  // сцепление: (1 − drift) от предела поворота на ходу (см. выше), так что без заноса движение повторяет нос в точности.
-  // С заносом нос обгоняет движение — копится угол заноса slip, Героя несёт по более широкой дуге; на малой скорости
-  // сцепления хватает, и занос сходит. Угол не больше maxSlip: дальше нос не поворачивает, Герой идёт боком
-  const grip = (1 - cfg.drift) * cfg.turnSpeed * cfg.speed * mv * mv / mass;
-  const follow = (grip / Math.max(v, 1)) * dt;
-  let slip = lead.slip + dh;
-  const rot = clamp(slip, -follow, follow);
-  slip -= rot;
-  if (Math.abs(slip) > cfg.maxSlip) {
-    const over = slip - Math.sign(slip) * cfg.maxSlip;
-    dh -= over; slip -= over;
-  }
-  lead.slip = slip;
-  lead.heading += dh;
+  lead.heading += turn * turnSpeed * dt;
   lead.facing = lead.heading;
-  const rc = Math.cos(rot), rs = Math.sin(rot);
-  [lead.vx, lead.vy] = [lead.vx * rc - lead.vy * rs, lead.vx * rs + lead.vy * rc];
 
-  // мотор тянет вдоль направления движения (нос минус занос); толчки со стороны гасит, как раньше
   const k = throttle > 0 ? 1 : 0;
-  const drive = lead.heading - slip;
-  const wantX = Math.cos(drive) * cfg.speed * speedMul * k;
-  const wantY = Math.sin(drive) * cfg.speed * speedMul * k;
+  const wantX = Math.cos(lead.heading) * cfg.speed * speedMul * k;
+  const wantY = Math.sin(lead.heading) * cfg.speed * speedMul * k;
   const dx = wantX - lead.vx, dy = wantY - lead.vy;
-  const gap = Math.hypot(dx, dy);
   const step = (k ? cfg.accel * mv / mass : cfg.brake * mv / chainMass(true)) * dt;
-  if (gap <= step) { lead.vx = wantX; lead.vy = wantY; }
-  else { lead.vx += (dx / gap) * step; lead.vy += (dy / gap) * step; }
+  // занос (LEADER.drift): поперёк носа скорость поправляется в (1 − drift) раз слабее, чем вдоль, — боковая инерция
+  // остаётся, Героя сносит. Шаг ограничен эллипсом: там, где боковая ось растянута в 1/(1 − drift) раз, он обычный
+  // круговой; при drift 0 — ровно прежний шаг к желаемой скорости
+  const side = Math.max(0.05, 1 - cfg.drift);
+  const fx = Math.cos(lead.heading), fy = Math.sin(lead.heading);
+  const ef = dx * fx + dy * fy, es = (dy * fx - dx * fy) / side;
+  const gap = Math.hypot(ef, es);
+  const t = gap <= step ? 1 : step / gap;
+  const mf = ef * t, ms = es * t * side;
+  lead.vx += mf * fx - ms * fy;
+  lead.vy += mf * fy + ms * fx;
 
   const sp = Math.hypot(lead.vx, lead.vy);
   if (sp > 0.5) {
