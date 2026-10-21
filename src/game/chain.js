@@ -39,28 +39,14 @@ function trailPointAt(distBack) {
   return prev;
 }
 
-// точка звена i: на следе Героя, а с CHAIN.cut — сдвинута к точке на расстоянии spacing от соседа спереди
-// по прямой к нему (как верёвка): на поворотах звенья срезают угол, и чем дальше к хвосту, тем сильнее.
-// Пока цепочка втягивается в портал (pull), — строго по следу
-function linkTarget(a, i, onTrail, pull) {
-  const cfg = CONFIG.CHAIN;
-  const ahead = state.party[i - 1];
-  if (!cfg.cut || pull > 0 || !ahead) return onTrail;
-  const dx = a.x - ahead.x, dy = a.y - ahead.y, d = Math.hypot(dx, dy);
-  if (d < 1) return onTrail;
-  const rx = ahead.x + (dx / d) * cfg.spacing, ry = ahead.y + (dy / d) * cfg.spacing;
-  return { x: onTrail.x + (rx - onTrail.x) * cfg.cut, y: onTrail.y + (ry - onTrail.y) * cfg.cut };
-}
-
-// звено i (i ≥ 1) тянется к своей точке (linkTarget) пружиной с затуханием: на поворотах
+// звено i (i ≥ 1) тянется к своей точке на следе Героя пружиной с затуханием: на поворотах
 // хвост заносит, при остановке звенья проскакивают вперёд и возвращаются («плётка»).
 // pull — на сколько точка звена подтянута по следу к Герою (цепочка втягивается в портал выхода)
 function followChain(a, dt, i, pull = 0) {
   const cfg = CONFIG.CHAIN, whip = cfg.whip;
-  const onTrail = trailPointAt(Math.max(0, i * cfg.spacing - pull));
-  const target = linkTarget(a, i, onTrail, pull);
+  const target = trailPointAt(Math.max(0, i * cfg.spacing - pull));
   const prev = a.prevTarget;
-  a.prevTarget = onTrail;
+  a.prevTarget = target;
   if (dt <= 0) return;
   const d = Math.hypot(target.x - a.x, target.y - a.y);
 
@@ -75,12 +61,10 @@ function followChain(a, dt, i, pull = 0) {
     return;
   }
 
-  // скорость самой точки следа; затухание считается относительно неё, а не абсолютной скорости.
-  // Именно следа, а не сдвинутой точки: у той поперёк верёвки скорость та же, что у звена, — раскачку
-  // поперёк ничего бы не гасило, и цепочка шла бы зигзагом
+  // скорость самой точки следа; затухание считается относительно неё, а не абсолютной скорости
   const cap = whip.maxSpeed * 2;
-  const tvx = clamp((onTrail.x - prev.x) / dt, -cap, cap);
-  const tvy = clamp((onTrail.y - prev.y) / dt, -cap, cap);
+  const tvx = clamp((target.x - prev.x) / dt, -cap, cap);
+  const tvy = clamp((target.y - prev.y) / dt, -cap, cap);
   const t = (i - 1) / Math.max(1, state.party.length - 2);
   const k = whip.stiffness * (1 - whip.tailSoftness * clamp(t, 0, 1));
   // затухание тоже слабеет к хвосту: поворот доходит до дальних звеньев и раскачивает их сильнее
