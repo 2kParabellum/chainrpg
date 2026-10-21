@@ -120,8 +120,23 @@ function updateLeader(dt) {
   const gap = Math.hypot(ef, es);
   const t = gap <= step ? 1 : step / gap;
   const mf = ef * t, ms = es * t * side;
-  lead.vx += mf * fx - ms * fy;
-  lead.vy += mf * fy + ms * fx;
+  const gx = mf * fx - ms * fy, gy = mf * fy + ms * fx;
+
+  // тяга (LEADER.thrust): 0 — только поправка выше (колёса со сцеплением гасят движение не туда, куда нос, и с ним
+  // часть скорости); 1 — чистая тяга: газ толкает вдоль носа, скорость сверх полной срезается, боковое движение никто
+  // не гасит — на повороте скорость не теряется, а Героя сносит, тем сильнее, чем слабее разгон. Между — смесь двух.
+  // Без газа — только торможение вдоль движения
+  let tx = 0, ty = 0;
+  if (cfg.thrust > 0) {
+    const cur = Math.hypot(lead.vx, lead.vy);
+    let nx = lead.vx + fx * step * k, ny = lead.vy + fy * step * k;
+    const top = k ? Math.max(cfg.speed * speedMul, cur - step) : Math.max(0, cur - step);
+    const len = Math.hypot(nx, ny);
+    if (len > top) { nx *= top / len; ny *= top / len; }
+    tx = nx - lead.vx; ty = ny - lead.vy;
+  }
+  lead.vx += (1 - cfg.thrust) * gx + cfg.thrust * tx;
+  lead.vy += (1 - cfg.thrust) * gy + cfg.thrust * ty;
 
   const sp = Math.hypot(lead.vx, lead.vy);
   if (sp > 0.5) {
