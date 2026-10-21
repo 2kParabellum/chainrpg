@@ -103,20 +103,25 @@ function updateLeader(dt) {
   } else if (aim !== null && aim !== undefined) ({ throttle, turn } = aimSteer(lead, aim, turnSpeed * dt));
 
   // в экранных координатах (y вниз) уменьшение угла — поворот налево
-  const dh = turn * turnSpeed * dt;
+  let dh = turn * turnSpeed * dt;
+
+  // сцепление: движение поворачивается вслед за носом, не теряя скорости, но не быстрее Ω = G / v. G — боковое
+  // сцепление: (1 − drift) от предела поворота на ходу (см. выше), так что без заноса движение повторяет нос в точности.
+  // С заносом нос обгоняет движение — копится угол заноса slip, Героя несёт по более широкой дуге; на малой скорости
+  // сцепления хватает, и занос сходит. Угол не больше maxSlip: дальше нос не поворачивает, Герой идёт боком
+  const grip = (1 - cfg.drift) * cfg.turnSpeed * cfg.speed * mv * mv / mass;
+  const follow = (grip / Math.max(v, 1)) * dt;
+  let slip = lead.slip + dh;
+  const rot = clamp(slip, -follow, follow);
+  slip -= rot;
+  if (Math.abs(slip) > cfg.maxSlip) {
+    const over = slip - Math.sign(slip) * cfg.maxSlip;
+    dh -= over; slip -= over;
+  }
+  lead.slip = slip;
   lead.heading += dh;
   lead.facing = lead.heading;
-
-  // сцепление: скорость поворачивается вместе с носом и не теряет величины. С заносом (LEADER.drift) часть поворота
-  // носа скорость не повторяет — копится угол заноса slip (на сколько движение отстаёт от носа). Он сходит на нет
-  // тоже поворотом скорости, без потери величины, тем медленнее, чем больше занос и тяжелее цепочка. Угол не больше
-  // maxSlip, а на малой скорости меньше: с места Герой едет туда, куда смотрит
-  const prevSlip = lead.slip;
-  let slip = (prevSlip + dh * cfg.drift) * Math.exp(-cfg.driftRecover * (1 - cfg.drift) * mv / mass * dt);
-  const slipCap = cfg.maxSlip * Math.min(1, v / (cfg.speed * 0.25));
-  slip = clamp(slip, -slipCap, slipCap);
-  lead.slip = slip;
-  const r = dh - (slip - prevSlip), rc = Math.cos(r), rs = Math.sin(r);
+  const rc = Math.cos(rot), rs = Math.sin(rot);
   [lead.vx, lead.vy] = [lead.vx * rc - lead.vy * rs, lead.vx * rs + lead.vy * rc];
 
   // мотор тянет вдоль направления движения (нос минус занос); толчки со стороны гасит, как раньше
