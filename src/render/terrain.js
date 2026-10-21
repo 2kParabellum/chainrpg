@@ -7,11 +7,11 @@
 (function (G) {
 'use strict';
 
-const { COLORS, state } = G;
+const { CONFIG, COLORS, state } = G;
 let { ctx } = G.shapes;      // холст, в который рисуем сейчас (кусок земли, скала для него или временный холст окошка)
 const { world } = G.world;
 const TAU = Math.PI * 2, INK = '#2a1d0d';
-const WALL_H = 48;               // на сколько рисунок стены поднят над её основанием — выше дружочка
+const WALL_H = CONFIG.WALL_LIFT; // на сколько рисунок стены поднят над её основанием — выше дружочка
 function hexA(h, a) { const n = parseInt(h.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
 function ell(c, x, y, rx, ry, rot = 0) { c.beginPath(); c.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), rot, 0, TAU); }
 const h2 = (x, y, k = 0) => { const s = Math.sin(x * 12.9898 + y * 78.233 + k * 37.719) * 43758.5453; return s - Math.floor(s); };
