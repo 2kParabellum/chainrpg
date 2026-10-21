@@ -13,6 +13,7 @@ const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAl
 const { updatePads, updateAllySpawns } = G.pads;
 const { updateWaves } = G.waves;
 const { updatePod } = G.pod;
+const { updateRace } = G.race;
 const combat = G.combat;
 const { updateProjectiles, updateBurns, updateClouds, applySpikes, applyFirewalls, updateEffects, updateCannons } = combat;
 const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
@@ -81,13 +82,14 @@ function updateMoveTarget() {
 // (pointSteer; доехал — точка снята).
 // Длинная цепочка тяжелее (масса M, см. CHAIN.heft): разгон делится на M (торможение — на меньшую массу), а поворот на ходу упирается
 // в предел сцепления — боковое ускорение v·ω не больше, чем у Героя налегке на полной скорости:
-// ω ≤ turnSpeed·mv·min(1, speed·mv / (M·v)). Медленно тяжёлая цепочка поворачивает круто, на полном ходу — дугой
+// ω ≤ turnSpeed·mv·min(1, speed·mv / (M·v)). Медленно тяжёлая цепочка поворачивает круто, на полном ходу — дугой.
+// На скользком полу (world.ice, «Dead Race») его поля — торможение и занос — заменяют обычные
 function updateLeader(dt) {
   const lead = leader();
   const mv = lead.moveMul || 1;   // усиление подиума скорости: быстрее ход, разгон и разворот
   const speedMul = leaderSpeedMul(); // длинная цепочка едет медленнее (не ниже 70%), но под «скоростью» — не ниже базовой
   const mass = chainMass();
-  const cfg = CONFIG.LEADER;
+  const cfg = world.ice ? { ...CONFIG.LEADER, ...world.ice } : CONFIG.LEADER;
   const v = Math.hypot(lead.vx, lead.vy);
   const turnSpeed = cfg.turnSpeed * mv * Math.min(1, (cfg.speed * mv) / (mass * Math.max(v, 1)));
   let { throttle, turn } = state.moveInput;
@@ -271,6 +273,8 @@ function isVictory() {
   if (rule.kind === 'destroyType') return !state.enemies.some((e) => e.type === rule.type);
   // «Hit the Count»: за один проезд по Поду прошло столько дружочков, сколько он просит (см. game/pod.js)
   if (rule.kind === 'podCount') return !!state.pod && state.pod.count >= world.pod.goal;
+  // «Dead Race»: пройдено laps кругов (см. game/race.js)
+  if (rule.kind === 'laps') return !!state.race && state.race.laps.length >= rule.laps;
   // дойти до финишной зоны уровня (см. world.finish)
   if (rule.kind === 'reachPoint') {
     const lead = leader();
@@ -309,6 +313,7 @@ function update(dt) {
   updatePads(dt);
   updateAllySpawns(dt);
   updatePod(dt);
+  updateRace();
   for (const d of state.downed) updateDowned(d, dt);
   // выбитые союзники не выходят из боя: стреляют, рубят и лечат лёжа
   for (const d of state.downed.slice()) updateWeapons(d, dt);

@@ -151,6 +151,7 @@
   #tRestart.armed::after { content: ' again to restart'; }
   #panelWin h1 { color: #efd8a1; }
   #panelWin p { margin: 0 0 10px; font-size: 16px; color: #efd8a1; }
+  #winText { white-space: pre-line; }   /* итоги тестового уровня — по строке на круг */
   #panelWin p.pickHint { margin: 4px 0 0; font-size: 13px; color: #927e6a; }
   /* карточки улучшений: в ряд, а на вертикальном экране — друг под другом (рисунок слева, текст справа) */
   #cards { display: flex; gap: 18px; align-items: stretch; }
@@ -356,7 +357,7 @@
           <button id="backBtn">Back</button>
         </div>
       </div>
-      <div id="build">build 24</div>
+      <div id="build">build 25</div>
     </div>
   </div>
   <script src="src/core/debug.js"></script>
@@ -380,11 +381,13 @@
   <script src="src/levels/level6.js"></script>
   <script src="src/levels/testRam.js"></script>
   <script src="src/levels/testChain.js"></script>
+  <script src="src/levels/testRace.js"></script>
   <script src="src/levels/populate.js"></script>
   <script src="src/game/world.js"></script>
   <script src="src/game/state.js"></script>
   <script src="src/game/pads.js"></script>
   <script src="src/game/pod.js"></script>
+  <script src="src/game/race.js"></script>
   <script src="src/game/chain.js"></script>
   <script src="src/game/combat.js"></script>
   <script src="src/game/roaming.js"></script>

@@ -12,6 +12,7 @@ const { nearestPickup } = G.chain;
 const { ctx, screenTransform } = G.shapes;
 const { withKeys, keyLabel } = G.input;
 const { isTouch, isPortrait } = G.screen;
+const { raceClock, lapTime } = G.race;
 
 // шрифт интерфейса: округлый, жирный (graphics.md); цвета — из палитры fantasy-24
 const UI_FONT = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
@@ -131,6 +132,13 @@ function drawBanners() {
   if (w && w.surge && !state.cleared) {
     const at = state.level.victory.time - w.surge.lastSeconds;
     drawBanner('ONSLAUGHT', `Last ${Math.round(w.surge.lastSeconds / 60)} minutes — bigger waves`, state.time - at, 4, COLORS.nest);
+  }
+  // «Dead Race»: круг пройден — его время и сколько дружочков уже пересекли линию (число растёт, пока проезжает хвост)
+  const laps = state.race ? state.race.laps : [];
+  if (laps.length) {
+    const l = laps[laps.length - 1], k = laps.length, total = state.level.victory.laps;
+    drawBanner(k >= total ? 'FINISH' : `LAP ${k}/${total}`, `${raceClock(l.time)} · mates across the line: ${l.mates}`,
+      state.time - l.at, 3.5, '#efac28', 220);
   }
   if (state.cleared && state.base) drawBanner('THE BASE HELD', 'A blast from the base wipes out every enemy and nest', state.time - state.clearedAt, 3.2, COLORS.baseEdge);
   if (state.exit && !state.leaving) drawBanner('PORTAL OPEN', 'Drive into the bright portal to finish the level', state.time - state.exit.at, 4, COLORS.exitGlow);
@@ -352,6 +360,13 @@ function drawHud() {
         : { text: `${rule.label} READY`, color: UI.teal });
     }
   }
+  // «Dead Race»: какой круг из скольких и время текущего круга (до старта — «GO!»)
+  const race = rule.kind === 'laps' && state.race;
+  if (race) {
+    const done = race.laps.length, t = lapTime();
+    chips.push({ text: `${rule.label} ${Math.min(done + 1, rule.laps)}/${rule.laps}`, color: UI.gold });
+    if (!state.cleared) chips.push(t === null ? { text: 'GO!', color: UI.teal } : { text: raceClock(t), icon: 'clock' });
+  }
   const speed = Math.round(leaderSpeedMul() * 100);
   if (!podRule) chips.push({ text: `${state.party.length}`, icon: 'mate' });
   if (speed < 100) chips.push({ text: `SPEED ${speed}%`, color: UI.orange }); // медленнее обычного — длинная цепочка
@@ -374,6 +389,18 @@ function drawHud() {
     shadowText(() => {
       ctx.fillStyle = UI.gold;
       for (const line of wrapLines(task.split(' '), maxX - 12)) { bottom += 20; ctx.fillText(line, 12, bottom); }
+    });
+  }
+  // «Dead Race»: пройденные круги — время и сколько дружочков пересекли линию; лучший круг — золотом
+  if (race && race.laps.length) {
+    const best = Math.min(...race.laps.map((l) => l.time));
+    ctx.font = `bold 13px ${UI_FONT}`;
+    shadowText(() => {
+      race.laps.forEach((l, i) => {
+        bottom += 17;
+        ctx.fillStyle = l.time === best && race.laps.length > 1 ? UI.gold : UI.text;
+        ctx.fillText(`Lap ${i + 1}   ${raceClock(l.time)}   ×${l.mates}`, 12, bottom);
+      });
     });
   }
   // улучшения прохождения: мелко, названия цветом того, чьё улучшение
