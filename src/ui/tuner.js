@@ -26,6 +26,7 @@ const PARAMS = [
   ['Chain', 'CHAIN.trailStep', 'trail step', 1, 20, 1],
   ['Chain', 'CHAIN.followSpeed', 'follow speed', 50, 600, 10],
   ['Chain', 'CHAIN.catchUpGain', 'catch-up', 1, 20, 0.5],
+  ['Chain', 'CHAIN.cut', 'corner cut', 0, 1, 0.01],
   ['Whip', 'CHAIN.whip.enabled', 'whip on'],
   ['Whip', 'CHAIN.whip.stiffness', 'stiffness', 10, 400, 5],
   ['Whip', 'CHAIN.whip.tailSoftness', 'tail softness', 0, 1, 0.01],
