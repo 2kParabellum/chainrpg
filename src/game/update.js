@@ -101,25 +101,32 @@ function updateLeader(dt) {
   } else if (aim !== null && aim !== undefined) ({ throttle, turn } = aimSteer(lead, aim, turnSpeed * dt));
 
   // в экранных координатах (y вниз) уменьшение угла — поворот налево
-  lead.heading += turn * turnSpeed * dt;
+  const dh = turn * turnSpeed * dt;
+  lead.heading += dh;
   lead.facing = lead.heading;
 
+  // сцепление: скорость поворачивается вместе с носом и не теряет величины. С заносом (LEADER.drift) часть поворота
+  // носа скорость не повторяет — копится угол заноса slip (на сколько движение отстаёт от носа). Он сходит на нет
+  // тоже поворотом скорости, без потери величины, тем медленнее, чем больше занос и тяжелее цепочка. Угол не больше
+  // maxSlip, а на малой скорости меньше: с места Герой едет туда, куда смотрит
+  const prevSlip = lead.slip;
+  let slip = (prevSlip + dh * cfg.drift) * Math.exp(-cfg.driftRecover * (1 - cfg.drift) * mv / mass * dt);
+  const slipCap = cfg.maxSlip * Math.min(1, v / (cfg.speed * 0.25));
+  slip = clamp(slip, -slipCap, slipCap);
+  lead.slip = slip;
+  const r = dh - (slip - prevSlip), rc = Math.cos(r), rs = Math.sin(r);
+  [lead.vx, lead.vy] = [lead.vx * rc - lead.vy * rs, lead.vx * rs + lead.vy * rc];
+
+  // мотор тянет вдоль направления движения (нос минус занос); толчки со стороны гасит, как раньше
   const k = throttle > 0 ? 1 : 0;
-  const wantX = Math.cos(lead.heading) * cfg.speed * speedMul * k;
-  const wantY = Math.sin(lead.heading) * cfg.speed * speedMul * k;
+  const drive = lead.heading - slip;
+  const wantX = Math.cos(drive) * cfg.speed * speedMul * k;
+  const wantY = Math.sin(drive) * cfg.speed * speedMul * k;
   const dx = wantX - lead.vx, dy = wantY - lead.vy;
+  const gap = Math.hypot(dx, dy);
   const step = (k ? cfg.accel * mv / mass : cfg.brake * mv / chainMass(true)) * dt;
-  // занос (LEADER.drift): поперёк носа скорость поправляется в (1 − drift) раз слабее, чем вдоль, — боковая инерция
-  // остаётся, Героя сносит. Шаг ограничен эллипсом: там, где боковая ось растянута в 1/(1 − drift) раз, он обычный
-  // круговой; при drift 0 — ровно прежний шаг к желаемой скорости
-  const side = Math.max(0.05, 1 - cfg.drift);
-  const fx = Math.cos(lead.heading), fy = Math.sin(lead.heading);
-  const ef = dx * fx + dy * fy, es = (dy * fx - dx * fy) / side;
-  const gap = Math.hypot(ef, es);
-  const t = gap <= step ? 1 : step / gap;
-  const mf = ef * t, ms = es * t * side;
-  lead.vx += mf * fx - ms * fy;
-  lead.vy += mf * fy + ms * fx;
+  if (gap <= step) { lead.vx = wantX; lead.vy = wantY; }
+  else { lead.vx += (dx / gap) * step; lead.vy += (dy / gap) * step; }
 
   const sp = Math.hypot(lead.vx, lead.vy);
   if (sp > 0.5) {
