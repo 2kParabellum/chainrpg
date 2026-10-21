@@ -108,10 +108,18 @@ function updateLeader(dt) {
   const wantX = Math.cos(lead.heading) * cfg.speed * speedMul * k;
   const wantY = Math.sin(lead.heading) * cfg.speed * speedMul * k;
   const dx = wantX - lead.vx, dy = wantY - lead.vy;
-  const gap = Math.hypot(dx, dy);
   const step = (k ? cfg.accel * mv / mass : cfg.brake * mv / chainMass(true)) * dt;
-  if (gap <= step) { lead.vx = wantX; lead.vy = wantY; }
-  else { lead.vx += (dx / gap) * step; lead.vy += (dy / gap) * step; }
+  // занос (LEADER.drift): поперёк носа скорость поправляется в (1 − drift) раз слабее, чем вдоль, — боковая инерция
+  // остаётся, Героя сносит. Шаг ограничен эллипсом: там, где боковая ось растянута в 1/(1 − drift) раз, он обычный
+  // круговой; при drift 0 — ровно прежний шаг к желаемой скорости
+  const side = Math.max(0.05, 1 - cfg.drift);
+  const fx = Math.cos(lead.heading), fy = Math.sin(lead.heading);
+  const ef = dx * fx + dy * fy, es = (dy * fx - dx * fy) / side;
+  const gap = Math.hypot(ef, es);
+  const t = gap <= step ? 1 : step / gap;
+  const mf = ef * t, ms = es * t * side;
+  lead.vx += mf * fx - ms * fy;
+  lead.vy += mf * fy + ms * fx;
 
   const sp = Math.hypot(lead.vx, lead.vy);
   if (sp > 0.5) {
