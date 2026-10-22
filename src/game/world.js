@@ -11,7 +11,8 @@ const { circleRectOverlap, segmentHitsRect, indexRects } = G.collision;
 
 const world = {
   walls: [], pillars: [], pits: [], spikes: [], floors: [], warnings: [],
-  // двери (кнопочные и выходы из комнат линии), кнопки, неуязвимые пушки-ловушки и финишная зона
+  // двери (кнопочные и выходы из комнат линии), кнопки (и площадки флагов — кнопки с flag: true), неуязвимые
+  // пушки-ловушки и финишная зона
   doors: [], buttons: [], cannons: [], finish: null,
   bridges: [],       // проходимые тропы и островки комнат-пропастей (только для рисования)
   // уровень «Оборона»: база (прямоугольник здания с запасом HP), двор вокруг неё и гнёзда врагов (точки)
@@ -265,6 +266,13 @@ function addRoomContent(plan, i) {
   for (const [cx, cy, doorIds] of plan.buttons || []) {
     const c = localToWorld(i, cx, cy);
     world.buttons.push({ x: c.x - btnSize / 2, y: c.y - btnSize / 2, w: btnSize, h: btnSize, doorIds, pressed: false });
+  }
+  // площадки флагов («Capture the Flags»): та же кнопка на полу (дружочек, брошенный с неё, ложится в середину), только
+  // крупнее и без дверей — её держит game/flags.js, рисует render/flagart.js
+  const flagSize = CONFIG.FLAGS.size;
+  for (const [cx, cy] of plan.flags || []) {
+    const c = localToWorld(i, cx, cy);
+    world.buttons.push({ x: c.x - flagSize / 2, y: c.y - flagSize / 2, w: flagSize, h: flagSize, doorIds: [], pressed: false, flag: true });
   }
   // неуязвимые пушки-ловушки: точка, направление (радианы), и необязательные числа поверх CONFIG.CANNON
   for (const [cx, cy, angle, interval, windup, dmg] of plan.cannons || []) {

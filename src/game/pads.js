@@ -27,8 +27,8 @@ function allySettings() { return { ...CONFIG.ALLY_SPAWN, ...state.level.allySpaw
 const padKind = (ability) => (G.buffs[ability] ? 'buffs' : 'jobs');
 
 // что занимает место: подиумы (и метки будущих; у постоянного — вместе с рамкой), ждущие дружочки,
-// громадины (порталы, боссы; у кого задан keepClear — круг такого радиуса), зоны выхода врагов у гнёзд и Под
-// «Hit the Count» с его keepClear — новое сюда не встаёт
+// громадины (порталы, боссы; у кого задан keepClear — круг такого радиуса), зоны выхода врагов у гнёзд, Под
+// «Hit the Count» с его keepClear, кнопки и площадки флагов — новое сюда не встаёт
 function occupied() {
   const nestR = state.level.waves ? state.level.waves.spawnRadius + 30 : 0;
   const pod = world.pod ? [{ x: world.pod.x, y: world.pod.y, r: world.pod.keepClear }] : [];
@@ -36,7 +36,8 @@ function occupied() {
     .map((p) => ({ x: p.x + p.w / 2, y: p.y + p.h / 2, r: p.w * 0.75 + (p.permanent ? CONFIG.PADS.permanentFrame : 0) }))
     .concat(state.neutrals.map((n) => ({ x: n.x, y: n.y, r: n.r + 10 })))
     .concat(state.enemies.filter((e) => e.r >= 40).map((e) => ({ x: e.x, y: e.y, r: e.cfg.keepClear || e.r })))
-    .concat(state.nests.map((n) => ({ x: n.x, y: n.y, r: nestR })), pod);
+    .concat(state.nests.map((n) => ({ x: n.x, y: n.y, r: nestR })), pod)
+    .concat(world.buttons.map((b) => ({ x: b.x + b.w / 2, y: b.y + b.h / 2, r: b.w * 0.75 })));
 }
 
 // уровень «Оборона»: стартовые подиумы и дружочки — во дворе базы, все следующие — только за его стенами.

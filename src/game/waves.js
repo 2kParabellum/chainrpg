@@ -1,6 +1,7 @@
 // Волны из гнёзд («Оборона», «Логово»): гнёзда по очереди выпускают отряды врагов, следующий отряд из того же гнезда
 // больше прошлого, а пауза между отрядами может сокращаться по ходу партии (waves.ramp). Враги волны (e.fromNest)
-// идут к Герою, а если на уровне есть база — к базе (e.siege, см. chaseStep в game/roaming.js).
+// идут к Герою, а если на уровне есть база — к базе (e.siege), с waves.hunt — к ближайшему союзнику (e.hunt, «Capture the
+// Flags»: часовые на флагах), см. chaseStep в game/roaming.js.
 // Таймеры гнёзд — часть состояния партии (state.nests), параметры — у уровня (level.waves).
 (function (G) {
 'use strict';
@@ -45,7 +46,7 @@ function releaseWave(nest, cfg) {
     slots -= cost;
     const spot = freeSpotNear(nest.x, nest.y, 20, cfg.spawnRadius, 20);
     if (!spot) continue;
-    spawnEnemy(type, spot.x, spot.y, 0, { chasing: true, fromNest: true, siege: !!state.base });
+    spawnEnemy(type, spot.x, spot.y, 0, { chasing: true, fromNest: true, siege: !!state.base, hunt: !!cfg.hunt });
     state.effects.push({ type: 'ring', x: spot.x, y: spot.y, r: 24, life: 0.4, color: COLORS.nest });
     nest.lastCount += 1;
   }

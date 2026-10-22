@@ -82,8 +82,21 @@ function allyFlow() {
   return field;
 }
 
+// враг волны с e.hunt («Capture the Flags») идёт не к Герою, а к ближайшему союзнику — звену цепочки или лежачему
+// (часовому на флаге). Ближайший — по прямой; если до него не пройти напрямую, chaseStep ведёт по полю путей к союзникам,
+// а оно и так ведёт к ближайшему по пути
+function huntTarget(e) {
+  let best = null, bd = Infinity;
+  for (const u of chainUnits().concat(state.downed)) {
+    const d = dist(e, u);
+    if (d < bd) { bd = d; best = u; }
+  }
+  return best;
+}
+
 function chaseStep(e, dt, speed, stopDist, target) {
   if (!target && e.siege && state.base) target = siegeTarget(e);
+  if (!target && e.hunt) target = huntTarget(e);
   target = target || leader();
   const dx = target.x - e.x, dy = target.y - e.y;
   const d = Math.hypot(dx, dy);

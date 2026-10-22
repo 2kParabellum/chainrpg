@@ -90,6 +90,19 @@ function drawPodMarker() {
   drawEdgeMarker(pod.x, pod.y, COLORS.exitGlow, 'POD');
 }
 
+// «Capture the Flags»: метки к флагам за краем экрана — к пустым (золотом, «FLAG») и к тем, чьего часового сейчас бьют
+// (красным, с его HP в процентах)
+function drawFlagMarkers() {
+  if (state.status !== 'play' || state.cleared) return;
+  for (const f of state.flags) {
+    const x = f.btn.x + f.btn.w / 2, y = f.btn.y + f.btn.h / 2;
+    if (!f.guard) drawEdgeMarker(x, y, UI.gold, 'FLAG');
+    else if (state.time - f.hitAt < CONFIG.FLAGS.alertTime) {
+      drawEdgeMarker(x, y, UI.red, `${Math.max(1, Math.round((f.guard.hp / f.guard.maxHp) * 100))}%`);
+    }
+  }
+}
+
 // яркость надписи, которая видна duration секунд с момента age = 0: быстро проявляется, в конце гаснет
 function bannerAlpha(age, duration) {
   return clamp(age / 0.25, 0, 1) * clamp((duration - age) / 0.6, 0, 1);
@@ -139,6 +152,13 @@ function drawBanners() {
     const l = laps[laps.length - 1], k = laps.length, total = state.level.victory.laps;
     drawBanner(k >= total ? 'FINISH' : `LAP ${k}/${total}`, `${raceClock(l.time)} · mates across the line: ${l.mates}`,
       state.time - l.at, 3.5, '#efac28', 220);
+  }
+  // «Capture the Flags»: флаг поднят или потерян (часового убили, утащили, сбили с площадки) — сколько теперь поднято
+  const fn = state.flagNews;
+  if (fn) {
+    const total = state.flags.length;
+    if (fn.up) drawBanner('FLAG RAISED', `${fn.count} of ${total} flags held`, state.time - fn.at, 2.6, COLORS.flag, 220);
+    else drawBanner('FLAG LOST', `${fn.count} of ${total} flags held — the guard is gone`, state.time - fn.at, 3, UI.red, 220);
   }
   if (state.cleared && state.base) drawBanner('THE BASE HELD', 'A blast from the base wipes out every enemy and nest', state.time - state.clearedAt, 3.2, COLORS.baseEdge);
   if (state.exit && !state.leaving) drawBanner('PORTAL OPEN', 'Drive into the bright portal to finish the level', state.time - state.exit.at, 4, COLORS.exitGlow);
@@ -238,6 +258,14 @@ function drawChip(c, x, y, w, h) {
     for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(tx + 6 + s * 2.6, cy - 1, 2, 0, Math.PI * 2); ctx.fill(); }
     ctx.fillStyle = UI.ink;
     for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(tx + 6.6 + s * 2.6, cy - 1, 1, 0, Math.PI * 2); ctx.fill(); }
+    tx += 18;
+  } else if (c.icon === 'flag') {
+    ctx.strokeStyle = UI.ink; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(tx + 2, cy + 8); ctx.lineTo(tx + 2, cy - 8); ctx.stroke();
+    ctx.strokeStyle = '#ab5c1c'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = COLORS.flag; ctx.strokeStyle = UI.ink; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(tx + 3, cy - 8); ctx.lineTo(tx + 13, cy - 6); ctx.lineTo(tx + 13, cy); ctx.lineTo(tx + 3, cy - 1);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
     tx += 18;
   } else if (c.icon === 'clock') {
     ctx.strokeStyle = UI.gold; ctx.lineWidth = 2;
@@ -360,6 +388,11 @@ function drawHud() {
         : { text: `${rule.label} READY`, color: UI.teal });
     }
   }
+  // «Capture the Flags»: сколько флагов поднято из всех (все — бирюзой)
+  if (rule.kind === 'flags') {
+    const held = G.flags.flagsHeld(), total = state.flags.length;
+    chips.push({ text: `${rule.label} ${held}/${total}`, icon: 'flag', color: held >= total ? UI.teal : UI.gold });
+  }
   // «Dead Race»: какой круг из скольких и время текущего круга (до старта — «GO!»)
   const race = rule.kind === 'laps' && state.race;
   if (race) {
@@ -432,6 +465,7 @@ function drawHud() {
 
   drawEdgeMarkers();
   drawPodMarker();
+  drawFlagMarkers();
   drawBanners();
   drawNotice();
   ctx.font = `bold 14px ${UI_FONT}`;
@@ -443,7 +477,8 @@ function drawHud() {
   } else if (btn && !btn.pressed && state.party.length > 1 && state.status === 'play') {
     ctx.fillStyle = '#3c9f9c';
     ctx.textAlign = 'center';
-    ctx.fillText(withKeys('{drop} — LEAVE A MATE ON THE BUTTON'), CONFIG.VIEW.w / 2, bottomHintY());
+    ctx.fillText(withKeys(btn.flag ? '{drop} — LEAVE A MATE TO RAISE THE FLAG' : '{drop} — LEAVE A MATE ON THE BUTTON'),
+      CONFIG.VIEW.w / 2, bottomHintY());
   } else if (pickup && state.status === 'play') {
     ctx.fillStyle = '#fff4dc';
     ctx.textAlign = 'center';

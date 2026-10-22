@@ -14,6 +14,7 @@ const { updatePads, updateAllySpawns } = G.pads;
 const { updateWaves } = G.waves;
 const { updatePod } = G.pod;
 const { updateRace } = G.race;
+const { updateFlags, allFlagsHeld } = G.flags;
 const combat = G.combat;
 const { updateProjectiles, updateBurns, updateClouds, applySpikes, applyFirewalls, updateEffects, updateCannons } = combat;
 const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
@@ -290,6 +291,8 @@ function isVictory() {
   if (rule.kind === 'podCount') return !!state.pod && state.pod.count >= world.pod.goal;
   // «Dead Race»: пройдено laps кругов (см. game/race.js)
   if (rule.kind === 'laps') return !!state.race && state.race.laps.length >= rule.laps;
+  // «Capture the Flags»: на всех площадках флагов лежит по союзнику (см. game/flags.js)
+  if (rule.kind === 'flags') return allFlagsHeld();
   // дойти до финишной зоны уровня (см. world.finish)
   if (rule.kind === 'reachPoint') {
     const lead = leader();
@@ -333,6 +336,7 @@ function update(dt) {
   // выбитые союзники не выходят из боя: стреляют, рубят и лечат лёжа
   for (const d of state.downed.slice()) updateWeapons(d, dt);
   updateDoors();
+  updateFlags(dt);
   updateWaves(dt);
   for (const e of state.enemies.slice()) updateEnemy(e, dt);
   separateBodies();

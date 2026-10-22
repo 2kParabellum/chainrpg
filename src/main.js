@@ -29,7 +29,7 @@ const { drawHud } = G.hud;
 const screenInfo = G.screen;
 
 // уровни в порядке их показа в меню; за фоном меню при запуске стоит первый
-const LEVELS = [G.level1, G.level2, G.level3, G.level6, G.level4, G.level5];
+const LEVELS = [G.level1, G.level2, G.level7, G.level3, G.level6, G.level4, G.level5];
 const START_LEVEL = LEVELS[0];
 // тестовые уровни: только из меню выбора уровней, в прохождение не входят; стартуют с улучшениями level.upgrades
 const TEST_LEVELS = [G.levelTestRam, G.levelTestChain, G.levelTestRace];
@@ -327,7 +327,7 @@ screenInfo.onChange(() => { if (screenInfo.needsRotate()) pause(); });
 // --- цикл ---
 
 // сенсорные кнопки: видны только во время партии; «ВЗЯТЬ» горит, когда рядом есть кого взять,
-// «БРОСИТЬ» — когда Герой на кнопке и можно оставить на ней дружочка (те же условия, что у подсказок внизу экрана).
+// «БРОСИТЬ» — когда Герой на кнопке (или площадке флага) и можно оставить на ней дружочка (те же условия, что у подсказок внизу экрана).
 // На компьютере во время партии курсор над полем — прицел (мышью Героя ведут к нему)
 function syncTouch() {
   const playing = state.status === 'play';

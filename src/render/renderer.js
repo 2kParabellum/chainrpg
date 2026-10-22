@@ -175,9 +175,10 @@ function drawDoors() {
 }
 
 // кнопки: квадрат на полу, светится зелёным, пока на ней лежит брошенный союзник; от кнопки к её дверям —
-// бегущий пунктир (пока дверь закрыта), чтобы было видно, что она открывает
+// бегущий пунктир (пока дверь закрыта), чтобы было видно, что она открывает. Площадки флагов рисует render/flagart.js
 function drawButtons() {
   for (const b of world.buttons) {
+    if (b.flag) continue;
     const bx = b.x + b.w / 2, by = b.y + b.h / 2;
     for (const d of world.doors) {
       if (d.open || !b.doorIds.includes(d.id)) continue;
@@ -929,6 +930,7 @@ function drawScene() {
   drawFinish();
   drawDoors();
   drawButtons();
+  G.flagArt.drawPlates();      // площадки флагов «Capture the Flags» — на полу, под телами
   drawCannons();
   if (world.pod && onScreen({ x: world.pod.x, y: world.pod.y, r: world.pod.r + 170 })) G.podArt.draw(); // Под «Hit the Count»
   drawPadMarks();
@@ -944,6 +946,7 @@ function drawScene() {
   drawWarnings();
   drawEnemies();
   drawChain();
+  G.flagArt.drawPoles();       // древки и полотнища флагов — выше тел
   G.ground.drawOccluders();    // стена поверх спрятанных за ней: полупрозрачная, с окошком вокруг каждого
   drawWeapons();
   drawProjectiles();
