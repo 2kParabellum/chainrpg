@@ -226,7 +226,7 @@ const spiky = {
 // Воля: пока действует, смертельный урон не убивает звено — оно остаётся с 1 HP
 const will = {
   name: 'grit',
-  desc: 'a killing blow leaves 1 HP',
+  desc: 'everyone in the chain is immortal',
   color: COLORS.will,
   duration: 20,
   revive: true,

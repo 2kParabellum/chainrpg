@@ -11,10 +11,10 @@
 (function (G) {
 'use strict';
 
-const { state } = G;
+const { CONFIG, state } = G;
 const { initInput, moveAxes, keyLabel, withKeys } = G.input;
 const { resetGame, startRun } = G.session;
-const { shuffled } = G.math;
+const { shuffled, pickWeighted, removeFrom } = G.math;
 const { drawCard, whoOf } = G.cards;
 const { tryRecruit, dropLastAlly, nearestPickup, usePack } = G.chain;
 const { buttonUnder } = G.world;
@@ -111,7 +111,6 @@ function restart() {
 function nextLevel() { return LEVELS[LEVELS.indexOf(state.level) + 1] || null; }
 
 // --- карточки улучшений ---
-const UPGRADE_OFFERS = 3;
 const cardsEl = document.getElementById('cards');
 let offers = [];   // ключи улучшений на карточках
 let picked = null; // выбранное; без выбора дальше не пускает
@@ -128,9 +127,27 @@ function offerable(key) {
   return def.tier !== 2 || state.upgrades.some((k) => G.upgrades[k].who === def.who && G.upgrades[k].tier !== 2);
 }
 
-// три случайных улучшения из тех, что можно предложить
+// случайные улучшения из тех, что можно предложить (см. CONFIG.UPGRADE_CARDS): каждая карточка — сперва класс (who),
+// потом улучшение в нём по весу ранга. Класс уже лежащей карточки не берётся, пока есть другие; класс улучшений,
+// взятых в последние recentPicks выборов (хвост state.upgrades), весит recentWeight
 function rollOffers() {
-  return shuffled(Object.keys(G.upgrades).filter(offerable)).slice(0, UPGRADE_OFFERS);
+  const cfg = CONFIG.UPGRADE_CARDS;
+  const whoOfKey = (k) => G.upgrades[k].who;
+  const recent = state.upgrades.slice(-cfg.recentPicks).map(whoOfKey);
+  const pool = Object.keys(G.upgrades).filter(offerable);
+  const offers = [];
+  while (offers.length < cfg.offers && pool.length) {
+    const used = offers.map(whoOfKey);
+    const fresh = pool.filter((k) => !used.includes(whoOfKey(k)));
+    const from = fresh.length ? fresh : pool;
+    const classes = [...new Set(from.map(whoOfKey))];
+    const who = pickWeighted(classes, Object.fromEntries(classes.map((c) => [c, recent.includes(c) ? cfg.recentWeight : 1])));
+    const inClass = from.filter((k) => whoOfKey(k) === who);
+    const key = pickWeighted(inClass, Object.fromEntries(inClass.map((k) => [k, cfg.tierWeight[G.upgrades[k].tier || 1]])));
+    offers.push(key);
+    removeFrom(pool, key);
+  }
+  return shuffled(offers);
 }
 
 function renderCards() {
