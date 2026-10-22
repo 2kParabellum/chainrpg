@@ -29,7 +29,7 @@ const { drawHud } = G.hud;
 const screenInfo = G.screen;
 
 // уровни в порядке их показа в меню; за фоном меню при запуске стоит первый
-const LEVELS = [G.level1, G.level2, G.level7, G.level3, G.level6, G.level4, G.level5];
+const LEVELS = [G.level1, G.level2, G.level6, G.level3, G.level7, G.level4, G.level5];
 const START_LEVEL = LEVELS[0];
 // тестовые уровни: только из меню выбора уровней, в прохождение не входят; стартуют с улучшениями level.upgrades
 const TEST_LEVELS = [G.levelTestRam, G.levelTestChain, G.levelTestRace];
@@ -120,9 +120,11 @@ let picked = null; // выбранное; без выбора дальше не 
 let afterPick = null;
 
 // улучшение можно предложить: ещё не взято, а 2-й ранг — только если у того же персонажа уже есть 1-й
+// (с полем needs — только если взято именно то улучшение)
 function offerable(key) {
   const def = G.upgrades[key];
   if (state.upgrades.includes(key)) return false;
+  if (def.needs) return state.upgrades.includes(def.needs);
   return def.tier !== 2 || state.upgrades.some((k) => G.upgrades[k].who === def.who && G.upgrades[k].tier !== 2);
 }
 

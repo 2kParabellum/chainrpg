@@ -103,8 +103,9 @@ function makeGear(u, key, level = 1) {
   return Object.entries((spec && spec.weapons) || {}).map(([name, over]) => makeWeapon(name, { ...over, ...up[name] }));
 }
 
-// пересчитать производные характеристики звена: множители активных усилений и прибавку HP от уровня
-// способности. Рост предела HP прибавляет столько же текущего HP, падение — только обрезает текущее
+// пересчитать производные характеристики звена: множители активных усилений, прибавку HP от уровня
+// способности и прибавки улучшений General (урон, HP). Рост предела HP прибавляет столько же текущего HP,
+// падение — только обрезает текущее
 function recalcStats(u) {
   let dmg = 1, hp = 1, move = 1, rate = 1;
   for (const [key, left] of Object.entries(u.buffs)) {
@@ -113,6 +114,7 @@ function recalcStats(u) {
     dmg *= d.dmg || 1; hp *= d.hp || 1; move *= d.move || 1; rate *= d.rate || 1;
   }
   if (u.ability) hp *= abilityLevelSpec(u.ability, u.abilityLevel).hp || 1;
+  dmg *= boostMul('dmgAdd'); hp *= boostMul('hpAdd');
   u.dmgMul = dmg; u.moveMul = move; u.rateMul = rate;
   const max = Math.round(u.cfg.hp * hp);
   if (max > u.maxHp) u.hp += max - u.maxHp; else u.hp = Math.min(u.hp, max);
@@ -129,6 +131,7 @@ function makeAlly(kind, type, x, y) {
   u.buffOrder = [];              // активные усиления в порядке взятия: первым снимается самое давнее
   u.prevTarget = null;           // прошлая точка следа: по ней плётка считает скорость точки
   u.gear = makeGear(u, null);
+  recalcStats(u);
   return u;
 }
 
@@ -276,6 +279,14 @@ function startRun() { state.upgrades = []; }
 // запись улучшения key, если оно взято в этом прохождении, иначе null
 function upgrade(key) { return state.upgrades.includes(key) ? G.upgrades[key] : null; }
 
+// множитель от прибавок взятых улучшений к базе: field — 'dmgAdd', 'moveAdd' или 'hpAdd'; прибавки складываются
+// (два улучшения по +10% — ×1.2)
+function boostMul(field) {
+  let add = 0;
+  for (const key of state.upgrades) add += G.upgrades[key][field] || 0;
+  return 1 + add;
+}
+
 // ведущий — всегда Герой, первое звено цепочки: от него считаются камера, активация врагов и цель порождённых порталами
 function leader() { return state.party[0]; }
 
@@ -320,5 +331,5 @@ function leaderSpeedMul() {
 function currentRoom() { return roomIndexAt(leader().x, leader().y); }
 
 G.state = state;
-G.session = { makeUnit, makeAlly, setAbility, recalcStats, spawnEnemy, resetGame, startRun, upgrade, leader, chainUnits, enemyTargets, isSpotted, currentRoom, chainMass, chainSpeedMul, leaderSpeedMul, cameraTarget };
+G.session = { makeUnit, makeAlly, setAbility, recalcStats, spawnEnemy, resetGame, startRun, upgrade, boostMul, leader, chainUnits, enemyTargets, isSpotted, currentRoom, chainMass, chainSpeedMul, leaderSpeedMul, cameraTarget };
 })(window.Game = window.Game || {});

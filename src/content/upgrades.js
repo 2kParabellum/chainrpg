@@ -3,9 +3,13 @@
 //
 // Поля записи:
 //   name  — название на карточке
-//   who   — чьё улучшение: ключ способности (стрелок, искра…) или 'hero'; от него цвет и подпись карточки
+//   who   — чьё улучшение: ключ способности (стрелок, искра…), 'hero' или 'general' (вся цепочка); от него цвет и
+//           подпись карточки
 //   desc  — что даёт, в несколько слов; {команда} заменяется подписью кнопки ({pack} — «C» или «BAG»)
 //   tier  — ранг: без поля — 1-й; 2 — выпадает, только если у того же who уже взято улучшение 1-го ранга
+//   needs — ключ улучшения: 2-й ранг выпадает, только если взято именно оно (вместо правила по who)
+//   dmgAdd, moveAdd, hpAdd — прибавки к базе (0.1 — +10%) урона цепочки, скорости хода Героя и HP своих; прибавки
+//           всех взятых улучшений складываются
 //   art   — (ctx, k): рисунок карточки 200 × 120; k — заготовки рисования из render/cards.js (свои, враги и
 //           подиумы — те же картинки, что на поле)
 //   остальные поля — числа улучшения; их читает тот код, который улучшение меняет (оружие, урон, движение Героя)
@@ -32,8 +36,8 @@ const tripleShot = {
 const fireArrows = {
   name: 'Fire Shots',
   who: 'shooter',
-  desc: 'Hits set the target on fire',
-  share: 0.6,        // за всё горение цель теряет такую долю урона стрелы
+  desc: 'Hits set the target on fire: it burns for as much as the hit',
+  share: 1,          // за всё горение цель теряет такую долю урона стрелы
   time: 3,           // сколько секунд горит
   art(ctx, k) {
     k.ally(36, 66, 'shooter', 0);
@@ -61,31 +65,14 @@ const doubleSpark = {
 const arc = {
   name: 'Long Arc',
   who: 'spark',
-  desc: 'Lightning holds on from farther away',
-  breakMul: 1.25,    // расстояние, на котором молния рвётся, больше во столько раз; заметить цель — как прежде
+  desc: 'Lightning reaches and holds on from farther away',
+  rangeMul: 1.25,    // во столько раз дальше искра замечает цель и во столько же — молния рвётся
   art(ctx, k) {
     k.ring(34, 64, 92, COLORS.spark, true);
     k.ring(34, 64, 128, COLORS.spark, false);
     k.ally(34, 66, 'spark', 0);
     k.enemy(166, 66);
     k.bolt(52, 62, 152, 62, COLORS.spark);
-  },
-};
-
-// цель молнии погибла — молния сразу, без прицеливания, перескакивает на врага вплотную к ней
-// (просвет между телами не больше reach — примерно один дружочек); разгон урона начинается заново
-const sticky = {
-  name: 'Sticky Electricity',
-  who: 'spark',
-  desc: 'When the target dies, lightning jumps to a foe right next to it',
-  reach: 36,
-  art(ctx, k) {
-    k.ally(30, 66, 'spark', 0);
-    k.ring(112, 64, 14, COLORS.spark, true);
-    k.pop(112, 64);
-    k.enemy(164, 66);
-    k.bolt(46, 62, 108, 62, COLORS.spark);
-    k.bolt(118, 62, 150, 62, COLORS.spark);
   },
 };
 
@@ -158,17 +145,6 @@ const march = {
   },
 };
 
-const luckyFoot = {
-  name: 'Lucky Foot',
-  who: 'hero',
-  desc: 'Boost pads show up more often',
-  mul: 1.25,         // подиумы усилений появляются во столько раз чаще (пауза между ними — во столько же раз короче)
-  art(ctx, k) {
-    k.pad(40, 36, 'speed', 0.42); k.pad(160, 36, 'power', 0.42); k.pad(40, 94, 'regen', 0.42); k.pad(160, 94, 'will', 0.42);
-    k.hero(100, 68, 0);
-  },
-};
-
 const ram = {
   name: 'Ram',
   who: 'hero',
@@ -189,6 +165,59 @@ const ram = {
     k.hero(92, 66, 0);
     k.enemy(150, 66, 'bull');
     k.impact(120, 62, COLORS.power);
+  },
+};
+
+// --- General: вся цепочка. Прибавки к базе — +10% каждое; с 2-м рангом того же — +20% (складываются) ---
+
+// урон всего своего: оружие Героя и дружочков, таран, шипы, горение
+const damageBoost = {
+  name: 'Damage Boost',
+  who: 'general',
+  desc: 'All damage your chain deals +10%',
+  dmgAdd: 0.1,
+  art(ctx, k) {
+    k.ally(40, 68, null, 0);
+    k.enemy(150, 68, 'hunter');
+    k.trail(58, 66, 126, 66, COLORS.power);
+    k.impact(136, 64, COLORS.power);
+  },
+};
+
+// потолок скорости хода Героя (а с ним и цепочки), как прибавка к базовой скорости
+const speedBoost = {
+  name: 'Speed Boost',
+  who: 'general',
+  desc: 'The chain moves 10% faster',
+  moveAdd: 0.1,
+  art(ctx, k) {
+    k.speedLines(30, 64);
+    k.ally(104, 68, null, 0);
+    k.hero(140, 68, 0);
+  },
+};
+
+// предел HP Героя и всех дружочков
+const hpBoost = {
+  name: 'HP Boost',
+  who: 'general',
+  desc: 'The Hero and all mates get +10% max HP',
+  hpAdd: 0.1,
+  art(ctx, k) {
+    k.hero(100, 72, 0);
+    k.hpBar(100, 42, 1);
+    k.plus(62, 50, 7, COLORS.regen); k.plus(140, 52, 7, COLORS.regen);
+  },
+};
+
+const luckyFoot = {
+  name: 'Lucky Foot',
+  who: 'general',
+  desc: 'Boost pads show up more often',
+  mul: 1.25,         // подиумы усилений появляются во столько раз чаще (пауза между ними — во столько же раз короче)
+  art(ctx, k) {
+    k.pad(40, 36, 'speed', 0.42); k.pad(160, 36, 'power', 0.42); k.pad(40, 94, 'regen', 0.42); k.pad(160, 94, 'will', 0.42);
+    k.hero(100, 68, 0);
   },
 };
 
@@ -258,6 +287,51 @@ const backpack = {
   },
 };
 
-G.upgrades = { tripleShot, fireArrows, arc, sticky, medicRegen, adrenaline, doubleEdge, cover, march, luckyFoot, ram,
-               piercing, lastingCure, berserk, doubleSpark, backpack };
+// General 2-го ранга: ещё +10% к базе, только если взят 1-й ранг того же (needs)
+const damageBoost2 = {
+  name: 'Damage Boost 2',
+  who: 'general',
+  tier: 2,
+  needs: 'damageBoost',
+  desc: 'All damage your chain deals another +10%',
+  dmgAdd: 0.1,
+  art(ctx, k) {
+    k.ally(36, 68, null, 0);
+    k.enemy(164, 40, 'hunter'); k.enemy(164, 96, 'hunter');
+    k.trail(54, 64, 140, 42, COLORS.power); k.trail(54, 70, 140, 94, COLORS.power);
+    k.impact(150, 40, COLORS.power); k.impact(150, 94, COLORS.power);
+  },
+};
+
+const speedBoost2 = {
+  name: 'Speed Boost 2',
+  who: 'general',
+  tier: 2,
+  needs: 'speedBoost',
+  desc: 'The chain moves another 10% faster',
+  moveAdd: 0.1,
+  art(ctx, k) {
+    k.speedLines(10, 64); k.speedLines(46, 64);
+    k.ally(112, 68, null, 0);
+    k.hero(148, 68, 0);
+  },
+};
+
+const hpBoost2 = {
+  name: 'HP Boost 2',
+  who: 'general',
+  tier: 2,
+  needs: 'hpBoost',
+  desc: 'The Hero and all mates get another +10% max HP',
+  hpAdd: 0.1,
+  art(ctx, k) {
+    k.ally(64, 74, null, 0); k.hpBar(64, 44, 1);
+    k.hero(136, 74, 0); k.hpBar(136, 44, 1);
+    k.plus(100, 30, 7, COLORS.regen); k.plus(100, 92, 6, COLORS.regen);
+  },
+};
+
+G.upgrades = { tripleShot, fireArrows, arc, medicRegen, adrenaline, doubleEdge, cover, march, ram,
+               damageBoost, speedBoost, hpBoost, luckyFoot,
+               piercing, lastingCure, berserk, doubleSpark, backpack, damageBoost2, speedBoost2, hpBoost2 };
 })(window.Game = window.Game || {});

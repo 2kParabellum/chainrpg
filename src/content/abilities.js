@@ -173,7 +173,7 @@ const regen = {
   name: 'regen',
   desc: 'heals itself quickly',
   color: COLORS.regen,
-  duration: 15,
+  duration: 10,
   regenRate: 18,
   icon(ctx, x, y, s) {
     ctx.beginPath();

@@ -127,34 +127,19 @@ const spear = {
 // (через 1 с — 120%, через 2 с — 140% …), но не дольше rampMax секунд (дальше — 180%, не растёт);
 // новая цель или разрыв молнии сбрасывают разгон.
 // Молний — w.beams ({ target, aim, held }): обычно одна; улучшение «двойное напряжение» — до двух на разных целях,
-// «электрическая дуга» — молния рвётся дальше (заметить цель — на прежней дальности); «Sticky Electricity» — цель
-// погибла, и молния без прицеливания перескакивает на врага вплотную к ней (разгон начинается заново)
+// «электрическая дуга» — во столько же раз дальше и замечает цель, и рвётся (урон к краю падает, как без неё)
 const spark = {
   stats: { range: 230, fullRange: 110, farMul: 0.5, breakMul: 1.25, aimTime: 1.2, dps: 31.2, bossMul: 0.3,
            rampStep: 0.2, rampMax: 4, color: COLORS.spark },
   update(u, w, dt, game) {
     const two = game.upgrade('doubleSpark'), arc = game.upgrade('arc');
-    const breakDist = w.range * w.breakMul * (arc ? arc.breakMul : 1);
-    const sticky = game.upgrade('sticky');
-    if (sticky) for (const b of w.beams || []) {
-      const dead = b.target;
-      if (b.aim > 0 || game.state.enemies.includes(dead)) continue;
-      const taken = w.beams.map((x) => x.target);
-      let next = null, best = sticky.reach;
-      for (const e of game.state.targetableEnemies) {
-        if (e.hp <= 0 || taken.includes(e) || !game.state.enemies.includes(e)) continue;
-        const g = dist(dead, e) - dead.r - e.r;
-        if (g <= best && dist(u, e) <= breakDist) { best = g; next = e; }
-      }
-      if (!next) continue;
-      b.target = next; b.held = 0;
-      game.state.effects.push({ type: 'beam', x1: dead.x, y1: dead.y, x2: next.x, y2: next.y, life: 0.2, color: w.color });
-    }
+    const reach = w.range * (arc ? arc.rangeMul : 1);
+    const breakDist = reach * w.breakMul;
     w.beams = (w.beams || []).filter((b) => game.state.enemies.includes(b.target) && dist(u, b.target) <= breakDist);
     while (w.beams.length < (two ? two.targets : 1)) {
       const taken = w.beams.map((b) => b.target);
       const free = game.state.targetableEnemies.filter((e) => !taken.includes(e));
-      const foe = game.nearestTarget(u, free, w.range);
+      const foe = game.nearestTarget(u, free, reach);
       if (!foe) break;
       w.beams.push({ target: foe, aim: w.aimTime, held: 0 });
     }

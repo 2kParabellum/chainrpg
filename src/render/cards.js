@@ -16,6 +16,7 @@ const INK = COLORS.floorLine, TAU = Math.PI * 2;
 function whoOf(key) {
   const who = upgrades[key].who;
   if (who === 'hero') return { color: COLORS.hero, label: 'HERO' };
+  if (who === 'general') return { color: COLORS.general, label: 'GENERAL' };
   return { color: abilities[who].color, label: abilities[who].name.toUpperCase() };
 }
 
@@ -123,15 +124,6 @@ function kit(ctx) {
       ctx.setLineDash([]); ctx.globalAlpha = 1;
     },
     plus(x, y, s, color) { plusMark(x, y, s, color); },
-    // погибший враг: тёмные кусочки разлетаются от места, где он был
-    pop(x, y) {
-      ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
-      for (let i = 0; i < 7; i++) {
-        const a = i / 7 * TAU + 0.4, d = 9 + (i % 3) * 4;
-        ctx.fillStyle = i % 2 ? '#9b1a0a' : '#550f0a';
-        ctx.beginPath(); ctx.ellipse(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.8, 3.2, 2.6, a, 0, TAU); ctx.fill(); ctx.stroke();
-      }
-    },
     // полоска HP, как в бою: свои — зелёная, враги — красная
     hpBar(x, y, frac, enemy) {
       ctx.fillStyle = COLORS.hpBack;

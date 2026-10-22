@@ -7,7 +7,7 @@ const { CONFIG, COLORS, state } = G;
 const { clamp, dist, removeFrom, pickWeighted, angleDiff } = G.math;
 const { moveAndCollide, slideAlongWall, circleRectOverlap } = G.collision;
 const { world, setDoorsOpen } = G.world;
-const { leader, leaderSpeedMul, chainMass, currentRoom, chainUnits, enemyTargets, isSpotted, spawnEnemy, upgrade, cameraTarget } = G.session;
+const { leader, leaderSpeedMul, chainMass, currentRoom, chainUnits, enemyTargets, isSpotted, spawnEnemy, upgrade, boostMul, cameraTarget } = G.session;
 const { freeSpotNear } = G.world;
 const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly, displaceAlly, cutChain, canBeDisplaced } = G.chain;
 const { updatePads, updateAllySpawns } = G.pads;
@@ -84,13 +84,15 @@ function updateMoveTarget() {
 // Длинная цепочка тяжелее (масса M, см. CHAIN.heft): разгон делится на M (торможение — на меньшую массу), а поворот на ходу упирается
 // в предел сцепления — боковое ускорение v·ω не больше, чем у Героя налегке на полной скорости:
 // ω ≤ turnSpeed·mv·min(1, speed·mv / (M·v)). Медленно тяжёлая цепочка поворачивает круто, на полном ходу — дугой.
-// На скользком полу (world.ice, «Dead Race») его поля — торможение и занос — заменяют обычные
+// На скользком полу (world.ice, «Dead Race») его поля — торможение и занос — заменяют обычные.
+// Улучшения «Speed Boost» прибавляют к полной скорости, как если бы базовая была выше
 function updateLeader(dt) {
   const lead = leader();
   const mv = lead.moveMul || 1;   // усиление подиума скорости: быстрее ход, разгон и разворот
   const speedMul = leaderSpeedMul(); // длинная цепочка едет медленнее (не ниже 70%), но под «скоростью» — не ниже базовой
   const mass = chainMass();
-  const cfg = world.ice ? { ...CONFIG.LEADER, ...world.ice } : CONFIG.LEADER;
+  const cfg = { ...CONFIG.LEADER, ...world.ice };
+  cfg.speed *= boostMul('moveAdd');
   const v = Math.hypot(lead.vx, lead.vy);
   const turnSpeed = cfg.turnSpeed * mv * Math.min(1, (cfg.speed * mv) / (mass * Math.max(v, 1)));
   let { throttle, turn } = state.moveInput;
@@ -200,7 +202,7 @@ function applySpikyContact(a, dt) {
   let hit = false;
   for (const e of state.enemies) {
     if (!meleeHittable(e)) continue;
-    if (dist(a, e) <= a.r + e.r) { combat.damageUnit(e, def.contactDmg); hit = true; }
+    if (dist(a, e) <= a.r + e.r) { combat.damageUnit(e, def.contactDmg * boostMul('dmgAdd')); hit = true; }
   }
   if (hit) {
     a.spikyCd = def.contactInterval;
