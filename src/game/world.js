@@ -17,6 +17,11 @@ const world = {
   // уровень «Оборона»: база (прямоугольник здания с запасом HP), двор вокруг неё и гнёзда врагов (точки)
   base: null, home: null, nests: [],
   pod: null,         // «Hit the Count»: Под — круг на полу { x, y, r } и его числа из плана (см. game/pod.js)
+  // «Dead Race»: дорога-кольцо — отрезки оси segments ({ ax, ay, bx, by, tx, ty, len, hw } по ходу гонки), длина круга
+  // length и ворота gates ([0] — старт-финиш, дальше невидимые чекпоинты по ходу: { x, y, tx, ty, half } — середина,
+  // направление гонки, полудлина поперёк дороги). См. game/race.js
+  track: null,
+  ice: null,         // скользкий пол уровня ({ brake, drift } поверх CONFIG.LEADER) или null — пол обычный
   solids: [],       // твёрдые постройки (база): держат движение, но не обзор и не выстрелы
   moveBlockers: [], sightBlockers: [],
   pathBlockers: [],  // мешают идти по прямой: стены, колонны, двери и пропасти (без построек — база бывает целью)
@@ -81,10 +86,43 @@ function localToWorld(i, cx, cy) {
   return { x: r.x + cx * s.w, y: r.y + cy * s.h };
 }
 
+// всё в прямоугольнике area, что не покрыто прямоугольниками walk, — прямоугольниками: сетка по всем краям walk,
+// непокрытые клетки склеиваются в полосы по строкам, одинаковые полосы соседних строк — в один прямоугольник
+function complementRects(walk, area) {
+  const out = [];
+  const x0 = area.x, x1 = area.x + area.w, y0 = area.y, y1 = area.y + area.h;
+  const cut = (vals, lo, hi) => [...new Set([lo, hi, ...vals.map((v) => clamp(v, lo, hi))])].sort((a, b) => a - b);
+  const xs = cut(walk.flatMap((r) => [r.x, r.x + r.w]), x0, x1);
+  const ys = cut(walk.flatMap((r) => [r.y, r.y + r.h]), y0, y1);
+  const covered = (x, y) => walk.some((r) => x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h);
+
+  let open = new Map(); // полосы предыдущей строки, ещё не закрытые: ключ «x0:x1» -> прямоугольник
+  for (let j = 0; j < ys.length - 1; j++) {
+    const ya = ys[j], yb = ys[j + 1], ym = (ya + yb) / 2;
+    const next = new Map();
+    let runStart = null;
+    for (let k = 0; k < xs.length - 1; k++) {
+      const free = !covered((xs[k] + xs[k + 1]) / 2, ym);
+      if (free && runStart === null) runStart = xs[k];
+      const end = !free || k === xs.length - 2;
+      if (end && runStart !== null) {
+        const runEnd = free ? xs[k + 1] : xs[k];
+        const key = runStart + ':' + runEnd;
+        const prev = open.get(key);
+        if (prev) { prev.h = yb - prev.y; next.set(key, prev); open.delete(key); }
+        else next.set(key, { x: runStart, y: ya, w: runEnd - runStart, h: yb - ya });
+        runStart = null;
+      }
+    }
+    for (const rect of open.values()) out.push(rect);
+    open = next;
+  }
+  for (const rect of open.values()) out.push(rect);
+  return out;
+}
+
 // комната-пропасть: план перечисляет только проходимое — тропы (ломаные с шириной) и островки,
-// а всё остальное внутри комнаты становится пропастью. Пропасть собирается из прямоугольников:
-// сетка по всем краям проходимых кусков, непокрытые клетки склеиваются в полосы по строкам,
-// одинаковые полосы соседних строк — в один прямоугольник
+// а всё остальное внутри комнаты становится пропастью (complementRects)
 function addChasm(chasm, i, toRect) {
   const inner = roomInterior(i), s = planScale(i);
   const walk = [];
@@ -99,35 +137,102 @@ function addChasm(chasm, i, toRect) {
   }
   for (const r of chasm.rects || []) walk.push(toRect(r));
   world.bridges.push(...walk);
+  for (const r of complementRects(walk, inner)) world.pits.push({ ...r, seamless: true });
+}
 
-  const x0 = inner.x, x1 = inner.x + inner.w, y0 = inner.y, y1 = inner.y + inner.h;
-  const cut = (vals, lo, hi) => [...new Set([lo, hi, ...vals.map((v) => clamp(v, lo, hi))])].sort((a, b) => a - b);
-  const xs = cut(walk.flatMap((r) => [r.x, r.x + r.w]), x0, x1);
-  const ys = cut(walk.flatMap((r) => [r.y, r.y + r.h]), y0, y1);
-  const covered = (x, y) => walk.some((r) => x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h);
+// --- дорога-кольцо («Dead Race») ---
+// План (plan.track, в пикселях) задаёт осевую линию — замкнутую ломаную points ([x, y, ширина отрезка до следующей точки]
+// по ходу гонки; соседние точки — на одной горизонтали или вертикали). Проходимо: прямоугольник вокруг каждого отрезка,
+// шире его на полширины во все стороны (углы — прямые), и карманы pockets ([cx, cy, w, h] — закутки сбоку; гнёзда в них —
+// обычные plan.nests). Остальное в комнате — стены прямоугольниками (complementRects, как у пропасти). start — точка на
+// оси, где линия старта-финиша, checkpoints — точки невидимых ворот (на прямых и подальше от карманов: через карман ворота
+// можно объехать). Шипы (spikes) раскладываются сами: полосами толщиной size вплотную к стенам — по местам длиной step;
+// доля занятых мест — outer на внешней стороне поворота (ближе двух полуширин к углу), inner — на внутренней, straight —
+// на прямой; и квадратами size посреди дороги через middle px пути (не ближе middleGap к колоннам). В зонах clear
+// ([cx, cy, w, h]: старт, портал) и в карманах шипов нет. Расклад не случайный — каждую партию один и тот же
 
-  let open = new Map(); // полосы предыдущей строки, ещё не закрытые: ключ «x0:x1» -> прямоугольник
-  for (let j = 0; j < ys.length - 1; j++) {
-    const ya = ys[j], yb = ys[j + 1], ym = (ya + yb) / 2;
-    const next = new Map();
-    let runStart = null;
-    for (let k = 0; k < xs.length - 1; k++) {
-      const pit = !covered((xs[k] + xs[k + 1]) / 2, ym);
-      if (pit && runStart === null) runStart = xs[k];
-      const end = !pit || k === xs.length - 2;
-      if (end && runStart !== null) {
-        const runEnd = pit ? xs[k + 1] : xs[k];
-        const key = runStart + ':' + runEnd;
-        const prev = open.get(key);
-        if (prev) { prev.h = yb - prev.y; next.set(key, prev); open.delete(key); }
-        else next.set(key, { x: runStart, y: ya, w: runEnd - runStart, h: yb - ya, seamless: true });
-        runStart = null;
-      }
-    }
-    for (const rect of open.values()) world.pits.push(rect);
-    open = next;
+// ближайшая к точке p точка оси: отрезок и проекция на него
+function nearestOnTrack(segs, p) {
+  let best = null, bd = Infinity;
+  for (const s of segs) {
+    const x = clamp(p.x, Math.min(s.ax, s.bx), Math.max(s.ax, s.bx)), y = clamp(p.y, Math.min(s.ay, s.by), Math.max(s.ay, s.by));
+    const d = Math.hypot(p.x - x, p.y - y);
+    if (d < bd) { bd = d; best = { s, x, y }; }
   }
-  for (const rect of open.values()) world.pits.push(rect);
+  return best;
+}
+
+// шипы вдоль дороги по правилу spec (см. выше); keepOut — прямоугольники, куда шипы не кладутся (колонны, карманы, clear)
+function trackSpikes(spec, segs, walk, keepOut) {
+  const { size, step } = spec;
+  const hash = (k) => { const v = Math.sin(k * 12.9898 + 78.233) * 43758.5453; return v - Math.floor(v); };
+  const inWalk = (x, y) => walk.some((r) => x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h);
+  const near = (a, b, m) => a.x < b.x + b.w + m && a.x + a.w + m > b.x && a.y < b.y + b.h + m && a.y + a.h + m > b.y;
+  const free = (r, m) => !keepOut.some((o) => near(r, o, m)) && !world.spikes.some((o) => near(r, o, 0));
+  // прямоугольник в осях отрезка s: вдоль — от a до b (от начала отрезка), поперёк — от c до d (сдвиг от оси вправо по ходу)
+  const band = (s, a, b, c, d) => {
+    const x1 = s.ax + s.tx * a - s.ty * c, y1 = s.ay + s.ty * a + s.tx * c;
+    const x2 = s.ax + s.tx * b - s.ty * d, y2 = s.ay + s.ty * b + s.tx * d;
+    return { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) };
+  };
+  let k = 0;
+  for (const s of segs) {
+    for (const side of [1, -1]) {
+      let strip = null;   // полоса из занятых мест подряд
+      const close = () => { if (strip) world.spikes.push(strip); strip = null; };
+      // стена ниже дороги закрывает своим верхом полосу пола у подножия (CONFIG.WALL_LIFT) — там полоса толще на столько,
+      // чтобы шипы было видно
+      const thick = size + (side * s.tx > 0 ? CONFIG.WALL_LIFT : 0);
+      for (let a = -s.hw; a + step <= s.len + s.hw + 0.5; a += step, k++) {
+        const m = a + step / 2, r = band(s, a, a + step, side * (s.hw - thick), side * s.hw);
+        // у стены: сразу за полосой — стена, а не проём в соседний отрезок или в карман
+        const beyond = band(s, m, m, side * (s.hw + 6), side * (s.hw + 6));
+        // ближний угол: плюс — поворот направо по ходу; его внешняя сторона — левая (side −1)
+        const turn = m < 2 * s.hw ? s.turnIn : m > s.len - 2 * s.hw ? s.turnOut : 0;
+        const chance = side * turn < 0 ? spec.outer : side * turn > 0 ? spec.inner : spec.straight;
+        if (inWalk(beyond.x, beyond.y) || !free(r, 0) || hash(k) >= chance) { close(); continue; }
+        strip = strip ? { x: Math.min(strip.x, r.x), y: Math.min(strip.y, r.y),
+                          w: Math.max(strip.x + strip.w, r.x + r.w) - Math.min(strip.x, r.x),
+                          h: Math.max(strip.y + strip.h, r.y + r.h) - Math.min(strip.y, r.y) } : r;
+      }
+      close();
+    }
+  }
+  for (const s of segs) {
+    for (let a = spec.middle / 2; a < s.len; a += spec.middle, k++) {
+      const d = (hash(k + 1000) - 0.5) * s.hw;
+      const r = band(s, a - size / 2, a + size / 2, d - size / 2, d + size / 2);
+      if (free(r, spec.middleGap)) world.spikes.push(r);
+    }
+  }
+}
+
+function addTrack(spec, i) {
+  const pts = spec.points.map(([x, y, w]) => ({ ...localToWorld(i, x, y), hw: w / 2 }));
+  const n = pts.length;
+  const segs = pts.map((a, j) => {
+    const b = pts[(j + 1) % n], len = Math.hypot(b.x - a.x, b.y - a.y);
+    return { ax: a.x, ay: a.y, bx: b.x, by: b.y, tx: (b.x - a.x) / len, ty: (b.y - a.y) / len, len, hw: a.hw };
+  });
+  // повороты на концах отрезка: плюс — направо по ходу
+  segs.forEach((s, j) => {
+    const p = segs[(j + n - 1) % n], q = segs[(j + 1) % n];
+    s.turnIn = p.tx * s.ty - p.ty * s.tx;
+    s.turnOut = s.tx * q.ty - s.ty * q.tx;
+  });
+  const toRect = ([cx, cy, w, h]) => { const c = localToWorld(i, cx, cy); return { x: c.x - w / 2, y: c.y - h / 2, w, h }; };
+  const pockets = (spec.pockets || []).map(toRect);
+  const walk = segs.map((s) => ({ x: Math.min(s.ax, s.bx) - s.hw, y: Math.min(s.ay, s.by) - s.hw,
+                                  w: Math.abs(s.bx - s.ax) + 2 * s.hw, h: Math.abs(s.by - s.ay) + 2 * s.hw })).concat(pockets);
+  for (const r of complementRects(walk, roomInterior(i))) world.walls.push(r);
+  if (spec.spikes) trackSpikes(spec.spikes, segs, walk, world.pillars.concat(pockets, (spec.clear || []).map(toRect)));
+  // ворота: поперёк дороги, концами уходят в стены
+  const gate = ([x, y]) => {
+    const { s, x: gx, y: gy } = nearestOnTrack(segs, localToWorld(i, x, y));
+    return { x: gx, y: gy, tx: s.tx, ty: s.ty, half: s.hw + 30 };
+  };
+  world.track = { segments: segs, length: segs.reduce((sum, s) => sum + s.len, 0),
+                  gates: [gate(spec.start), ...(spec.checkpoints || []).map(gate)] };
 }
 
 // препятствия и знаки комнаты из её плана; координаты плана — доли внутреннего размера комнаты
@@ -184,6 +289,7 @@ function addRoomContent(plan, i) {
     world.solids.push(r);
   }
   for (const [cx, cy] of plan.nests || []) world.nests.push(localToWorld(i, cx, cy));
+  if (plan.track) addTrack(plan.track, i);
   // Под («Hit the Count»): круглый механизм на полу, ничего не блокирует; его счёт и перезарядка — в state.pod
   if (plan.pod) {
     const c = localToWorld(i, plan.pod.at[0], plan.pod.at[1]);
@@ -368,7 +474,7 @@ function buildNav() {
   for (let j = 0; j < rows; j++) {
     for (let i = 0; i < cols; i++) {
       const x = (i + 0.5) * S, y = (j + 0.5) * S;
-      open[j * cols + i] = world.pathBlockers.some((r) => circleRectOverlap(x, y, C, r)) ? 0 : 1;
+      open[j * cols + i] = world.pathBlockers.index.near(x - C, y - C, x + C, y + C).some((r) => circleRectOverlap(x, y, C, r)) ? 0 : 1;
     }
   }
   nav = { S, cols, rows, open };
@@ -445,7 +551,8 @@ function buildWorld(level) {
   world.walls = []; world.pillars = []; world.pits = []; world.spikes = [];
   world.floors = []; world.warnings = [];
   world.doors = []; world.buttons = []; world.cannons = []; world.finish = null; world.bridges = [];
-  world.base = null; world.home = null; world.nests = []; world.solids = []; world.pod = null;
+  world.base = null; world.home = null; world.nests = []; world.solids = []; world.pod = null; world.track = null;
+  world.ice = level.ice || null;
   roomPx = level.rooms.map((p) => p.units === 'px');
   if (level.geometry.kind === 'field') buildField(level);
   else if (level.geometry.kind === 'arena') buildArena(level);

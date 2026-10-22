@@ -285,6 +285,8 @@ const bull = {
            chargeAccel: 780,        // разгон во время рывка
            chargeBrake: 620,        // торможение после того, как кого-то переехал
            chargeStopSpeed: 110,    // на какой скорости рывок заканчивается
+           iceBrake: 240,           // на льду (world.ice): торможение рывка — и после удара, и после chargeMaxDist (там
+                                    // рывок не обрывается, а докатывается)
            repeatDamage: 0.5,       // множитель урона для всех целей после первой
            knockoutChance: 0.3,     // шанс выбить из цепочки того, кого переехал (лежачего — отбросить)
            maxPushes: 2,            // больше стольких союзников за один рывок не выбивает и не отбрасывает
@@ -321,9 +323,11 @@ const bull = {
       return;
     }
 
-    // рывок: сначала разгон, после первого столкновения бычок начинает тормозить
-    const cfg = e.cfg;
-    e.chargeSpeed += (e.hitThisCharge.length ? -cfg.chargeBrake : cfg.chargeAccel) * dt;
+    // рывок: сначала разгон, после первого столкновения бычок начинает тормозить. На льду тормозит слабее (iceBrake),
+    // а пройдя chargeMaxDist, не встаёт как вкопанный, а тоже тормозит и докатывается
+    const cfg = e.cfg, ice = !!game.world.ice;
+    const braking = e.hitThisCharge.length || (ice && e.travelled > cfg.chargeMaxDist);
+    e.chargeSpeed += (braking ? -(ice ? cfg.iceBrake : cfg.chargeBrake) : cfg.chargeAccel) * dt;
     e.chargeSpeed = Math.min(e.chargeSpeed, cfg.chargeSpeed);
 
     const step = e.chargeSpeed * dt;
@@ -355,7 +359,7 @@ const bull = {
           && game.displaceAlly(u, Math.atan2(u.y - e.y, u.x - e.x), cfg.knockbackSpeed)) e.pushes += 1;
     }
 
-    if (crashed || e.travelled > cfg.chargeMaxDist || e.chargeSpeed < cfg.chargeStopSpeed) {
+    if (crashed || (!ice && e.travelled > cfg.chargeMaxDist) || e.chargeSpeed < cfg.chargeStopSpeed) {
       e.state = 'idle';
       e.passThrough = false;
       e.timer = cfg.chargeCooldown;

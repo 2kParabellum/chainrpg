@@ -12,10 +12,11 @@ const { leader } = G.session;
 const { followChain } = G.chain;
 const { damageUnit } = G.combat;
 
+// портал в точке level.exit; радиус — у уровня (radius, «Dead Race»: на всю ширину дороги) или общий EXIT.radius
 function openExit() {
   const spec = state.level.exit;
   const p = localToWorld(spec.room, spec.at[0], spec.at[1]);
-  state.exit = { x: p.x, y: p.y, r: CONFIG.EXIT.radius, at: state.time };
+  state.exit = { x: p.x, y: p.y, r: spec.radius || CONFIG.EXIT.radius, at: state.time };
   state.effects.push({ type: 'ring', x: p.x, y: p.y, r: 130, life: 0.8, color: COLORS.exit });
 }
 

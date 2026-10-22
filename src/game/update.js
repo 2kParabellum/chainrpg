@@ -13,6 +13,7 @@ const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAl
 const { updatePads, updateAllySpawns } = G.pads;
 const { updateWaves } = G.waves;
 const { updatePod } = G.pod;
+const { updateRace } = G.race;
 const combat = G.combat;
 const { updateProjectiles, updateBurns, updateClouds, applySpikes, applyFirewalls, updateEffects, updateCannons } = combat;
 const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
@@ -81,13 +82,14 @@ function updateMoveTarget() {
 // (pointSteer; доехал — точка снята).
 // Длинная цепочка тяжелее (масса M, см. CHAIN.heft): разгон делится на M (торможение — на меньшую массу), а поворот на ходу упирается
 // в предел сцепления — боковое ускорение v·ω не больше, чем у Героя налегке на полной скорости:
-// ω ≤ turnSpeed·mv·min(1, speed·mv / (M·v)). Медленно тяжёлая цепочка поворачивает круто, на полном ходу — дугой
+// ω ≤ turnSpeed·mv·min(1, speed·mv / (M·v)). Медленно тяжёлая цепочка поворачивает круто, на полном ходу — дугой.
+// На скользком полу (world.ice, «Dead Race») его поля — торможение и занос — заменяют обычные
 function updateLeader(dt) {
   const lead = leader();
   const mv = lead.moveMul || 1;   // усиление подиума скорости: быстрее ход, разгон и разворот
   const speedMul = leaderSpeedMul(); // длинная цепочка едет медленнее (не ниже 70%), но под «скоростью» — не ниже базовой
   const mass = chainMass();
-  const cfg = CONFIG.LEADER;
+  const cfg = world.ice ? { ...CONFIG.LEADER, ...world.ice } : CONFIG.LEADER;
   const v = Math.hypot(lead.vx, lead.vy);
   const turnSpeed = cfg.turnSpeed * mv * Math.min(1, (cfg.speed * mv) / (mass * Math.max(v, 1)));
   let { throttle, turn } = state.moveInput;
@@ -108,10 +110,33 @@ function updateLeader(dt) {
   const wantX = Math.cos(lead.heading) * cfg.speed * speedMul * k;
   const wantY = Math.sin(lead.heading) * cfg.speed * speedMul * k;
   const dx = wantX - lead.vx, dy = wantY - lead.vy;
-  const gap = Math.hypot(dx, dy);
   const step = (k ? cfg.accel * mv / mass : cfg.brake * mv / chainMass(true)) * dt;
-  if (gap <= step) { lead.vx = wantX; lead.vy = wantY; }
-  else { lead.vx += (dx / gap) * step; lead.vy += (dy / gap) * step; }
+  // занос (LEADER.drift): поперёк носа скорость поправляется в (1 − drift) раз слабее, чем вдоль, — боковая инерция
+  // остаётся, Героя сносит. Шаг ограничен эллипсом: там, где боковая ось растянута в 1/(1 − drift) раз, он обычный
+  // круговой; при drift 0 — ровно прежний шаг к желаемой скорости
+  const side = Math.max(0.05, 1 - cfg.drift);
+  const fx = Math.cos(lead.heading), fy = Math.sin(lead.heading);
+  const ef = dx * fx + dy * fy, es = (dy * fx - dx * fy) / side;
+  const gap = Math.hypot(ef, es);
+  const t = gap <= step ? 1 : step / gap;
+  const mf = ef * t, ms = es * t * side;
+  const gx = mf * fx - ms * fy, gy = mf * fy + ms * fx;
+
+  // тяга (LEADER.thrust): 0 — только поправка выше (колёса со сцеплением гасят движение не туда, куда нос, и с ним
+  // часть скорости); 1 — чистая тяга: газ толкает вдоль носа, скорость сверх полной срезается, боковое движение никто
+  // не гасит — на повороте скорость не теряется, а Героя сносит, тем сильнее, чем слабее разгон. Между — смесь двух.
+  // Без газа — только торможение вдоль движения
+  let tx = 0, ty = 0;
+  if (cfg.thrust > 0) {
+    const cur = Math.hypot(lead.vx, lead.vy);
+    let nx = lead.vx + fx * step * k, ny = lead.vy + fy * step * k;
+    const top = k ? Math.max(cfg.speed * speedMul, cur - step) : Math.max(0, cur - step);
+    const len = Math.hypot(nx, ny);
+    if (len > top) { nx *= top / len; ny *= top / len; }
+    tx = nx - lead.vx; ty = ny - lead.vy;
+  }
+  lead.vx += (1 - cfg.thrust) * gx + cfg.thrust * tx;
+  lead.vy += (1 - cfg.thrust) * gy + cfg.thrust * ty;
 
   const sp = Math.hypot(lead.vx, lead.vy);
   if (sp > 0.5) {
@@ -263,6 +288,8 @@ function isVictory() {
   if (rule.kind === 'destroyType') return !state.enemies.some((e) => e.type === rule.type);
   // «Hit the Count»: за один проезд по Поду прошло столько дружочков, сколько он просит (см. game/pod.js)
   if (rule.kind === 'podCount') return !!state.pod && state.pod.count >= world.pod.goal;
+  // «Dead Race»: пройдено laps кругов (см. game/race.js)
+  if (rule.kind === 'laps') return !!state.race && state.race.laps.length >= rule.laps;
   // дойти до финишной зоны уровня (см. world.finish)
   if (rule.kind === 'reachPoint') {
     const lead = leader();
@@ -301,6 +328,7 @@ function update(dt) {
   updatePads(dt);
   updateAllySpawns(dt);
   updatePod(dt);
+  updateRace();
   for (const d of state.downed) updateDowned(d, dt);
   // выбитые союзники не выходят из боя: стреляют, рубят и лечат лёжа
   for (const d of state.downed.slice()) updateWeapons(d, dt);

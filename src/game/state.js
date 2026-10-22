@@ -41,7 +41,13 @@ const state = {
   // уже была, lastSide / streak: в какой угол была последняя выдача и сколько раз подряд, drops: выданные Подом группы
   // дружочков, которых ещё не забрали — { side, x, y, mates, at } (к каждой у Пода горит стрелка). null на других уровнях
   pod: null,
-  allyFlow: null,    // поле путей к союзникам и когда оно посчитано (см. game/roaming.js); null — посчитать заново
+  // «Dead Race»: гонка по кругу (см. game/race.js) — gates: сколько ворот Герой прошёл (вперёд минус назад), best:
+  // наибольший такой счёт, startAt: когда Герой впервые пересёк линию старта (null — ещё не стартовал), lapAt: когда
+  // начался текущий круг, laps: пройденные круги { time, mates, at } (mates — сколько дружочков пересекли линию после
+  // Героя), counted: дружочки, уже посчитанные за последний круг, prev: где было каждое звено в прошлом кадре (Map).
+  // null на других уровнях
+  race: null,
+  allyFlow: null,   // поле путей к союзникам и когда оно посчитано (см. game/roaming.js); null — посчитать заново
   notice: null,      // надпись на экране о взятом усилении: { key, at, packed } — что взято, когда (по state.time)
                      // и не ушло ли в рюкзак
   // рюкзак Героя (улучшение «Backpack»): open — открыт и ждёт подиум усиления, stored — ключ усиления внутри или null.
@@ -168,6 +174,7 @@ function resetGame(level) {
   state.targetableEnemies = [];
   state.base = world.base ? makeBase(world.base) : null;
   state.pod = world.pod ? { count: 0, passing: false, touched: [], lastTouch: 0, cooldown: 0, countAt: -99, dropped: false, lastSide: -1, streak: 0, drops: [] } : null;
+  state.race = world.track ? { gates: 0, best: 0, startAt: null, lapAt: 0, laps: [], counted: [], prev: new Map() } : null;
   state.allyFlow = null;
   state.notice = null;
   state.backpack = { open: false, stored: null };

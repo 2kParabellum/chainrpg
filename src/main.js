@@ -21,6 +21,7 @@ const { buttonUnder } = G.world;
 const { leader, upgrade } = G.session;
 const touchUI = G.touch;
 const controlsPanel = G.controlsPanel;
+const tuner = G.tuner;
 const { update } = G.update;
 const { canvas } = G.shapes;
 const { drawScene, drawCannonShots } = G.renderer;
@@ -31,7 +32,7 @@ const screenInfo = G.screen;
 const LEVELS = [G.level1, G.level2, G.level3, G.level6, G.level4, G.level5];
 const START_LEVEL = LEVELS[0];
 // тестовые уровни: только из меню выбора уровней, в прохождение не входят; стартуют с улучшениями level.upgrades
-const TEST_LEVELS = [G.levelTestRam];
+const TEST_LEVELS = [G.levelTestRam, G.levelTestChain, G.levelTestRace];
 
 // --- ввод: намерения игрока ---
 
@@ -176,8 +177,10 @@ function pickCard(i) {
   renderCards();
 }
 
-// экран «уровень пройден»: какой пройден, карточки улучшений и что дальше; после последнего — «вы прошли игру»
+// экран «уровень пройден»: какой пройден, карточки улучшений и что дальше; после последнего — «вы прошли игру».
+// Тестовый уровень (в прохождение не входит) — свой экран: итоги и «ещё раз»
 function showWin() {
+  if (!LEVELS.includes(state.level)) { showTestWin(); return; }
   const i = LEVELS.indexOf(state.level), next = nextLevel();
   document.getElementById('winTitle').textContent = next ? `LEVEL ${i + 1} COMPLETE` : 'YOU BEAT THE GAME!';
   document.getElementById('winText').textContent = next
@@ -189,6 +192,22 @@ function showWin() {
   offers = next ? rollOffers() : [];
   picked = null;
   afterPick = next ? () => startLevel(next) : null;
+  renderCards();
+  showPanel('win');
+}
+
+// тестовый уровень пройден: без карточек; итоги гонки («Dead Race»: общее время, по кругам время и дружочки), если она
+// была; «Again» — тот же уровень заново
+function showTestWin() {
+  const level = state.level;
+  document.getElementById('winTitle').textContent = `${level.name.toUpperCase()} COMPLETE`;
+  document.getElementById('winText').textContent = G.race.raceSummary().join('\n');
+  const btn = document.getElementById('nextBtn');
+  btn.style.display = '';
+  btn.textContent = 'Again' + keyHint('recruit');
+  offers = [];
+  picked = null;
+  afterPick = () => startLevel(level);
   renderCards();
   showPanel('win');
 }
@@ -314,6 +333,8 @@ function syncTouch() {
   const playing = state.status === 'play';
   document.body.classList.toggle('playing', playing);
   touchUI.setVisible(playing);
+  // ползунки параметров цепочки — только на уровне с панелью (tuner); на остальных параметры по умолчанию
+  tuner.sync(!!state.level.tuner, playing);
   if (!playing) return;
   const btn = buttonUnder(leader());
   touchUI.setGlow('recruit', !state.leaving && nearestPickup());
