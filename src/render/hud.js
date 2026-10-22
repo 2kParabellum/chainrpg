@@ -90,14 +90,14 @@ function drawPodMarker() {
   drawEdgeMarker(pod.x, pod.y, COLORS.exitGlow, 'POD');
 }
 
-// «Capture the Flags»: метки к флагам за краем экрана — к пустым (золотом, «FLAG») и к тем, чьего часового сейчас бьют
+// «Capture the Flags»: метки к флагам за краем экрана — к погасшим (золотом, «FLAG») и к тем, чьего часового сейчас бьют
 // (красным, с его HP в процентах)
 function drawFlagMarkers() {
   if (state.status !== 'play' || state.cleared) return;
   for (const f of state.flags) {
     const x = f.btn.x + f.btn.w / 2, y = f.btn.y + f.btn.h / 2;
-    if (!f.guard) drawEdgeMarker(x, y, UI.gold, 'FLAG');
-    else if (state.time - f.hitAt < CONFIG.FLAGS.alertTime) {
+    if (!f.held) drawEdgeMarker(x, y, UI.gold, 'FLAG');
+    else if (f.guard && state.time - f.hitAt < CONFIG.FLAGS.alertTime) {
       drawEdgeMarker(x, y, UI.red, `${Math.max(1, Math.round((f.guard.hp / f.guard.maxHp) * 100))}%`);
     }
   }
@@ -153,7 +153,7 @@ function drawBanners() {
     drawBanner(k >= total ? 'FINISH' : `LAP ${k}/${total}`, `${raceClock(l.time)} · mates across the line: ${l.mates}`,
       state.time - l.at, 3.5, '#efac28', 220);
   }
-  // «Capture the Flags»: флаг поднят или потерян (часового убили, утащили, сбили с площадки) — сколько теперь поднято
+  // «Capture the Flags»: часовой поднял флаг или флаг потерян (часового убили, утащили, сбили с площадки) — сколько горит
   const fn = state.flagNews;
   if (fn) {
     const total = state.flags.length;
@@ -388,7 +388,7 @@ function drawHud() {
         : { text: `${rule.label} READY`, color: UI.teal });
     }
   }
-  // «Capture the Flags»: сколько флагов поднято из всех (все — бирюзой)
+  // «Capture the Flags»: сколько флагов горит из всех (все — бирюзой)
   if (rule.kind === 'flags') {
     const held = G.flags.flagsHeld(), total = state.flags.length;
     chips.push({ text: `${rule.label} ${held}/${total}`, icon: 'flag', color: held >= total ? UI.teal : UI.gold });
@@ -477,7 +477,7 @@ function drawHud() {
   } else if (btn && !btn.pressed && state.party.length > 1 && state.status === 'play') {
     ctx.fillStyle = '#3c9f9c';
     ctx.textAlign = 'center';
-    ctx.fillText(withKeys(btn.flag ? '{drop} — LEAVE A MATE TO RAISE THE FLAG' : '{drop} — LEAVE A MATE ON THE BUTTON'),
+    ctx.fillText(withKeys(btn.flag ? '{drop} — LEAVE A MATE TO HOLD THE FLAG' : '{drop} — LEAVE A MATE ON THE BUTTON'),
       CONFIG.VIEW.w / 2, bottomHintY());
   } else if (pickup && state.status === 'play') {
     ctx.fillStyle = '#fff4dc';

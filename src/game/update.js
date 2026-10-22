@@ -291,7 +291,7 @@ function isVictory() {
   if (rule.kind === 'podCount') return !!state.pod && state.pod.count >= world.pod.goal;
   // «Dead Race»: пройдено laps кругов (см. game/race.js)
   if (rule.kind === 'laps') return !!state.race && state.race.laps.length >= rule.laps;
-  // «Capture the Flags»: на всех площадках флагов лежит по союзнику (см. game/flags.js)
+  // «Capture the Flags»: горят все флаги — на каждой площадке лежит союзник или едет цепочка (см. game/flags.js)
   if (rule.kind === 'flags') return allFlagsHeld();
   // дойти до финишной зоны уровня (см. world.finish)
   if (rule.kind === 'reachPoint') {

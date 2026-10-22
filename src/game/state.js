@@ -48,8 +48,9 @@ const state = {
   // null на других уровнях
   race: null,
   // «Capture the Flags»: флаги по площадкам мира (см. game/flags.js) — btn: площадка (кнопка мира с flag: true),
-  // guard: союзник, лежащий на ней (или null — флага нет), raise: 0..1 — насколько флаг поднят (рисунок), guardHp: HP
-  // часового в прошлом кадре, hitAt: когда часового последний раз ранили. На других уровнях пусто
+  // guard: союзник, лежащий на ней (часовой, или null), held: флаг горит (есть часовой или на площадке звено цепочки),
+  // raise: 0..1 — насколько флаг поднят (рисунок), guardHp: HP часового в прошлом кадре, hitAt: когда часового последний
+  // раз ранили. На других уровнях пусто
   flags: [],
   flagNews: null,    // последнее событие флагов для плашки: { up: поднят или потерян, count: сколько поднято, at }
   allyFlow: null,   // поле путей к союзникам и когда оно посчитано (см. game/roaming.js); null — посчитать заново
@@ -180,7 +181,7 @@ function resetGame(level) {
   state.base = world.base ? makeBase(world.base) : null;
   state.pod = world.pod ? { count: 0, passing: false, touched: [], lastTouch: 0, cooldown: 0, countAt: -99, dropped: false, lastSide: -1, streak: 0, drops: [] } : null;
   state.race = world.track ? { gates: 0, best: 0, startAt: null, lapAt: 0, laps: [], counted: [], prev: new Map() } : null;
-  state.flags = world.buttons.filter((b) => b.flag).map((btn) => ({ btn, guard: null, raise: 0, guardHp: 0, hitAt: -99 }));
+  state.flags = world.buttons.filter((b) => b.flag).map((btn) => ({ btn, guard: null, held: false, raise: 0, guardHp: 0, hitAt: -99 }));
   state.flagNews = null;
   state.allyFlow = null;
   state.notice = null;
