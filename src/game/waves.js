@@ -2,6 +2,8 @@
 // больше прошлого, а пауза между отрядами может сокращаться по ходу партии (waves.ramp). Враги волны (e.fromNest)
 // идут к Герою, а если на уровне есть база — к базе (e.siege), с waves.hunt — к ближайшему союзнику (e.hunt, «Capture the
 // Flags»: часовые на флагах), см. chaseStep в game/roaming.js.
+// Закрытое гнездо («Seal the Gates», заслонку двигает game/flags.js) молчит, его таймер стоит. С waves.share поток общий:
+// доля закрытых гнёзд делится между открытыми — из каждого открытого выходит в «всего гнёзд / открытых» раз больше.
 // Таймеры гнёзд — часть состояния партии (state.nests), параметры — у уровня (level.waves).
 (function (G) {
 'use strict';
@@ -31,11 +33,25 @@ function intervalNow(cfg) {
   return cfg.interval + (cfg.ramp.to - cfg.interval) * k;
 }
 
+// сколько врагов гнездо выпустит следующей волной, дробным числом: с waves.share — в «всего гнёзд / открытых» раз больше
+// своей волны, плюс дробный остаток, накопленный прошлыми волнами
+function dueCount(cfg, nest) {
+  const base = waveSize(cfg, nest.wave);
+  if (!cfg.share) return base;
+  const open = state.nests.filter((n) => !n.sealed).length;
+  return base * state.nests.length / Math.max(1, open) + nest.carry;
+}
+
+// то же целым числом — его показывают плашка над норой и метка у края экрана
+function nextCount(cfg, nest) { return Math.floor(dueCount(cfg, nest) + 1e-9); }
+
 // отряд из гнезда: не больше kinds типов; пока живых врагов волн maxAlive, лишние не выходят.
 // Враг с spawnCost занимает в отряде столько мест (колесница — два); не влез — выходит следующий по списку
 function releaseWave(nest, cfg) {
   const alive = state.enemies.filter((e) => e.fromNest).length;
-  const count = Math.min(waveSize(cfg, nest.wave), Math.max(0, cfg.maxAlive - alive));
+  const due = nextCount(cfg, nest);
+  if (cfg.share) nest.carry = Math.max(0, dueCount(cfg, nest) - due);
+  const count = Math.min(due, Math.max(0, cfg.maxAlive - alive));
   nest.wave += 1;
   nest.releasedAt = state.time;
   nest.lastCount = 0;
@@ -57,6 +73,8 @@ function updateWaves(dt) {
   if (!cfg || state.cleared) return; // база выстояла: новых волн нет
   if (state.base) state.base.regenTimer += dt; // сколько секунд базу не задевали
   for (const nest of state.nests) {
+    // закрытое гнездо молчит, таймер стоит; откроют снова — до волны не меньше telegraph секунд (успеть увидеть)
+    if (nest.sealed) { nest.nextIn = Math.max(nest.nextIn, cfg.telegraph); continue; }
     nest.nextIn -= dt;
     if (nest.nextIn > 0) continue;
     releaseWave(nest, cfg);
@@ -64,5 +82,5 @@ function updateWaves(dt) {
   }
 }
 
-G.waves = { updateWaves, waveSize, surgeActive };
+G.waves = { updateWaves, waveSize, nextCount, surgeActive };
 })(window.Game = window.Game || {});

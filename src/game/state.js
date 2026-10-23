@@ -34,7 +34,10 @@ const state = {
   allySpawnIn: null, // то же для случайных дружочков
   targetableEnemies: [], // враги, по которым можно стрелять: считаются раз за кадр
   base: null,        // уровень «Оборона»: база — цель врагов с запасом HP (null на других уровнях)
-  nests: [],         // гнёзда врагов: таймер следующей волны и сколько волн уже вышло (см. game/waves.js)
+  // гнёзда врагов: таймер следующей волны и сколько волн уже вышло (см. game/waves.js); в «Seal the Gates» ещё заслонка
+  // (см. game/flags.js) — seal: 0..1, насколько закрыта, sealed: закрыто, guarded: на его флаге лежит часовой, openedAt:
+  // когда гнездо открылось снова
+  nests: [],
   // «Hit the Count»: Под (см. game/pod.js) — count: сколько дружочков за текущий или последний проезд, passing: идёт
   // проезд, touched: кто из цепочки уже проехал за него, lastTouch: когда цепочка последний раз касалась, cooldown: секунд
   // до того, как Под снова взведётся, countAt: когда прибавился последний (по state.time), dropped: выдача за этот проезд
@@ -47,12 +50,15 @@ const state = {
   // Героя), counted: дружочки, уже посчитанные за последний круг, prev: где было каждое звено в прошлом кадре (Map).
   // null на других уровнях
   race: null,
-  // «Capture the Flags»: флаги по площадкам мира (см. game/flags.js) — btn: площадка (кнопка мира с flag: true),
-  // guard: союзник, лежащий на ней (часовой, или null), held: флаг горит (есть часовой или на площадке звено цепочки),
-  // raise: 0..1 — насколько флаг поднят (рисунок), guardHp: HP часового в прошлом кадре, hitAt: когда часового последний
-  // раз ранили. На других уровнях пусто
+  // «Capture the Flags», «Seal the Gates»: флаги по площадкам мира (см. game/flags.js) — btn: площадка (кнопка мира с
+  // flag: true), guard: союзник, лежащий на ней (часовой, или null), held: флаг горит (есть часовой или — кроме «Seal the
+  // Gates» — на площадке звено цепочки), raise: 0..1 — насколько флаг поднят (рисунок), guardHp: HP часового в прошлом
+  // кадре, hitAt: когда часового последний раз ранили, nest: гнездо из state.nests, которое флаг закрывает («Seal the
+  // Gates», иначе null). На других уровнях пусто
   flags: [],
-  flagNews: null,    // последнее событие флагов для плашки: { up: поднят или потерян, count: сколько поднято, at }
+  // последнее событие флагов для плашки: { kind, count, at } — kind: 'up' (часовой поднял флаг) или 'lost' (флаг потерян),
+  // в «Seal the Gates» — 'sealed' (гнездо закрыто) или 'open' (снова открыто); count — сколько флагов горит (гнёзд закрыто)
+  flagNews: null,
   allyFlow: null,   // поле путей к союзникам и когда оно посчитано (см. game/roaming.js); null — посчитать заново
   notice: null,      // надпись на экране о взятом усилении: { key, at, packed } — что взято, когда (по state.time)
                      // и не ушло ли в рюкзак
@@ -184,7 +190,7 @@ function resetGame(level) {
   state.base = world.base ? makeBase(world.base) : null;
   state.pod = world.pod ? { count: 0, passing: false, touched: [], lastTouch: 0, cooldown: 0, countAt: -99, dropped: false, lastSide: -1, streak: 0, drops: [] } : null;
   state.race = world.track ? { gates: 0, best: 0, startAt: null, lapAt: 0, laps: [], counted: [], prev: new Map() } : null;
-  state.flags = world.buttons.filter((b) => b.flag).map((btn) => ({ btn, guard: null, held: false, raise: 0, guardHp: 0, hitAt: -99 }));
+  state.flags = world.buttons.filter((b) => b.flag).map((btn) => ({ btn, guard: null, held: false, raise: 0, guardHp: 0, hitAt: -99, nest: null }));
   state.flagNews = null;
   state.allyFlow = null;
   state.notice = null;
@@ -193,9 +199,18 @@ function resetGame(level) {
   state.cleared = false; state.clearedAt = 0; state.shockwave = null; state.exit = null; state.leaving = null;
   // у каждого гнезда свой таймер волн; порядок, в котором гнёзда выпускают первые волны, бросается заново
   const waves = level.waves;
+  // carry — дробный остаток врагов при общем потоке (waves.share)
   state.nests = waves ? shuffled(world.nests).map((p, k) => ({
-    x: p.x, y: p.y, wave: 0, nextIn: waves.firstAt + k * waves.stagger, releasedAt: -99, lastCount: 0,
+    x: p.x, y: p.y, wave: 0, nextIn: waves.firstAt + k * waves.stagger, releasedAt: -99, lastCount: 0, carry: 0,
+    seal: 0, sealed: false, guarded: false, openedAt: -99,
   })) : [];
+  // «Seal the Gates»: каждый флаг закрывает ближайшее к нему гнездо
+  if (level.seals && state.nests.length) {
+    for (const f of state.flags) {
+      const c = { x: f.btn.x + f.btn.w / 2, y: f.btn.y + f.btn.h / 2 };
+      f.nest = state.nests.reduce((a, b) => (dist(b, c) < dist(a, c) ? b : a));
+    }
+  }
 
   const spawn = localToWorld(level.spawn.room, level.spawn.at[0], level.spawn.at[1]);
   const hero = makeAlly('ally', 'hero', spawn.x, spawn.y);

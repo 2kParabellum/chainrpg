@@ -14,7 +14,7 @@ const { updatePads, updateAllySpawns } = G.pads;
 const { updateWaves } = G.waves;
 const { updatePod } = G.pod;
 const { updateRace } = G.race;
-const { updateFlags, allFlagsHeld } = G.flags;
+const { updateFlags, allFlagsHeld, allGatesSealed } = G.flags;
 const combat = G.combat;
 const { updateProjectiles, updateBurns, updateClouds, applySpikes, applyFirewalls, updateEffects, updateCannons } = combat;
 const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
@@ -295,6 +295,8 @@ function isVictory() {
   if (rule.kind === 'laps') return !!state.race && state.race.laps.length >= rule.laps;
   // «Capture the Flags»: горят все флаги — на каждой площадке лежит союзник или едет цепочка (см. game/flags.js)
   if (rule.kind === 'flags') return allFlagsHeld();
+  // «Seal the Gates»: закрыты все гнёзда — на каждом флаге часовой пролежал свои секунды и лежит до сих пор
+  if (rule.kind === 'seals') return allGatesSealed();
   // дойти до финишной зоны уровня (см. world.finish)
   if (rule.kind === 'reachPoint') {
     const lead = leader();
