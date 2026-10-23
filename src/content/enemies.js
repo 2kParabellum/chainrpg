@@ -82,7 +82,7 @@ const tower = {
            dmg: 17,                 // урон в эпицентре
            edgeDmg: 5,              // урон на краю радиуса (между ними урон падает линейно)
            blastRadius: 95,         // радиус поражения
-           flightTime: 1.5 },       // сколько снаряд летит до земли
+           flightTime: 1.36 },      // сколько снаряд летит до земли
   draw(e, g) {
     const { ctx } = g;
     ctx.fillStyle = COLORS.tower;
@@ -104,8 +104,8 @@ const tower = {
 tower.update = ranged(tower, (e, foe, game) => game.spawnMortar(e, foe.x, foe.y));
 
 const scorpion = {
-  stats: { name: 'Scorpion', hp: 60, radius: 20, mass: 1.2, range: 456, cooldown: 3.5, dmg: 12,
-           projSpeed: 218,         // гарпун летит медленно, его видно заранее
+  stats: { name: 'Scorpion', hp: 60, radius: 20, mass: 1.2, range: 365, cooldown: 3.5, dmg: 12,
+           projSpeed: 240,         // гарпун летит медленно, его видно заранее
            projRadius: 6,
            pullSpeed: 450,         // с какой скоростью тащит выдернутого союзника
            pinchDmg: 10,           // клешни: союзник совсем рядом — удар вплотную ..
@@ -233,11 +233,11 @@ const zombie = {
 // Хантер: мелкий и быстрый (чуть медленнее Героя). Видит далеко: заметив ближайшего союзника,
 // бежит к нему, обходя препятствия, и кусает вплотную
 const hunter = {
-  stats: { name: 'Hunter', hp: 40, radius: 10, mass: 0.6, aggro: 720, runSpeed: 165,
+  stats: { name: 'Hunter', hp: 40, radius: 10, mass: 0.6, aggro: 720, runSpeed: 182,
            dmg: 5, cooldown: 0.8,
            reach: 8 },              // с какого просвета между телами достаёт укусом
-  wanderSpeed: 60,
-  chaseSpeed: 165,
+  wanderSpeed: 66,
+  chaseSpeed: 182,
   update(e, dt, chain, game) {
     e.cd -= dt;
     const foe = game.nearestTarget(e, chain, e.cfg.aggro);
@@ -279,10 +279,10 @@ const hunter = {
 };
 
 const bull = {
-  stats: { name: 'Bull', hp: 88, radius: 18, mass: 3, dmg: 12, aggro: 430, walkSpeed: 55,
-           telegraph: 0.7, chargeSpeed: 540, chargeMaxDist: 720, chargeCooldown: 1.6,
-           chargeStartSpeed: 150,   // с какой скорости начинается рывок
-           chargeAccel: 780,        // разгон во время рывка
+  stats: { name: 'Bull', hp: 88, radius: 18, mass: 3, dmg: 12, aggro: 430, walkSpeed: 61,
+           telegraph: 0.7, chargeSpeed: 594, chargeMaxDist: 720, chargeCooldown: 1.6,
+           chargeStartSpeed: 165,   // с какой скорости начинается рывок
+           chargeAccel: 858,        // разгон во время рывка
            chargeBrake: 620,        // торможение после того, как кого-то переехал
            chargeStopSpeed: 110,    // на какой скорости рывок заканчивается
            iceBrake: 240,           // на льду (world.ice): торможение рывка — и после удара, и после chargeMaxDist (там
@@ -291,8 +291,8 @@ const bull = {
            knockoutChance: 0.3,     // шанс выбить из цепочки того, кого переехал (лежачего — отбросить)
            maxPushes: 2,            // больше стольких союзников за один рывок не выбивает и не отбрасывает
            knockbackSpeed: 380 },   // с какой силой отбрасывает выбитого
-  wanderSpeed: 42,
-  chaseSpeed: 95,
+  wanderSpeed: 46,
+  chaseSpeed: 105,
   init(e) { e.state = 'idle'; e.timer = 0; e.travelled = 0; e.dir = { x: 0, y: 0 }; },
   update(e, dt, chain, game) {
     const foe = game.nearestTarget(e, chain, e.cfg.aggro);
