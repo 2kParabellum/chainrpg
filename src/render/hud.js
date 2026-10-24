@@ -4,7 +4,7 @@
 'use strict';
 
 const { CONFIG, COLORS, state } = G;
-const { abilities } = G;
+const { abilities, enemyTypes } = G;
 const { currentRoom, isSpotted, leaderSpeedMul, leader, upgrade } = G.session;
 const { world, roomCount, roomIndexAt, buttonUnder } = G.world;
 const { clamp } = G.math;
@@ -72,7 +72,7 @@ function drawEdgeMarkers() {
   const cfg = state.level.waves;
   if (!cfg) return;
   for (const n of state.nests) {
-    if (n.nextIn < cfg.telegraph) drawEdgeMarker(n.x, n.y, COLORS.nest, `×${G.waves.nextCount(cfg, n)}`);
+    if (n.nextIn < cfg.telegraph && !n.done) drawEdgeMarker(n.x, n.y, COLORS.nest, `×${G.waves.nextCount(cfg, n)}`);
     else if (state.time - n.releasedAt < 3) drawEdgeMarker(n.x, n.y, COLORS.nest, '');
   }
   if (state.base && state.base.regenTimer < 1) drawEdgeMarker(state.base.x, state.base.y, COLORS.baseEdge, 'BASE');
@@ -165,6 +165,12 @@ function drawBanners() {
         age, 3, COLORS.flag, 220);
     }
     if (fn.kind === 'open') drawBanner('GATE OPEN', `${fn.count} of ${nests} sealed — the guard is gone`, age, 3, UI.red, 220);
+  }
+  // «Ambush»: вышла волна — какая по счёту и кто в ней
+  const wn = state.waveNews, script = w && w.script;
+  if (wn && script) {
+    const names = [...new Set(wn.types)].map((k) => enemyTypes[k].stats.name).join(' · ');
+    drawBanner(wn.n >= script.length ? 'LAST WAVE' : `WAVE ${wn.n}/${script.length}`, names, state.time - wn.at, 3.2, COLORS.nest, 220);
   }
   if (state.cleared && state.base) drawBanner('THE BASE HELD', 'A blast from the base wipes out every enemy and nest', state.time - state.clearedAt, 3.2, COLORS.baseEdge);
   if (state.exit && !state.leaving) drawBanner('PORTAL OPEN', 'Drive into the bright portal to finish the level', state.time - state.exit.at, 4, COLORS.exitGlow);
@@ -406,6 +412,11 @@ function drawHud() {
   if (rule.kind === 'flags') {
     const held = G.flags.flagsHeld(), total = state.flags.length;
     chips.push({ text: `${rule.label} ${held}/${total}`, icon: 'flag', color: held >= total ? UI.teal : UI.gold });
+  }
+  // «Ambush»: сколько волн вышло из всех (все — бирюзой: осталось добить тех, кто на поле)
+  if (rule.kind === 'waves') {
+    const total = level.waves.script.length, n = state.waveNo;
+    chips.push({ text: `${rule.label} ${n}/${total}`, color: n < total ? UI.gold : UI.teal });
   }
   // «Seal the Gates»: сколько гнёзд закрыто из всех (все — бирюзой)
   if (rule.kind === 'seals') {

@@ -37,11 +37,13 @@ function drawWarning(w) {
   ctx.fillRect(w.x - 1.5, w.y + s * 0.42, 3, 3);
 }
 
-// обычных врагов рисует render/foes.js (тёмная раса, graphics.md), остальных — их запись в реестре, полоску HP — сцена
+// обычных врагов рисует render/foes.js (тёмная раса, graphics.md), врагов «Ambush» — render/ambushart.js, остальных —
+// их запись в реестре, полоску HP — сцена
 // записи реестра получают примитивы рисования и тела тёмной расы (g.foe)
 const enemyDraw = { ...shapes, foe: G.foes };
 function drawEnemy(e) {
   if (G.foes.has(e.type)) { G.foes.draw(e); return; }
+  if (G.ambushArt.has(e.type)) { G.ambushArt.draw(e); return; }
   enemyTypes[e.type].draw(e, enemyDraw);
   drawHpBar(e);
 }
@@ -286,6 +288,16 @@ function drawDowned() {
   for (const d of state.downed) if (onScreen(d)) G.blobs.drawAlly(d, 'downed');
 }
 
+// зазомбированные дудочником бредут к нему: свечение и ноты — render/ambushart.js, тело — render/blobs.js
+function drawCharmed() {
+  for (const u of state.charmed) {
+    if (!onScreen(u)) continue;
+    G.ambushArt.charmedUnder(u);
+    G.blobs.drawAlly(u, 'charmed');
+    G.ambushArt.charmedOver(u);
+  }
+}
+
 function drawWarnings() {
   for (const w of world.warnings) {
     if (!visible({ x: w.x - 20, y: w.y - 20, w: 40, h: 40 })) continue;
@@ -312,10 +324,11 @@ function drawBurn(e) {
   ctx.globalAlpha = 1;
 }
 
-// враг в кадре: тело (с запасом drawReach) или то, что он тянет далеко от себя (лапа Скорпиона, линия разгона Бычка)
+// враг в кадре: тело (с запасом drawReach) или то, что он тянет далеко от себя (лапа Скорпиона, линия разгона Бычка,
+// связь дудочника с дружочком)
 function enemyInView(e) {
   if (onScreen(e, enemyTypes[e.type].drawReach || 0)) return true;
-  const p = G.foes.has(e.type) && G.foes.farPoint(e), pad = e.r * 3;
+  const p = G.foes.has(e.type) ? G.foes.farPoint(e) : G.ambushArt.has(e.type) && G.ambushArt.farPoint(e), pad = e.r * 3;
   return !!p && visible({ x: Math.min(e.x, p.x) - pad, y: Math.min(e.y, p.y) - pad, w: Math.abs(p.x - e.x) + pad * 2, h: Math.abs(p.y - e.y) + pad * 2 });
 }
 
@@ -327,6 +340,7 @@ function drawEnemies() {
     drawBurn(e);
   }
   G.foes.sweep();
+  G.ambushArt.sweep();
 }
 
 function drawClouds() {
@@ -596,7 +610,7 @@ function drawChain() {
   const shown = state.party.filter((a) => !a.absorbed);
   if (lead.buffs && lead.buffs.sturdy > 0) G.blobs.drawLinks(shown.map((a) => ({ x: a.x, y: a.y + 3 })));
   for (let i = shown.length - 1; i >= 0; i--) G.blobs.drawAlly(shown[i], 'chain');
-  G.blobs.sweep(state.party.concat(state.downed));
+  G.blobs.sweep(state.party.concat(state.downed, state.charmed));
   G.blobs.drawBits();
   // шеврон перед Героем: куда он поедет по W
   const h = lead.heading || 0;
@@ -943,6 +957,7 @@ function drawScene() {
   drawFirewalls();
   drawNeutrals();
   drawDowned();
+  drawCharmed();
   drawWarnings();
   drawEnemies();
   drawChain();

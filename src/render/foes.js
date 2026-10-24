@@ -829,5 +829,6 @@ function sweep() {
   lastDrawn = now;
 }
 
-G.foes = { has, draw, drawsHook, farPoint, sweep, maw, mawSpikeShot, kraken, swallowed };
+// kit — приёмы рисования тёмной расы для render/ambushart.js (колышущийся край, светящийся глаз, звёздочка, полоска HP)
+G.foes = { has, draw, drawsHook, farPoint, sweep, maw, mawSpikeShot, kraken, swallowed, kit: { ell, hexA, edgePath, glowEye, star, hpBar } };
 })(window.Game = window.Game || {});

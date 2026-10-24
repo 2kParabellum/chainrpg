@@ -17,6 +17,8 @@ const state = {
   moveTarget: null,    // куда Герой едет мышью — точка мира { x, y }; null — никуда
   neutrals: [],      // ждут вербовки
   downed: [],        // выбитые из цепочки, лежат до подбора
+  charmed: [],       // зазомбированные дудочником («Ambush»): идут к нему, не дерутся, подобрать и ранить нельзя
+                     // (u.charmedBy — дудочник; см. game/chain.js)
   enemies: [],
   projectiles: [],
   effects: [],
@@ -34,6 +36,10 @@ const state = {
   allySpawnIn: null, // то же для случайных дружочков
   targetableEnemies: [], // враги, по которым можно стрелять: считаются раз за кадр
   base: null,        // уровень «Оборона»: база — цель врагов с запасом HP (null на других уровнях)
+  // «Ambush»: сколько заранее заданных волн (level.waves.script) уже вышло и последняя вышедшая — { n, types, at }
+  // (для плашки); у гнёзд тогда ещё queue — кто выйдет из гнезда следующей волной, done — волн больше не будет
+  waveNo: 0,
+  waveNews: null,
   // гнёзда врагов: таймер следующей волны и сколько волн уже вышло (см. game/waves.js); в «Seal the Gates» ещё заслонка
   // (см. game/flags.js) — seal: 0..1, насколько закрыта, sealed: закрыто, guarded: на его флаге лежит часовой, openedAt:
   // когда гнездо открылось снова
@@ -179,7 +185,7 @@ function spawnEnemy(type, x, y, room, extra) {
 function resetGame(level) {
   state.level = level;
   buildWorld(level);
-  state.party = []; state.moveInput = { throttle: 0, turn: 0, aim: null, toward: null, holdOnly: false }; state.moveTarget = null; state.neutrals = []; state.downed = []; state.enemies = [];
+  state.party = []; state.moveInput = { throttle: 0, turn: 0, aim: null, toward: null, holdOnly: false }; state.moveTarget = null; state.neutrals = []; state.downed = []; state.charmed = []; state.enemies = [];
   state.projectiles = []; state.effects = []; state.trail = [];
   state.clouds = []; state.firewalls = [];
   state.pads = []; state.padMarks = []; state.jobSpawnIn = null; state.buffSpawnIn = null; state.allySpawnIn = null;
@@ -197,11 +203,12 @@ function resetGame(level) {
   state.backpack = { open: false, stored: null };
   state.room = null; state.roomAt = 0;
   state.cleared = false; state.clearedAt = 0; state.shockwave = null; state.exit = null; state.leaving = null;
+  state.waveNo = 0; state.waveNews = null;
   // у каждого гнезда свой таймер волн; порядок, в котором гнёзда выпускают первые волны, бросается заново
   const waves = level.waves;
   // carry — дробный остаток врагов при общем потоке (waves.share)
   state.nests = waves ? shuffled(world.nests).map((p, k) => ({
-    x: p.x, y: p.y, wave: 0, nextIn: waves.firstAt + k * waves.stagger, releasedAt: -99, lastCount: 0, carry: 0,
+    x: p.x, y: p.y, wave: 0, nextIn: waves.firstAt + k * (waves.stagger || 0), releasedAt: -99, lastCount: 0, carry: 0,
     seal: 0, sealed: false, guarded: false, openedAt: -99,
   })) : [];
   // «Seal the Gates»: каждый флаг закрывает ближайшее к нему гнездо

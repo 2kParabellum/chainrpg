@@ -29,7 +29,7 @@ const { drawHud } = G.hud;
 const screenInfo = G.screen;
 
 // уровни в порядке их показа в меню; за фоном меню при запуске стоит первый
-const LEVELS = [G.level1, G.level2, G.level6, G.level3, G.level8, G.level7, G.level4, G.level5];
+const LEVELS = [G.level1, G.level2, G.level6, G.level3, G.level8, G.level7, G.level4, G.level5, G.level9];
 const START_LEVEL = LEVELS[0];
 // тестовые уровни: только из меню выбора уровней, в прохождение не входят; стартуют с улучшениями level.upgrades
 const TEST_LEVELS = [G.levelTestRam, G.levelTestChain, G.levelTestRace];

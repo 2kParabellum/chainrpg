@@ -15,6 +15,8 @@
 //   update       — (e, dt, chain, game): поведение за кадр, когда враг активен и жив
 //   lateUpdate   — (e, chain, game): шаг после боя и среды (мина: обнаружение и подрыв)
 //   draw         — (e, g): тело врага; полоску HP рисует сцена
+//                  (у врагов «Ambush» — улитки, дудочника, черепахи — поля нет: их целиком рисует render/ambushart.js)
+//   damageMul    — (e): множитель входящего урона сейчас (черепаха в панцире — 0.15)
 //   hiddenUntilRevealed — враг невидим и неуязвим для прицеливания, пока e.revealed не станет true
 //   ignoredForVictory   — не считается в условии победы
 //   rangedOnly   — ближний бой (кулак, копьё, шипастость, таран Героя) его не ранит, только выстрелы и молния
@@ -278,6 +280,88 @@ const hunter = {
   },
 };
 
+// рывок Бычка (и улитки-рыцаря, у неё — свои числа): бродит; увидев цепочку ближе aggro, подходит, по таймеру
+// замахивается (telegraph) и несётся по прямой сквозь союзников. Поля типа type: chaseSpeed, wanderSpeed; числа — e.cfg:
+// brakeOnHit: false — после столкновений не тормозит (проносится всю длину рывка), fireDps — оставляет огненную полосу
+function charger(type, e, dt, chain, game) {
+  const foe = game.nearestTarget(e, chain, e.cfg.aggro);
+
+  if (e.state === 'idle') {
+    if (e.chasing && !foe) { game.chaseStep(e, dt, type.chaseSpeed); return; }
+    if (!e.chasing && game.stepOffSpikes(e, dt, type.wanderSpeed * 1.6)) return;
+    if (!foe) { game.wanderStep(e, dt, type.wanderSpeed); return; }
+    e.facing = Math.atan2(foe.y - e.y, foe.x - e.x);
+    game.chaseStep(e, dt, e.cfg.walkSpeed, 0, foe); // подходит к цели, обходя пропасти и стены
+    e.timer -= dt;
+    if (e.timer <= 0) { e.state = 'telegraph'; e.timer = e.cfg.telegraph; }
+    return;
+  }
+
+  if (e.state === 'telegraph') {
+    if (foe) e.facing = Math.atan2(foe.y - e.y, foe.x - e.x);
+    e.timer -= dt;
+    if (e.timer <= 0) {
+      e.state = 'charge';
+      e.passThrough = true; // в рывке проезжает сквозь союзников (см. game/bodies.js)
+      e.dir = { x: Math.cos(e.facing), y: Math.sin(e.facing) };
+      e.travelled = 0;
+      e.hitThisCharge = [];
+      e.pushes = 0;
+      e.chargeSpeed = e.cfg.chargeStartSpeed;
+      // огненная полоса (улитка-рыцарь): растёт от места старта за ним, пока он в рывке
+      if (e.cfg.fireDps) {
+        e.fire = game.spawnFirewall(e.x, e.y, e.x, e.y, e.cfg.fireRadius, e.cfg.fireDps, e.cfg.fireLife, true);
+        e.fire.owner = e;
+      }
+    }
+    return;
+  }
+
+  // рывок: сначала разгон, после первого столкновения бычок начинает тормозить (с brakeOnHit: false — нет). На льду тормозит слабее (iceBrake),
+  // а пройдя chargeMaxDist, не встаёт как вкопанный, а тоже тормозит и докатывается
+  const cfg = e.cfg, ice = !!game.world.ice;
+  const braking = (cfg.brakeOnHit !== false && e.hitThisCharge.length) || (ice && e.travelled > cfg.chargeMaxDist);
+  e.chargeSpeed += (braking ? -(ice ? cfg.iceBrake : cfg.chargeBrake) : cfg.chargeAccel) * dt;
+  e.chargeSpeed = Math.min(e.chargeSpeed, cfg.chargeSpeed);
+
+  const step = e.chargeSpeed * dt;
+  const normal = moveAndCollide(e, e.dir.x * step, e.dir.y * step, game.world.moveBlockers);
+  e.travelled += step;
+  if (e.fire) { e.fire.x2 = e.x; e.fire.y2 = e.y; }
+
+  // лобовой удар в стену обрывает рывок, косой — только сворачивает бычка вдоль неё
+  let crashed = false;
+  if (normal) {
+    const into = e.dir.x * normal.x + e.dir.y * normal.y;
+    if (into < -0.5) crashed = true;
+    else {
+      e.dir.x -= normal.x * into;
+      e.dir.y -= normal.y * into;
+      const len = Math.hypot(e.dir.x, e.dir.y) || 1;
+      e.dir.x /= len; e.dir.y /= len;
+      e.facing = Math.atan2(e.dir.y, e.dir.x);
+    }
+  }
+
+  // проезжает насквозь: первому достаётся полный урон, остальным — repeatDamage от него (Бычку — половина)
+  for (const u of chain.concat(game.state.downed)) {
+    if (e.hitThisCharge.includes(u)) continue;
+    if (dist(e, u) >= e.r + u.r) continue;
+    const dmg = e.hitThisCharge.length ? cfg.dmg * cfg.repeatDamage : cfg.dmg;
+    e.hitThisCharge.push(u);
+    game.damageUnit(u, dmg, { by: e, melee: true });
+    if (u.hp > 0 && e.pushes < cfg.maxPushes && Math.random() < cfg.knockoutChance
+        && game.displaceAlly(u, Math.atan2(u.y - e.y, u.x - e.x), cfg.knockbackSpeed)) e.pushes += 1;
+  }
+
+  if (crashed || (!ice && e.travelled > cfg.chargeMaxDist) || e.chargeSpeed < cfg.chargeStopSpeed) {
+    e.state = 'idle';
+    e.passThrough = false;
+    e.timer = cfg.chargeCooldown;
+    if (e.fire) { e.fire.growing = false; e.fire = null; } // дальше полоса fireLife секунд догорает на месте
+  }
+}
+
 const bull = {
   stats: { name: 'Bull', hp: 88, radius: 18, mass: 3, dmg: 12, aggro: 430, walkSpeed: 61,
            telegraph: 0.7, chargeSpeed: 594, chargeMaxDist: 720, chargeCooldown: 1.6,
@@ -294,77 +378,7 @@ const bull = {
   wanderSpeed: 46,
   chaseSpeed: 105,
   init(e) { e.state = 'idle'; e.timer = 0; e.travelled = 0; e.dir = { x: 0, y: 0 }; },
-  update(e, dt, chain, game) {
-    const foe = game.nearestTarget(e, chain, e.cfg.aggro);
-
-    if (e.state === 'idle') {
-      if (e.chasing && !foe) { game.chaseStep(e, dt, bull.chaseSpeed); return; }
-      if (!e.chasing && game.stepOffSpikes(e, dt, bull.wanderSpeed * 1.6)) return;
-      if (!foe) { game.wanderStep(e, dt, bull.wanderSpeed); return; }
-      e.facing = Math.atan2(foe.y - e.y, foe.x - e.x);
-      game.chaseStep(e, dt, e.cfg.walkSpeed, 0, foe); // подходит к цели, обходя пропасти и стены
-      e.timer -= dt;
-      if (e.timer <= 0) { e.state = 'telegraph'; e.timer = e.cfg.telegraph; }
-      return;
-    }
-
-    if (e.state === 'telegraph') {
-      if (foe) e.facing = Math.atan2(foe.y - e.y, foe.x - e.x);
-      e.timer -= dt;
-      if (e.timer <= 0) {
-        e.state = 'charge';
-        e.passThrough = true; // в рывке проезжает сквозь союзников (см. game/bodies.js)
-        e.dir = { x: Math.cos(e.facing), y: Math.sin(e.facing) };
-        e.travelled = 0;
-        e.hitThisCharge = [];
-        e.pushes = 0;
-        e.chargeSpeed = e.cfg.chargeStartSpeed;
-      }
-      return;
-    }
-
-    // рывок: сначала разгон, после первого столкновения бычок начинает тормозить. На льду тормозит слабее (iceBrake),
-    // а пройдя chargeMaxDist, не встаёт как вкопанный, а тоже тормозит и докатывается
-    const cfg = e.cfg, ice = !!game.world.ice;
-    const braking = e.hitThisCharge.length || (ice && e.travelled > cfg.chargeMaxDist);
-    e.chargeSpeed += (braking ? -(ice ? cfg.iceBrake : cfg.chargeBrake) : cfg.chargeAccel) * dt;
-    e.chargeSpeed = Math.min(e.chargeSpeed, cfg.chargeSpeed);
-
-    const step = e.chargeSpeed * dt;
-    const normal = moveAndCollide(e, e.dir.x * step, e.dir.y * step, game.world.moveBlockers);
-    e.travelled += step;
-
-    // лобовой удар в стену обрывает рывок, косой — только сворачивает бычка вдоль неё
-    let crashed = false;
-    if (normal) {
-      const into = e.dir.x * normal.x + e.dir.y * normal.y;
-      if (into < -0.5) crashed = true;
-      else {
-        e.dir.x -= normal.x * into;
-        e.dir.y -= normal.y * into;
-        const len = Math.hypot(e.dir.x, e.dir.y) || 1;
-        e.dir.x /= len; e.dir.y /= len;
-        e.facing = Math.atan2(e.dir.y, e.dir.x);
-      }
-    }
-
-    // проезжает насквозь: первому достаётся полный урон, остальным — половинный
-    for (const u of chain.concat(game.state.downed)) {
-      if (e.hitThisCharge.includes(u)) continue;
-      if (dist(e, u) >= e.r + u.r) continue;
-      const dmg = e.hitThisCharge.length ? cfg.dmg * cfg.repeatDamage : cfg.dmg;
-      e.hitThisCharge.push(u);
-      game.damageUnit(u, dmg, { by: e, melee: true });
-      if (u.hp > 0 && e.pushes < cfg.maxPushes && Math.random() < cfg.knockoutChance
-          && game.displaceAlly(u, Math.atan2(u.y - e.y, u.x - e.x), cfg.knockbackSpeed)) e.pushes += 1;
-    }
-
-    if (crashed || (!ice && e.travelled > cfg.chargeMaxDist) || e.chargeSpeed < cfg.chargeStopSpeed) {
-      e.state = 'idle';
-      e.passThrough = false;
-      e.timer = cfg.chargeCooldown;
-    }
-  },
+  update(e, dt, chain, game) { charger(bull, e, dt, chain, game); },
   draw(e, g) {
     const { ctx } = g;
     const color = e.state === 'telegraph' ? '#efac28' : COLORS.bull;
@@ -451,6 +465,159 @@ const chariot = {
     bull.draw(e, g);
   },
 };
+
+// Улитка-рыцарь («Ambush»): демоническая улитка в рыцарском шлеме на сноуборде. Ведёт себя как Бычок (тот же рывок,
+// см. charger), но подходит ближе (aggro меньше), рывок короче и не тормозит о цепочку — проносится насквозь всю длину,
+// каждому задетому полный урон, и оставляет за собой огненную полосу (как стена огня Демона, только слабее).
+// Шаг на 15% быстрее Бычка, HP втрое больше. В волне занимает два места
+const snail = {
+  stats: { ...bull.stats, name: 'Snail Knight', hp: 264, radius: 20, dmg: 15,
+           aggro: 300,              // замахивается, только когда цепочка ближе этого (Бычок — 430)
+           walkSpeed: 70,           // шаг на 15% быстрее Бычка
+           chargeMaxDist: 440,      // рывок короче (Бычок — 720)
+           brakeOnHit: false,       // после столкновений не тормозит: проносится насквозь всю длину рывка
+           repeatDamage: 1,         // каждому задетому — полный урон
+           fireRadius: 16,          // огненная полоса за рывком: полуширина ..
+           fireDps: 10,             // .. урон в секунду ..
+           fireLife: 3 },           // .. и сколько секунд горит после рывка (потом тлеет без урона)
+  wanderSpeed: 53,
+  chaseSpeed: 121,
+  spawnCost: 2,
+  init: bull.init,
+  update(e, dt, chain, game) { charger(snail, e, dt, chain, game); },
+};
+
+// Дудочник-сирена («Ambush»): патлатый демон с дудкой. Держится рядом с цепочкой, не касаясь её (как Зомби), и зазывает
+// дружочков: выбирает ближайшего видимого рядового (звено цепочки — не Героя и не «крепкого» — или лежачего) не дальше
+// charmRange и играет ему, держа удобное расстояние comfort медленным шагом. Связь рвётся, если дружочек дальше
+// breakRange, за стеной, погиб или стал «крепким»; не рвалась charmTime — дружочек зазомбирован (game.charmAlly): выходит
+// из цепочки и идёт к дудочнику (это ведёт game/chain.js), не дерётся, подобрать и ранить его нельзя. Дошёл — дудочник
+// пьёт его drainDps, леча себя на столько же; пока зазомбированный при нём, дудочник медленно отступает от Героя.
+// Допил — ищет нового. Убит дудочник — дружочек свободен (см. updateCharmed). В волне занимает два места
+const piper = {
+  stats: { name: 'Piper Siren', hp: 140, radius: 16, mass: 1.5, aggro: 520,
+           walkSpeed: 70,           // средняя скорость ..
+           playSpeed: 30,           // .. а пока играет — медленная
+           retreatSpeed: 26,        // как отступает от Героя с зазомбированным
+           standoff: 40,            // просвет до цепочки, пока никого не зазывает: рядом, но не касаясь
+           charmRange: 260,         // кого может начать зазывать
+           breakRange: 340,         // дальше — связь рвётся
+           comfort: 170,            // на каком расстоянии от дружочка держится, пока играет
+           charmTime: 2.5,          // сколько связь не должна рваться
+           charmCooldown: 1.5,      // пауза после порванной связи или выпитого дружочка
+           victimSpeed: 60,         // с какой скоростью зазомбированный идёт к дудочнику
+           drinkGap: 34,            // с какого просвета между телами дудочник пьёт
+           drainDps: 12 },          // сколько HP в секунду выпивает (и себе прибавляет)
+  wanderSpeed: 50,
+  chaseSpeed: 75,
+  spawnCost: 2,
+  init(e) { e.charm = null; e.victim = null; e.drinking = false; e.charmCd = 1; },
+  update(e, dt, chain, game) {
+    const cfg = e.cfg, st = game.state;
+    e.charmCd -= dt;
+    if (e.victim && !st.charmed.includes(e.victim)) { e.victim = null; e.drinking = false; }
+
+    // зазомбированный при нём: пьёт, когда тот дошёл, и всё это время медленно отступает от Героя
+    if (e.victim) {
+      const v = e.victim, lead = st.party[0], away = Math.atan2(e.y - lead.y, e.x - lead.x);
+      e.facing = Math.atan2(v.y - e.y, v.x - e.x);
+      moveAndCollide(e, Math.cos(away) * cfg.retreatSpeed * dt, Math.sin(away) * cfg.retreatSpeed * dt, game.world.moveBlockers);
+      e.drinking = dist(e, v) - e.r - v.r <= cfg.drinkGap + 4;
+      if (!e.drinking) return;
+      const sip = Math.min(v.hp, cfg.drainDps * dt);
+      v.hp -= sip;
+      e.hp = Math.min(e.maxHp, e.hp + sip);
+      if (v.hp <= 0) {
+        game.removeFrom(st.charmed, v);
+        st.effects.push({ type: 'ring', x: v.x, y: v.y, r: v.r + 10, life: 0.4, color: COLORS.piper });
+        e.victim = null; e.drinking = false; e.charmCd = cfg.charmCooldown;
+      }
+      return;
+    }
+
+    // играет выбранному: держит удобное расстояние, пока связь не порвётся или не выйдет charmTime
+    if (e.charm) {
+      const u = e.charm.target, d = dist(e, u);
+      const still = st.party.includes(u) ? game.canBeDisplaced(u) : st.downed.includes(u);
+      if (!still || d > cfg.breakRange || !game.hasLineOfSight(e, u)) { e.charm = null; e.charmCd = cfg.charmCooldown; return; }
+      e.facing = Math.atan2(u.y - e.y, u.x - e.x);
+      if (d > cfg.comfort + 20) game.chaseStep(e, dt, cfg.playSpeed, 0, u);
+      else if (d < cfg.comfort - 20) {
+        moveAndCollide(e, -Math.cos(e.facing) * cfg.playSpeed * dt, -Math.sin(e.facing) * cfg.playSpeed * dt, game.world.moveBlockers);
+      }
+      e.charm.t += dt;
+      if (e.charm.t >= cfg.charmTime) {
+        if (game.charmAlly(u, e)) e.victim = u;
+        e.charm = null;
+      }
+      return;
+    }
+
+    const foe = game.nearestTarget(e, chain, cfg.aggro);
+    if (!foe) {
+      if (e.chasing) game.chaseStep(e, dt, piper.chaseSpeed);
+      else if (!game.stepOffSpikes(e, dt, piper.wanderSpeed * 1.6)) game.wanderStep(e, dt, piper.wanderSpeed);
+      return;
+    }
+    // кого зазывать: ближайший видимый рядовой союзник или лежачий
+    if (e.charmCd <= 0) {
+      const prey = game.nearestTarget(e, chain.filter((u) => u.kind === 'downed' || game.canBeDisplaced(u)), cfg.charmRange);
+      if (prey) { e.charm = { target: prey, t: 0 }; return; }
+    }
+    // как Зомби: рядом с цепочкой, но не вплотную; подходит в обход, отходит по прямой
+    const gap = dist(e, foe) - e.r - foe.r;
+    e.facing = Math.atan2(foe.y - e.y, foe.x - e.x);
+    if (gap > cfg.standoff + 8) game.chaseStep(e, dt, cfg.walkSpeed, 0, foe);
+    else if (gap < cfg.standoff - 11) {
+      moveAndCollide(e, -Math.cos(e.facing) * cfg.walkSpeed * dt, -Math.sin(e.facing) * cfg.walkSpeed * dt, game.world.moveBlockers);
+    }
+  },
+};
+
+// Черепаха-циклоп («Ambush»): одноглазый демон под бронированным панцирем, на панцире — турель с частыми выстрелами
+// (бродит и стреляет, как Стрелок). Звено цепочки или лежачий подошли ближе hideGap (просвет между телами) — прячется в
+// панцирь: не ходит и не стреляет, урон по ней — только (1 − armor) от обычного, а из щелей валит облако, как у Зомби
+// (сразу и потом раз в cloudCooldown, пока сидит). Вылезает, когда рядом никого нет дольше showDelay. В волне — два места
+const turtle = {
+  stats: { name: 'Turtle Cyclop', hp: 66, radius: 18, mass: 2.5, range: 320, cooldown: 0.4, dmg: 3,
+           projSpeed: 360, projRadius: 4,
+           hideGap: 60,             // ближе — прячется ..
+           showGap: 110,            // .. а вылезает, когда все дальше этого ..
+           showDelay: 1,            // .. уже столько секунд
+           hideTime: 0.25,          // за сколько прячется и вылезает (пока не вылезла совсем — не стреляет)
+           armor: 0.85,             // в панцире урон меньше на столько
+           cloudRadius: 95, cloudLife: 3.5, // облако — как у Зомби
+           cloudCooldown: 4.5 },
+  wanderSpeed: 40,
+  chaseSpeed: 70,
+  spawnCost: 2,
+  init(e) { e.hide = 0; e.hidden = false; e.calm = 0; e.cloudCd = 0; },
+  damageMul(e) { return e.hidden ? 1 - e.cfg.armor : 1; },
+  update(e, dt, chain, game) {
+    const cfg = e.cfg;
+    let near = Infinity;
+    for (const u of chain) if (u.kind !== 'base') near = Math.min(near, dist(e, u) - e.r - u.r);
+    if (near < cfg.hideGap) { e.hidden = true; e.calm = 0; }
+    else if (e.hidden) {
+      e.calm = near > cfg.showGap ? e.calm + dt : 0;
+      if (e.calm >= cfg.showDelay) e.hidden = false;
+    }
+    e.hide = clamp(e.hide + (e.hidden ? dt : -dt) / cfg.hideTime, 0, 1);
+    e.cloudCd -= dt;
+    if (e.hidden) {
+      if (e.cloudCd <= 0) {
+        game.state.clouds.push({ x: e.x, y: e.y, r: cfg.cloudRadius, cur: 0, t: 0, life: cfg.cloudLife });
+        e.cloudCd = cfg.cloudCooldown;
+      }
+      return;
+    }
+    if (e.hide > 0) return; // ещё вылезает
+    turtleShoot(e, dt, chain, game);
+  },
+};
+const turtleShoot = ranged(turtle, (e, foe, game) => {
+  game.spawnProjectile(e, foe.x, foe.y, e.cfg.projSpeed, e.cfg.dmg, 'enemy', e.cfg.projRadius);
+});
 
 // мина: не блуждает и сама не действует; цепочка её замечает вблизи, она взрывается под ногами
 // и простреливается союзниками, как любой враг — но только после обнаружения
@@ -1346,6 +1513,6 @@ const kraken = {
   },
 };
 
-const TYPES = { shooter, bull, tower, scorpion, zombie, hunter, chariot, mine, portal, boss, doorTarget, kraken, dummy };
+const TYPES = { shooter, bull, tower, scorpion, zombie, hunter, chariot, snail, piper, turtle, mine, portal, boss, doorTarget, kraken, dummy };
 G.enemyTypes = TYPES;
 })(window.Game = window.Game || {});

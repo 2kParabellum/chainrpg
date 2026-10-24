@@ -319,7 +319,7 @@ function draw(n, cfg) {
   else liveBurrow(n, P, soon, just, p, t, seal, op);
   if (n.sealed) sealChip(n.x, n.y - 74, 'SEALED');
   else if (n.guarded && seal > 0) sealChip(n.x, n.y - 74, `${Math.ceil((1 - seal) * state.level.seals.time)}s`);
-  else chip(n.x, n.y - 74, G.waves.nextCount(cfg, n), Math.max(0, Math.ceil(n.nextIn)), soon, t);
+  else if (!n.done) chip(n.x, n.y - 74, G.waves.nextCount(cfg, n), Math.max(0, Math.ceil(n.nextIn)), soon, t); // волн больше нет — без плашки
 }
 
 G.nestArt = { draw, R: NEST_R };

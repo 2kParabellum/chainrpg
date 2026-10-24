@@ -10,7 +10,7 @@ const COLORS = {
   // цвета профессий = цвета их шапок (graphics.md), усилений — цвета их значков
   hero: '#efac28', general: '#efb775', medic: '#efd8a1', buddy: '#efb775', shooter: '#a58c27', speed: '#efac28', power: '#ef3a0c',
   regen: '#3c9f9c', spear: '#ef692f', sturdy: '#927e6a', spiky: '#9b1a0a', will: '#efd8a1', spark: '#3c9f9c',
-  neutral: '#927e6a', enemy: '#ef3a0c', bull: '#ab5c1c', tower: '#a56243',
+  neutral: '#927e6a', enemy: '#ef3a0c', bull: '#ab5c1c', tower: '#a56243', piper: '#efac28', snail: '#ef692f', turtle: '#724113',
   scorpion: '#927e6a', hunter: '#ef692f', zombie: '#39571c', cloud: '#a58c27', portal: '#9b1a0a',
   boss: '#550f0a', bossGlow: '#ef692f', bossRam: '#ef3a0c', fire: '#ef692f',
   // подсветка пола зон поля: по ней видно, насколько зона опасна
