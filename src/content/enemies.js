@@ -579,7 +579,7 @@ const piper = {
 // панцирь: не ходит и не стреляет, урон по ней — только (1 − armor) от обычного, а из щелей валит облако, как у Зомби
 // (сразу и потом раз в cloudCooldown, пока сидит). Вылезает, когда рядом никого нет дольше showDelay. В волне — два места
 const turtle = {
-  stats: { name: 'Turtle Cyclop', hp: 86, radius: 18, mass: 2.5, range: 320, cooldown: 0.4, dmg: 3,
+  stats: { name: 'Turtle Cyclop', hp: 172, radius: 18, mass: 2.5, range: 320, cooldown: 0.4, dmg: 3,
            projSpeed: 360, projRadius: 4,
            hideGap: 60,             // ближе — прячется ..
            showGap: 110,            // .. а вылезает, когда все дальше этого ..
