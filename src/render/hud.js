@@ -443,7 +443,7 @@ function drawHud() {
     let ux = 12;
     shadowText(() => {
       for (const key of state.upgrades) {
-        const def = G.upgrades[key], who = abilities[def.who] ? abilities[def.who].color : COLORS[def.who]; // Герой и General — свои цвета
+        const def = G.upgrades[key], who = abilities[def.who] ? abilities[def.who].color : COLORS[def.who]; // Герой, General и PODS — свои цвета
         const wd = ctx.measureText(def.name + '   ').width;
         if (ux > 12 && ux + wd > maxX) { ux = 12; bottom += 16; }
         ctx.fillStyle = who;

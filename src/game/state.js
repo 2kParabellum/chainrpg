@@ -279,13 +279,16 @@ function startRun() { state.upgrades = []; }
 // запись улучшения key, если оно взято в этом прохождении, иначе null
 function upgrade(key) { return state.upgrades.includes(key) ? G.upgrades[key] : null; }
 
+// сумма числового поля field по всем взятым улучшениям (у кого его нет — 0)
+function upgradeSum(field) {
+  let sum = 0;
+  for (const key of state.upgrades) sum += G.upgrades[key][field] || 0;
+  return sum;
+}
+
 // множитель от прибавок взятых улучшений к базе: field — 'dmgAdd', 'moveAdd' или 'hpAdd'; прибавки складываются
 // (два улучшения по +10% — ×1.2)
-function boostMul(field) {
-  let add = 0;
-  for (const key of state.upgrades) add += G.upgrades[key][field] || 0;
-  return 1 + add;
-}
+function boostMul(field) { return 1 + upgradeSum(field); }
 
 // ведущий — всегда Герой, первое звено цепочки: от него считаются камера, активация врагов и цель порождённых порталами
 function leader() { return state.party[0]; }
@@ -302,10 +305,9 @@ function enemyTargets() {
 // враг, которого уже можно видеть, целить и рубить: скрытые типы (мина) — только после обнаружения
 function isSpotted(e) { return !enemyTypes[e.type].hiddenUntilRevealed || e.revealed; }
 
-// сколько дружочков утяжеляют цепочку: сверх CHAIN.heft.freeLinks («Марш» добавляет бесплатных)
+// сколько дружочков утяжеляют цепочку: сверх CHAIN.heft.freeLinks («Марш» и «Марш 2» добавляют бесплатных)
 function heavyLinks() {
-  const m = upgrade('march');
-  return Math.max(0, state.party.length - 1 - CONFIG.CHAIN.heft.freeLinks - (m ? m.links : 0));
+  return Math.max(0, state.party.length - 1 - CONFIG.CHAIN.heft.freeLinks - upgradeSum('links'));
 }
 
 // масса цепочки для управления Героем: 1 — налегке, каждое тяжёлое звено добавляет linkMass
@@ -331,5 +333,5 @@ function leaderSpeedMul() {
 function currentRoom() { return roomIndexAt(leader().x, leader().y); }
 
 G.state = state;
-G.session = { makeUnit, makeAlly, setAbility, recalcStats, spawnEnemy, resetGame, startRun, upgrade, boostMul, leader, chainUnits, enemyTargets, isSpotted, currentRoom, chainMass, chainSpeedMul, leaderSpeedMul, cameraTarget };
+G.session = { makeUnit, makeAlly, setAbility, recalcStats, spawnEnemy, resetGame, startRun, upgrade, upgradeSum, boostMul, leader, chainUnits, enemyTargets, isSpotted, currentRoom, chainMass, chainSpeedMul, leaderSpeedMul, cameraTarget };
 })(window.Game = window.Game || {});

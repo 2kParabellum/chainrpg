@@ -31,13 +31,13 @@ function nearestTarget(from, list, range) {
   return null;
 }
 
-// улучшение «прикрытие»: оба соседа копейщика в цепочке (не он сам) получают меньше урона — от любых атак.
+// улучшение «прикрытие»: копейщик в цепочке и оба его соседа получают меньше урона — от любых атак.
 // Вспышка — не чаще раза в 0.2 с, чтобы урон в секунду (облака, огонь) не мигал каждый кадр
 function coverDefense(u, dmg) {
   const c = upgrade('cover');
-  if (!c || u.kind !== 'ally' || u.ability === 'spear') return dmg;
+  if (!c || u.kind !== 'ally') return dmg;
   const i = state.party.indexOf(u);
-  if (![state.party[i - 1], state.party[i + 1]].some((n) => n && n.ability === 'spear')) return dmg;
+  if (![state.party[i - 1], u, state.party[i + 1]].some((n) => n && n.ability === 'spear')) return dmg;
   if (!(state.time - (u.coverFx || -1) < 0.2)) {
     u.coverFx = state.time;
     state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 5, life: 0.2, color: COLORS.sturdy });

@@ -12,11 +12,13 @@ const { drawOn, glow } = G.shapes;
 const W = 200, H = 120;  // размер рисунка карточки (в его единицах рисуют записи реестра)
 const INK = COLORS.floorLine, TAU = Math.PI * 2;
 
+// подписи классов улучшений, которые не профессии (их цвет — в палитре под тем же ключом)
+const CLASS_LABELS = { hero: 'HERO', general: 'GENERAL', pods: 'PODS' };
+
 // цвет и подпись того, чьё улучшение
 function whoOf(key) {
   const who = upgrades[key].who;
-  if (who === 'hero') return { color: COLORS.hero, label: 'HERO' };
-  if (who === 'general') return { color: COLORS.general, label: 'GENERAL' };
+  if (CLASS_LABELS[who]) return { color: COLORS[who], label: CLASS_LABELS[who] };
   return { color: abilities[who].color, label: abilities[who].name.toUpperCase() };
 }
 

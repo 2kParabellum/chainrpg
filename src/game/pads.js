@@ -13,13 +13,15 @@ const { leader, makeAlly, currentRoom, upgrade } = G.session;
 const rand = ([a, b]) => a + Math.random() * (b - a);
 
 // параметры появления: общие из CONFIG, уровень может переопределить отдельные поля
-// (у групп jobs/buffs — тоже поштучно). Улучшение «Lucky Foot» — подиумы усилений появляются в mul раз чаще
+// (у групп jobs/buffs — тоже поштучно). Улучшения «Lucky Foot» и «Talent Scout» — подиумы усилений и профессий
+// появляются в mul раз чаще
 function settings() {
   const base = CONFIG.PAD_SPAWN, lvl = state.level.padSpawn || {};
-  const buffs = { ...base.buffs, ...lvl.buffs };
-  const lucky = upgrade('luckyFoot');
+  const buffs = { ...base.buffs, ...lvl.buffs }, jobs = { ...base.jobs, ...lvl.jobs };
+  const lucky = upgrade('luckyFoot'), scout = upgrade('talentScout');
   if (lucky) buffs.interval = buffs.interval.map((v) => v / lucky.mul);
-  return { ...base, ...lvl, jobs: { ...base.jobs, ...lvl.jobs }, buffs };
+  if (scout) jobs.interval = jobs.interval.map((v) => v / scout.mul);
+  return { ...base, ...lvl, jobs, buffs };
 }
 function allySettings() { return { ...CONFIG.ALLY_SPAWN, ...state.level.allySpawn }; }
 
