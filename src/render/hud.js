@@ -4,7 +4,7 @@
 'use strict';
 
 const { CONFIG, COLORS, state } = G;
-const { abilities } = G;
+const { abilities, enemyTypes } = G;
 const { currentRoom, isSpotted, leaderSpeedMul, leader, upgrade } = G.session;
 const { world, roomCount, roomIndexAt, buttonUnder } = G.world;
 const { clamp } = G.math;
@@ -72,7 +72,7 @@ function drawEdgeMarkers() {
   const cfg = state.level.waves;
   if (!cfg) return;
   for (const n of state.nests) {
-    if (n.nextIn < cfg.telegraph) drawEdgeMarker(n.x, n.y, COLORS.nest, `×${G.waves.waveSize(cfg, n.wave)}`);
+    if (n.nextIn < cfg.telegraph && !n.done) drawEdgeMarker(n.x, n.y, COLORS.nest, `×${G.waves.nextCount(cfg, n)}`);
     else if (state.time - n.releasedAt < 3) drawEdgeMarker(n.x, n.y, COLORS.nest, '');
   }
   if (state.base && state.base.regenTimer < 1) drawEdgeMarker(state.base.x, state.base.y, COLORS.baseEdge, 'BASE');
@@ -90,13 +90,13 @@ function drawPodMarker() {
   drawEdgeMarker(pod.x, pod.y, COLORS.exitGlow, 'POD');
 }
 
-// «Capture the Flags»: метки к флагам за краем экрана — к погасшим (золотом, «FLAG») и к тем, чьего часового сейчас бьют
-// (красным, с его HP в процентах)
+// «Capture the Flags», «Seal the Gates»: метки к флагам за краем экрана — к погасшим (золотом, «FLAG»; к флагу открытого
+// гнезда — «SEAL») и к тем, чьего часового сейчас бьют (красным, с его HP в процентах)
 function drawFlagMarkers() {
   if (state.status !== 'play' || state.cleared) return;
   for (const f of state.flags) {
     const x = f.btn.x + f.btn.w / 2, y = f.btn.y + f.btn.h / 2;
-    if (!f.held) drawEdgeMarker(x, y, UI.gold, 'FLAG');
+    if (!f.held) drawEdgeMarker(x, y, UI.gold, f.nest ? 'SEAL' : 'FLAG');
     else if (f.guard && state.time - f.hitAt < CONFIG.FLAGS.alertTime) {
       drawEdgeMarker(x, y, UI.red, `${Math.max(1, Math.round((f.guard.hp / f.guard.maxHp) * 100))}%`);
     }
@@ -153,12 +153,28 @@ function drawBanners() {
     drawBanner(k >= total ? 'FINISH' : `LAP ${k}/${total}`, `${raceClock(l.time)} · mates across the line: ${l.mates}`,
       state.time - l.at, 3.5, '#efac28', 220);
   }
-  // «Capture the Flags»: часовой поднял флаг или флаг потерян (часового убили, утащили, сбили с площадки) — сколько горит
+  // «Capture the Flags»: часовой поднял флаг или флаг потерян (часового убили, утащили, сбили с площадки) — сколько горит.
+  // «Seal the Gates»: гнездо закрылось или открылось снова — сколько закрыто
   const fn = state.flagNews;
   if (fn) {
-    const total = state.flags.length;
-    if (fn.up) drawBanner('FLAG RAISED', `${fn.count} of ${total} flags held`, state.time - fn.at, 2.6, COLORS.flag, 220);
-    else drawBanner('FLAG LOST', `${fn.count} of ${total} flags held — the guard is gone`, state.time - fn.at, 3, UI.red, 220);
+    const age = state.time - fn.at, flags = state.flags.length, nests = state.nests.length;
+    if (fn.kind === 'up') drawBanner('FLAG RAISED', `${fn.count} of ${flags} flags held`, age, 2.6, COLORS.flag, 220);
+    if (fn.kind === 'lost') drawBanner('FLAG LOST', `${fn.count} of ${flags} flags held — the guard is gone`, age, 3, UI.red, 220);
+    if (fn.kind === 'sealed') {
+      drawBanner('GATE SEALED', fn.count < nests ? `${fn.count} of ${nests} sealed — the other nests spawn more` : `All ${nests} gates sealed`,
+        age, 3, COLORS.flag, 220);
+    }
+    if (fn.kind === 'open') drawBanner('GATE OPEN', `${fn.count} of ${nests} sealed — the guard is gone`, age, 3, UI.red, 220);
+  }
+  // «Ambush» и «Endless»: вышла волна — какая по счёту и кто в ней (в «Endless» — ещё на сколько крепче враги и что за
+  // волну с наградой дадут выбрать улучшение)
+  const wn = state.waveNews, script = w && w.script;
+  if (wn && (script || w.endless)) {
+    const names = [...new Set(wn.types)].map((k) => enemyTypes[k].stats.name).join(' · ');
+    const tough = wn.hpMul > 1 ? ` — HP +${Math.round((wn.hpMul - 1) * 100)}%` : '';
+    const every = w.endless && w.endless.perkEvery, perk = every && wn.n % every === 0 ? ' — clear it for an upgrade' : '';
+    const title = !script ? `WAVE ${wn.n}` : wn.n >= script.length ? 'LAST WAVE' : `WAVE ${wn.n}/${script.length}`;
+    drawBanner(title, names + tough + perk, state.time - wn.at, 3.2, COLORS.nest, 220);
   }
   if (state.cleared && state.base) drawBanner('THE BASE HELD', 'A blast from the base wipes out every enemy and nest', state.time - state.clearedAt, 3.2, COLORS.baseEdge);
   if (state.exit && !state.leaving) drawBanner('PORTAL OPEN', 'Drive into the bright portal to finish the level', state.time - state.exit.at, 4, COLORS.exitGlow);
@@ -266,6 +282,14 @@ function drawChip(c, x, y, w, h) {
     ctx.fillStyle = COLORS.flag; ctx.strokeStyle = UI.ink; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(tx + 3, cy - 8); ctx.lineTo(tx + 13, cy - 6); ctx.lineTo(tx + 13, cy); ctx.lineTo(tx + 3, cy - 1);
     ctx.closePath(); ctx.fill(); ctx.stroke();
+    tx += 18;
+  } else if (c.icon === 'lock') {
+    ctx.strokeStyle = UI.ink; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(tx + 6, cy - 2, 4, Math.PI, 0); ctx.lineTo(tx + 10, cy); ctx.moveTo(tx + 2, cy); ctx.lineTo(tx + 2, cy - 2); ctx.stroke();
+    ctx.strokeStyle = COLORS.flag; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = COLORS.flag; ctx.strokeStyle = UI.ink; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(tx - 0.5, cy - 1, 13, 9, 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = UI.ink; ctx.fillRect(tx + 5.2, cy + 1.5, 1.6, 3.5);
     tx += 18;
   } else if (c.icon === 'clock') {
     ctx.strokeStyle = UI.gold; ctx.lineWidth = 2;
@@ -393,6 +417,18 @@ function drawHud() {
     const held = G.flags.flagsHeld(), total = state.flags.length;
     chips.push({ text: `${rule.label} ${held}/${total}`, icon: 'flag', color: held >= total ? UI.teal : UI.gold });
   }
+  // «Ambush»: сколько волн вышло из всех (все — бирюзой: осталось добить тех, кто на поле)
+  if (rule.kind === 'waves') {
+    const total = level.waves.script.length, n = state.waveNo;
+    chips.push({ text: `${rule.label} ${n}/${total}`, color: n < total ? UI.gold : UI.teal });
+  }
+  // «Endless»: сколько волн уже вышло
+  if (rule.kind === 'endless') chips.push({ text: `${rule.label} ${state.waveNo}`, color: UI.gold });
+  // «Seal the Gates»: сколько гнёзд закрыто из всех (все — бирюзой)
+  if (rule.kind === 'seals') {
+    const sealed = G.flags.gatesSealed(), total = state.nests.length;
+    chips.push({ text: `${rule.label} ${sealed}/${total}`, icon: 'lock', color: sealed >= total ? UI.teal : UI.gold });
+  }
   // «Dead Race»: какой круг из скольких и время текущего круга (до старта — «GO!»)
   const race = rule.kind === 'laps' && state.race;
   if (race) {
@@ -477,8 +513,8 @@ function drawHud() {
   } else if (btn && !btn.pressed && state.party.length > 1 && state.status === 'play') {
     ctx.fillStyle = '#3c9f9c';
     ctx.textAlign = 'center';
-    ctx.fillText(withKeys(btn.flag ? '{drop} — LEAVE A MATE TO HOLD THE FLAG' : '{drop} — LEAVE A MATE ON THE BUTTON'),
-      CONFIG.VIEW.w / 2, bottomHintY());
+    const what = !btn.flag ? 'ON THE BUTTON' : state.level.seals ? 'TO SEAL THE GATE' : 'TO HOLD THE FLAG';
+    ctx.fillText(withKeys(`{drop} — LEAVE A MATE ${what}`), CONFIG.VIEW.w / 2, bottomHintY());
   } else if (pickup && state.status === 'play') {
     ctx.fillStyle = '#fff4dc';
     ctx.textAlign = 'center';

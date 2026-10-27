@@ -2,11 +2,16 @@
 // и скорлупа вокруг. Перед волной (telegraph) комья дрожат, дыра разгорается красным и изнутри глядят глаза;
 // при выходе волны летят земля и пыль. Вокруг — зона, где появляются враги волны (только по полу),
 // над норой — плашка: сколько врагов в следующей волне и через сколько секунд.
+// «Seal the Gates»: гнездо закрывает каменная заслонка-диафрагма — шесть лепестков выходят из-под края дыры и,
+// докручиваясь, сходятся к середине, зона выхода гаснет; сомкнулась — посередине бирюзовая печать с короной, как на
+// флаге, плашка — замок и «SEALED» (пока закрывается — замок и секунды). Открыли снова — лепестки отскакивают под край,
+// дыра вспыхивает красным, летят земля и пыль, как при выходе волны.
 // Нора видна только на полу: стены и их поднятый верх её закрывают. Вырезать это каждый кадр по всем стенам дорого
 // (на трассе «Dead Race» их сотни), поэтому у норы один раз готовятся маска пола вокруг неё, заливка зоны по этой маске
 // и спокойная нора (до волны дальше telegraph, выход давно прошёл) уже по маске; бегущий пунктир зоны — дугами по тем
 // местам круга, что на полу. Перед волной и при выходе нора рисуется заново во временном холсте и обрезается маской.
-// Состояние только читается (state.nests, level.waves).
+// Закрытая нора — тоже готовой картинкой (по той же маске); заново рисуется только, пока заслонка движется.
+// Состояние только читается (state.nests, level.waves, level.seals).
 (function (G) {
 'use strict';
 
@@ -15,8 +20,9 @@ let { ctx } = G.shapes;      // холст, в который рисуем се�
 const { world } = G.world;
 const { clamp } = G.math;
 
-const TAU = Math.PI * 2, INK = '#2a1d0d';
+const TAU = Math.PI * 2, INK = '#2a1d0d', STONE = '#927e6a', TEAL = G.COLORS.flag, GOLD = '#efac28';
 const NEST_R = 68; // полуширина вала
+const HOLE_RX = 42, HOLE_RY = 27; // полуоси дыры
 
 function hexA(h, a) { const n = parseInt(h.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
 function ell(x, y, rx, ry) { ctx.beginPath(); ctx.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), 0, 0, TAU); }
@@ -84,7 +90,52 @@ function burst(x, y, p, seed) {
   }
 }
 
-function burrow(x, y, soon, just, p, t, seed) {
+// заслонка-диафрагма над дырой (k — 0..1, насколько закрыта): шесть каменных лепестков, у каждого прямое внутреннее
+// ребро; ребра образуют шестиугольный просвет, он сжимается к середине, а лепестки докручиваются. Рисуется под обрезкой
+// по дыре — лишнее уходит под её край. Сомкнулась — посередине бирюзовая печать с короной
+function lid(x, y, k) {
+  if (k <= 0) return;
+  const e = smooth(k), N = 6, R = HOLE_RX * 2.4, r = HOLE_RX * 1.05 * (1 - e), tw = (1 - e) * 1.1;
+  ctx.save();
+  ctx.translate(x, y); ctx.scale(1, HOLE_RY / HOLE_RX); // круг в перспективе, как сама дыра
+  // лепесток i: вершина просвета, вдоль ребра к следующей вершине (edge) и наружу назад (back)
+  const blade = (i) => {
+    const a = tw + i / N * TAU;
+    return { ax: Math.cos(a) * r, ay: Math.sin(a) * r, edge: a + Math.PI / 2 + Math.PI / N, back: a - Math.PI / N };
+  };
+  for (let i = 0; i < N; i++) {
+    const { ax, ay, edge, back } = blade(i), mid = (edge + back) / 2;
+    ctx.fillStyle = i % 2 ? STONE : '#84705e';
+    ctx.beginPath(); ctx.moveTo(ax, ay);
+    for (const d of [edge, mid, back]) ctx.lineTo(ax + Math.cos(d) * R, ay + Math.sin(d) * R);
+    ctx.closePath(); ctx.fill();
+  }
+  // рёбра — поверх всех лепестков: тёмная обводка и светлая кромка вдоль неё (стыки закручиваются вертушкой)
+  for (let i = 0; i < N; i++) {
+    const { ax, ay, edge } = blade(i), bx = ax + Math.cos(edge) * R, by = ay + Math.sin(edge) * R;
+    const nx = Math.cos(edge - Math.PI / 2) * 2.5, ny = Math.sin(edge - Math.PI / 2) * 2.5;
+    ctx.strokeStyle = INK; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = 'rgba(239,216,161,0.3)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(ax + nx, ay + ny); ctx.lineTo(bx + nx, by + ny); ctx.stroke();
+  }
+  if (k >= 1) {
+    // печать: бирюзовый круг с тёмной обводкой, на нём золотая корона
+    ctx.fillStyle = TEAL; ctx.strokeStyle = INK; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(0, 0, 15, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(239,216,161,0.5)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(0, 0, 11, Math.PI * 1.1, Math.PI * 1.7); ctx.stroke();
+    ctx.restore(); ctx.save(); ctx.translate(x, y); // корона — без сжатия перспективы
+    ctx.fillStyle = GOLD; ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-7, 4); ctx.lineTo(-7, -3); ctx.lineTo(-3.5, 0.5); ctx.lineTo(0, -5); ctx.lineTo(3.5, 0.5); ctx.lineTo(7, -3);
+    ctx.lineTo(7, 4); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// seal — насколько закрыта заслонка, op — секунд с тех пор, как гнездо открыли снова
+function burrow(x, y, soon, just, p, t, seed, seal = 0, op = 99) {
   const sh = soon > 0.4 ? (soon - 0.4) * Math.sin(t * 47) * 2.2 : 0;
   bone(x - 92, y + 24, 0.6 + seed, 1); bone(x + 84, y - 40, -0.3, 0.8); shell(x + 70, y + 46, 0.4 + seed); shell(x - 66, y - 46, -0.8); bone(x + 30, y + 72, 1.9, 0.7);
   ctx.fillStyle = 'rgba(20,10,5,0.4)'; blob(x, y + 10, 76, 50, 3, 0.07); ctx.fill();
@@ -100,12 +151,16 @@ function burrow(x, y, soon, just, p, t, seed) {
   ctx.fillStyle = '#36170c'; hole(); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 2.5; ctx.stroke();
   ctx.save(); hole(); ctx.clip();
   ctx.fillStyle = 'rgba(8,5,2,0.85)'; ell(x, y + 9, 42, 24); ctx.fill();
-  const glow = Math.min(0.9, 0.15 + 0.6 * soon + 0.6 * just);
+  const opened = clamp(1 - op / 1.2, 0, 1);
+  const glow = Math.min(0.9, 0.15 + 0.6 * soon + 0.6 * Math.max(just, opened));
   const g = ctx.createRadialGradient(x, y + 10, 0, x, y + 10, 40);
   g.addColorStop(0, hexA('#ef3a0c', glow)); g.addColorStop(1, 'rgba(155,26,10,0)');
   ctx.fillStyle = g; ell(x, y + 10, 40, 26); ctx.fill();
-  eyes(x, y + 4, soon, t, 40);
+  eyes(x, y + 4, Math.max(soon, opened), t, 40);
+  lid(x + sh * 0.5, y - 2, seal);
   ctx.restore();
+  if (seal > 0) { ctx.strokeStyle = INK; ctx.lineWidth = 2.5; hole(); ctx.stroke(); }
+  if (seal >= 1) G.shapes.glow(ctx, x, y - 2, 46, TEAL, 0.35);
   // комья по краю: перед волной дрожат и подпрыгивают
   ctx.lineWidth = 1.5;
   for (let i = 0; i < 16; i++) {
@@ -117,6 +172,7 @@ function burrow(x, y, soon, just, p, t, seed) {
     ctx.fill(); ctx.stroke();
   }
   burst(x, y, p, 6);
+  burst(x, y, op, 9);
 }
 
 // плашка над норой: череп, сколько врагов и через сколько секунд; перед волной краснеет и пульсирует.
@@ -141,6 +197,28 @@ function chip(x, y, n, sec, soon, t) {
   if (!hot) { G.shapes.stamp(sp, x, y); return; }
   const k = 1 + 0.08 * soon * (0.5 + 0.5 * Math.sin(t * 12));
   G.shapes.stamp(sp, x, y, k, k);
+}
+
+// плашка закрытого или закрывающегося гнезда: бирюзовая, замок и текст («SEALED» или секунды до закрытия)
+function sealChip(x, y, txt) {
+  const key = 's' + txt;
+  let sp = chips.get(key);
+  if (!sp) {
+    ctx.font = CHIP_FONT;
+    const w = ctx.measureText(txt).width + 34;
+    sp = chips.bake(key, 1, [-w / 2 - 1, -13, w / 2 + 1, 13], () => {
+      ctx.fillStyle = '#183f39'; ctx.strokeStyle = TEAL; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(-w / 2, -12, w, 24, 12); ctx.fill(); ctx.stroke();
+      const lx = -w / 2 + 13;
+      ctx.strokeStyle = '#efd8a1'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(lx, -2, 3.6, Math.PI, 0); ctx.lineTo(lx + 3.6, 0); ctx.moveTo(lx - 3.6, 0); ctx.lineTo(lx - 3.6, -2); ctx.stroke();
+      ctx.fillStyle = '#efd8a1'; ctx.beginPath(); ctx.roundRect(lx - 5.5, -0.5, 11, 8, 2); ctx.fill();
+      ctx.fillStyle = INK; ctx.fillRect(lx - 0.8, 2, 1.6, 3);
+      ctx.font = CHIP_FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#efd8a1'; ctx.fillText(txt, -w / 2 + 24, 1);
+    });
+  }
+  G.shapes.stamp(sp, x, y);
 }
 
 // --- готовое для норы: квадрат вокруг неё в пикселях холста, маска пола (стены и их поднятый верх — не пол),
@@ -179,6 +257,9 @@ function prepare(n, R) {
   };
   const fill = masked(() => { ctx.fillStyle = '#9b1a0a'; ell(n.x, n.y, R, R); ctx.fill(); });
   const idle = masked(() => burrow(n.x, n.y, 0, 0, 99, 0, seedOf(n)));
+  // закрытая нора — по надобности, при первом показе (см. draw)
+  let sealedImg = null;
+  const sealed = () => sealedImg || (sealedImg = masked(() => burrow(n.x, n.y, 0, 0, 99, 0, seedOf(n), 1)));
   // дуги круга зоны на полу: [от, до] по углу, через градус
   const floorAt = (x, y) => world.floors.some((f) => inRect(f, x, y)) && !walls.some((r) => inRect(r, x, y));
   const N = 360, on = [];
@@ -190,19 +271,20 @@ function prepare(n, R) {
     if (last && last[1] === i / N * TAU) last[1] = (i + 1) / N * TAU; else arcs.push([i / N * TAU, (i + 1) / N * TAU]);
   }
   if (arcs.length > 1 && on[0] && on[N - 1]) { const tail = arcs.pop(); arcs[0][0] = tail[0] - TAU; }
-  P = { s, x0, y0, cw, ch, w: cw / s, h: ch / s, mask, fill, idle, arcs };
+  P = { s, x0, y0, cw, ch, w: cw / s, h: ch / s, mask, fill, idle, sealed, arcs };
   prepared.set(n, P);
   for (const k of prepared.keys()) { if (prepared.size <= KEEP) break; prepared.delete(k); }
   return P;
 }
 const seedOf = (n) => (n.x * 7 + n.y) % 3;
 
-// зона выхода волны: заливка по полу и бегущий пунктир по дугам на полу
-function zone(n, P, R, soon, just) {
-  ctx.globalAlpha = 0.05 + 0.08 * soon + 0.15 * just;
+// зона выхода волны: заливка по полу и бегущий пунктир по дугам на полу; fade — насколько видна (гаснет, пока гнездо
+// закрывается)
+function zone(n, P, R, soon, just, fade) {
+  ctx.globalAlpha = (0.05 + 0.08 * soon + 0.15 * just) * fade;
   ctx.drawImage(P.fill, P.x0, P.y0, P.w, P.h);
   ctx.globalAlpha = 1;
-  ctx.strokeStyle = hexA('#ef3a0c', 0.35 + 0.45 * soon); ctx.lineWidth = 2;
+  ctx.strokeStyle = hexA('#ef3a0c', (0.35 + 0.45 * soon) * fade); ctx.lineWidth = 2;
   ctx.setLineDash([12, 9]);
   const off = -state.time * (15 + 60 * soon);
   for (const [a0, a1] of P.arcs) {
@@ -212,14 +294,14 @@ function zone(n, P, R, soon, just) {
   ctx.setLineDash([]); ctx.lineDashOffset = 0;
 }
 
-// нора перед волной и при выходе: заново во временном холсте, по маске пола
-function liveBurrow(n, P, soon, just, p, t) {
+// нора перед волной, при выходе и пока движется заслонка: заново во временном холсте, по маске пола
+function liveBurrow(n, P, soon, just, p, t, seal, op) {
   if (!scratch) scratch = document.createElement('canvas');
   if (scratch.width < P.cw || scratch.height < P.ch) { scratch.width = Math.max(scratch.width, P.cw); scratch.height = Math.max(scratch.height, P.ch); }
   const g = scratch.getContext('2d');
   g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, P.cw, P.ch);
   g.setTransform(P.s, 0, 0, P.s, -P.x0 * P.s, -P.y0 * P.s);
-  paintOn(g, () => burrow(n.x, n.y, soon, just, p, t, seedOf(n)));
+  paintOn(g, () => burrow(n.x, n.y, soon, just, p, t, seedOf(n), seal, op));
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.globalCompositeOperation = 'destination-in'; g.drawImage(P.mask, 0, 0); g.globalCompositeOperation = 'source-over';
   ctx.drawImage(scratch, 0, 0, P.cw, P.ch, P.x0, P.y0, P.w, P.h);
@@ -227,13 +309,17 @@ function liveBurrow(n, P, soon, just, p, t) {
 
 // n — гнездо из state.nests, cfg — level.waves
 function draw(n, cfg) {
-  const t = state.time, p = t - n.releasedAt;
-  const soon = clamp(1 - n.nextIn / cfg.telegraph, 0, 1), just = clamp(1 - p / 1.2, 0, 1);
+  const t = state.time, p = t - n.releasedAt, seal = n.seal, op = t - n.openedAt;
+  const soon = n.sealed ? 0 : clamp(1 - n.nextIn / cfg.telegraph, 0, 1), just = clamp(1 - p / 1.2, 0, 1);
   const R = cfg.spawnRadius + 24, P = prepare(n, R);
-  zone(n, P, R, soon, just);
-  if (soon === 0 && just === 0) ctx.drawImage(P.idle, P.x0, P.y0, P.w, P.h);
-  else liveBurrow(n, P, soon, just, p, t);
-  chip(n.x, n.y - 74, G.waves.waveSize(cfg, n.wave), Math.max(0, Math.ceil(n.nextIn)), soon, t);
+  if (seal < 1) zone(n, P, R, soon, just, 1 - seal);
+  const still = soon === 0 && just === 0 && op > 1.2; // ни волны, ни вспышки открытия: нора не шевелится
+  if (still && seal === 0) ctx.drawImage(P.idle, P.x0, P.y0, P.w, P.h);
+  else if (still && seal >= 1) ctx.drawImage(P.sealed(), P.x0, P.y0, P.w, P.h);
+  else liveBurrow(n, P, soon, just, p, t, seal, op);
+  if (n.sealed) sealChip(n.x, n.y - 74, 'SEALED');
+  else if (n.guarded && seal > 0) sealChip(n.x, n.y - 74, `${Math.ceil((1 - seal) * state.level.seals.time)}s`);
+  else if (!n.done) chip(n.x, n.y - 74, G.waves.nextCount(cfg, n), Math.max(0, Math.ceil(n.nextIn)), soon, t); // волн больше нет — без плашки
 }
 
 G.nestArt = { draw, R: NEST_R };

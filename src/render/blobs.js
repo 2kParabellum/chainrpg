@@ -97,7 +97,8 @@ function track(u) {
   const cx = Math.cos(f);
   if (cx > 0.25) a.face = 1; else if (cx < -0.25) a.face = -1;
   a.look = f;
-  if (u.hp < a.hp - 0.3 && t - a.hurtAt > 0.4) { a.hurtAt = t; burst(u, a.face); }
+  // зазомбированного пьёт дудочник: HP тает непрерывно — без вспышек и кусочков
+  if (u.hp < a.hp - 0.3 && t - a.hurtAt > 0.4 && u.kind !== 'charmed') { a.hurtAt = t; burst(u, a.face); }
   a.hp = u.hp;
   (u.gear || []).forEach((w, i) => {
     if (a.cds[i] !== undefined && w.cd > a.cds[i] + 0.05) a.atkAt = t;
@@ -150,7 +151,8 @@ function sweep(list) {
 }
 
 // --- блоб ---
-// mode: 'chain' (в цепочке), 'downed' (выбит или брошен: стоит один и дерётся, над ним «!»), 'neutral' (ждёт вербовки)
+// mode: 'chain' (в цепочке), 'downed' (выбит или брошен: стоит один и дерётся, над ним «!»), 'neutral' (ждёт вербовки),
+// 'charmed' (зазомбирован дудочником: глаза-спирали, обе руки тянет вперёд, без оружия; ноты и свечение — render/ambushart.js)
 function drawAlly(u, mode, alpha = 1) {
   baseA = alpha;
   ctx.globalAlpha = alpha;
@@ -196,7 +198,8 @@ function drawAlly(u, mode, alpha = 1) {
   const x = u.x + dx, by = u.y - hop, rx = r * sx, ry = r * 0.95 * sy;
 
   // подобрать можно: мягкое светлое пятно под телом
-  if (mode !== 'chain') {
+  const charmed = mode === 'charmed';
+  if (mode !== 'chain' && !charmed) {
     const k = 0.5 - 0.5 * Math.cos(t * 3), R = r * (1.9 + 0.3 * k);
     glow(ctx, u.x, u.y, R, '#fff4dc', 0.22, r * 0.6 / R);
   }
@@ -224,7 +227,8 @@ function drawAlly(u, mode, alpha = 1) {
   }
   if (buffs.includes('will')) drawWings(rx, ry, r, t);
   const rk = Math.round(r * 4) / 4, fist = weapon === 'fist' ? 1 : 0;
-  stamp(part(`k|${rk}|${fist}`, r, BOX.hand, () => drawHand(0, 0, r, weapon)), -face * r * 0.88, r * 0.3 - swing * r * 0.12);
+  if (charmed) stamp(part(`k|${rk}|1`, r, BOX.hand, () => drawHand(0, 0, r, 'fist')), face * r * 0.98, -r * 0.16 + Math.sin(t * 5 + a.seed) * r * 0.06);
+  else stamp(part(`k|${rk}|${fist}`, r, BOX.hand, () => drawHand(0, 0, r, weapon)), -face * r * 0.88, r * 0.3 - swing * r * 0.12);
   if (buffs.includes('spiky')) {
     ctx.fillStyle = C.blood; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
     for (let i = 0; i < 9; i++) {
@@ -249,7 +253,10 @@ function drawAlly(u, mode, alpha = 1) {
   const pupils = eyes === 'normal' || eyes === 'tired' || eyes === 'focus';
   const dir = pupils ? dirOf(look, DIRS) : 0, blink = eyes === 'normal' && ((t + a.seed * 1.7) % 3.3) < 0.12 ? 1 : 0;
   const lx = Math.cos(dir / DIRS * TAU), ly = Math.sin(dir / DIRS * TAU);
-  stamp(part(`e|${rk}|${face}|${eyes}|${dir}|${blink}`, r, BOX.eyes, () => drawEyes(eyes, r, face, lx, ly, t, blink)), 0, 0);
+  if (charmed) {
+    ctx.fillStyle = 'rgba(24,63,57,0.16)'; ell(0, 0, rx - 1, ry - 1); ctx.fill();
+    drawEyes('spiral', r, face, 0, 0, t, 0);
+  } else stamp(part(`e|${rk}|${face}|${eyes}|${dir}|${blink}`, r, BOX.eyes, () => drawEyes(eyes, r, face, lx, ly, t, blink)), 0, 0);
   if (hat) {
     const k = HAT_WAVE[hat], fr = k ? frameAt(t * k, TAU, WAVE) : 0, tf = k ? fr / WAVE * TAU / k : 0;
     stamp(part(`h|${hat}|${rk}|${face}|${fr}`, r, BOX[hat], () => drawHat(hat, r, r * 0.95, r, face, tf)), 0, 0, sx, sy);
@@ -259,11 +266,12 @@ function drawAlly(u, mode, alpha = 1) {
   // оружие в передней руке и сама рука — готовой картинкой; искры шара — живьём
   const hx = face * (r * 0.95 + handFx), hy = r * 0.22 + swing * r * 0.12, firing = sa >= 0 && sa < 0.15 ? 1 : 0;
   const wk = WEAPON_WAVE[weapon + lvl], wf = wk ? frameAt(t * wk, TAU, WAVE) : 0, wt = wk ? wf / WAVE * TAU / wk : 0;
-  stamp(part(`w|${weapon}|${lvl}|${rk}|${face}|${firing}|${wf}`, r, mirror(BOX[weapon || 'fist'], face), () => {
+  if (charmed) stamp(part(`k|${rk}|1`, r, BOX.hand, () => drawHand(0, 0, r, 'fist')), face * r * 1.12, r * 0.2 + Math.sin(t * 5 + a.seed + 1.5) * r * 0.06);
+  else stamp(part(`w|${weapon}|${lvl}|${rk}|${face}|${firing}|${wf}`, r, mirror(BOX[weapon || 'fist'], face), () => {
     drawWeapon(weapon, lvl, 0, 0, r, face, wt, firing, false);
     drawHand(0, 0, r, weapon);
   }), hx, hy);
-  if (weapon === 'orb' && lvl === 3) {
+  if (weapon === 'orb' && lvl === 3 && !charmed) {
     ctx.save(); ctx.translate(hx, hy); ctx.scale(face * 1.2, 1.2);
     orbSparks(r * 0.1, -r * 1.35, r * 0.42, t);
     ctx.restore();
@@ -372,6 +380,16 @@ function drawEyes(mode, r, face, lx, ly, t, blink) {
       ctx.lineTo(x - s * r * 0.17, y + r * 0.17); ctx.stroke(); continue;
     }
     if (mode === 'happy') { ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y + r * 0.08, r * 0.17, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); continue; }
+    // зазомбирован дудочником: белок с крутящейся тёмно-бирюзовой спиралью
+    if (mode === 'spiral') {
+      ctx.fillStyle = C.eye; ell(x, y, r * 0.25, r * 0.3); ctx.fill(); ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.strokeStyle = '#183f39'; ctx.lineWidth = 1.1; ctx.beginPath();
+      for (let k = 0; k <= 30; k++) {
+        const q = k / 30, ang = q * 2.2 * TAU + t * 6, rr = r * 0.2 * q;
+        ctx.lineTo(x + Math.cos(ang) * rr, y + Math.sin(ang) * rr * 1.2);
+      }
+      ctx.stroke(); continue;
+    }
     if (mode === 'ko') {
       ctx.lineWidth = 1.2; ctx.beginPath();
       for (let k = 0; k < 12; k += 0.4) { const q = r * 0.02 * k; ctx.lineTo(x + Math.cos(k + t * 6 * s) * q, y + Math.sin(k + t * 6 * s) * q); }

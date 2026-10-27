@@ -93,8 +93,9 @@ function drawPole(f) {
   ctx.fillStyle = GOLD; ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
   circle(p.x, top - 3, 4.5); ctx.fill(); ctx.stroke();
   if (f.raise <= 0) return;
-  // поднимается плавно, с замедлением у верха; падает — соскальзывает и гаснет
-  const k = f.held ? 1 - (1 - f.raise) * (1 - f.raise) : f.raise;
+  // поднимается плавно, с замедлением у верха; падает — соскальзывает и гаснет. У флага гнезда («Seal the Gates») — ровно,
+  // вместе с заслонкой: высота полотнища — сколько осталось до закрытия
+  const k = f.held && !f.nest ? 1 - (1 - f.raise) * (1 - f.raise) : f.raise;
   const low = p.y - CLOTH_H - 8, high = top + 5;
   const shake = f.guard ? clamp(1 - (t - f.hitAt) / 0.35, 0, 1) : 0;
   drawCloth(p.x + 1, low + (high - low) * k, t, f.held ? 1 : clamp(f.raise * 3, 0, 1), shake);

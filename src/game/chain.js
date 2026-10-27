@@ -295,6 +295,45 @@ function cutChain(from) {
   }
 }
 
+// дудочник зазомбировал союзника (звено цепочки или лежачего): тот выходит из цепочки и идёт к дудочнику
+// (updateCharmed), не дерётся, подобрать и ранить его нельзя. Героя и «крепких» — нельзя. true — получилось
+function charmAlly(u, piper) {
+  if (u.kind === 'ally') { if (!canBeDisplaced(u)) return false; removeFrom(state.party, u); }
+  else if (u.kind === 'downed') removeFrom(state.downed, u);
+  else return false;
+  u.kind = 'charmed';
+  u.charmedBy = piper;
+  u.vx = 0; u.vy = 0;
+  u.drag = null;
+  u.prevTarget = null;
+  copyBuffs(u, {}, []);
+  state.charmed.push(u);
+  state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 14, life: 0.5, color: COLORS.piper });
+  return true;
+}
+
+// зазомбированные бредут к своему дудочнику (пока не подойдут на его drinkGap); дудочник убит — чары спали: дружочек
+// лежит, как выбитый, его можно подобрать
+function updateCharmed(dt) {
+  for (const u of state.charmed.slice()) {
+    const p = u.charmedBy;
+    if (!state.enemies.includes(p)) {
+      removeFrom(state.charmed, u);
+      u.kind = 'downed';
+      u.charmedBy = null;
+      u.cd = 0;
+      state.downed.push(u);
+      state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 12, life: 0.5, color: COLORS.flag });
+      continue;
+    }
+    const d = dist(u, p), gap = d - u.r - p.r;
+    u.facing = Math.atan2(p.y - u.y, p.x - u.x);
+    if (gap <= p.cfg.drinkGap) continue;
+    const step = Math.min(gap - p.cfg.drinkGap, p.cfg.victimSpeed * dt);
+    moveAndCollide(u, ((p.x - u.x) / d) * step, ((p.y - u.y) / d) * step, world.moveBlockers);
+  }
+}
+
 // попав в союзника, гарпун вырывает его из цепочки и тянет к Скорпиону; лежачего — просто тянет
 function hookAlly(a, scorpion) {
   if (a.kind === 'downed') { a.vx = 0; a.vy = 0; a.drag = scorpion; return; }
@@ -328,5 +367,6 @@ function updateDowned(d, dt) {
 G.chain = {
   pushTrail, trailPointAt, followChain, touchPads, updateBuffs, jobTarget,
   usePack, nearestPickup, tryRecruit, canBeDisplaced, knockOutAlly, displaceAlly, cutChain, dropLastAlly, hookAlly, updateDowned,
+  charmAlly, updateCharmed,
 };
 })(window.Game = window.Game || {});

@@ -1,6 +1,6 @@
 // Враги — другая раса, чем свои (graphics.md): тёмные тела с колышущимся краем, светящиеся глаза
 // без белков, вместо рук — лапы, клешни, хвост, рога, ствол. Целиком рисует Стрелка, Бычка, Колесницу, Скорпиона,
-// Зомби, Хантера, катапульту, мину, портал и турель. Демону и Спруту даёт тела (demon, kraken): прицелы, тентакли,
+// Зомби, Хантера, катапульту, Катапульту II, мину, портал и турель. Демону и Спруту даёт тела (demon, kraken): прицелы, тентакли,
 // лужи и прочее вокруг них рисуют их записи в реестре.
 // Анимация выводится из изменений врага между кадрами (свой кэш, состояние игры только читается).
 (function (G) {
@@ -486,6 +486,122 @@ function launchGlob(x, y, r, shot) {
   glowEye(x, gy, r * 0.09, C.red);
 }
 
+// Катапульта II (тип catapult2, «Endless»): тот же одноглазый миномётчик, но сидит на кованой повозке с двумя шипастыми
+// колёсами и железным тараном спереди, а за ним веером торчат три мортиры — три снаряда за залп; на борту две золотые
+// полосы «II». Едет — колёса крутятся, повозку потряхивает, сзади пыль; смотрит по ходу. Встаёт для залпа (e.setup,
+// e.hold) — из-под днища в пол упираются два упора, смотрит на цель; пока наводится, три жерла разгораются, глаз
+// раскрывается и щурится, повозка дрожит; залп — отдача всех трёх стволов, дым и три кома слизи вверх
+const CAT2 = { wood: '#724113', woodD: '#45230d', iron: '#36170c', mud: '#684c3c', red: '#9b1a0a', redD: '#550f0a' };
+function cat2Wheel(x, y, R, roll) {
+  ctx.fillStyle = C.stone;
+  for (let i = 0; i < 6; i++) {
+    const q = roll + i / 6 * TAU;
+    ctx.beginPath(); ctx.moveTo(x + Math.cos(q - 0.22) * R * 0.95, y + Math.sin(q - 0.22) * R * 0.95);
+    ctx.lineTo(x + Math.cos(q) * R * 1.3, y + Math.sin(q) * R * 1.3);
+    ctx.lineTo(x + Math.cos(q + 0.22) * R * 0.95, y + Math.sin(q + 0.22) * R * 0.95); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  ctx.fillStyle = CAT2.iron; ell(x, y, R, R); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = CAT2.wood; ell(x, y, R * 0.68, R * 0.68); ctx.fill();
+  ctx.strokeStyle = CAT2.iron; ctx.lineWidth = R * 0.2;
+  ctx.beginPath();
+  for (let i = 0; i < 3; i++) { const q = roll + i / 3 * Math.PI; ctx.moveTo(x + Math.cos(q) * R * 0.68, y + Math.sin(q) * R * 0.68); ctx.lineTo(x - Math.cos(q) * R * 0.68, y - Math.sin(q) * R * 0.68); }
+  ctx.stroke();
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
+  ctx.fillStyle = C.gold; ell(x, y, R * 0.24, R * 0.24); ctx.fill(); ctx.stroke();
+}
+// мортира: основание в (0, 0), жерло вверх на len; rec — отдача, hot — накал жерла 0..1
+function cat2Tube(len, w, rec, hot) {
+  ctx.fillStyle = CAT2.woodD; ctx.beginPath(); ctx.roundRect(-w / 2, -len + rec, w, len, 5); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = C.stone;
+  for (const k of [0.78, 0.4]) { ctx.fillRect(-w * 0.53, -len * k + rec, w * 1.06, w * 0.2); ctx.strokeRect(-w * 0.53, -len * k + rec, w * 1.06, w * 0.2); }
+  ell(0, -len + rec, w * 0.6, w * 0.22); ctx.fill(); ctx.stroke();
+  if (hot > 0.15) glow(ctx, 0, -len + rec, w * 1.6, C.orange, 0.55 * hot);
+  ctx.fillStyle = hot > 0 ? hexA(C.orange, 0.45 + 0.55 * hot) : C.dark; ell(0, -len + rec, w * 0.4, w * 0.13); ctx.fill();
+}
+function drawCatapult2(e, a) {
+  const r = e.r * 1.3, now = state.time, t = now + a.seed, fl = hurtFlash(a), f = e.facing || 0;
+  // свой кэш: путь колёс, сторона по ходу, выдвинутость упоров
+  const dt = Math.max(0, now - (a.bt === undefined ? now : a.bt));
+  const mx = e.x - (a.px === undefined ? e.x : a.px), my = e.y - (a.py === undefined ? e.y : a.py), moved = Math.hypot(mx, my);
+  a.bt = now; a.px = e.x; a.py = e.y;
+  if (Math.abs(mx) > 0.15) a.side = mx > 0 ? 1 : -1;
+  const stopped = e.setup > 0 || e.hold > 0, driving = !stopped && a.speed > 6;
+  const face = stopped || !a.side ? a.face : a.side;
+  a.roll = (a.roll || 0) + face * moved / (r * 0.5);
+  a.brace = Math.max(0, Math.min(1, (a.brace || 0) + (stopped ? dt : -dt) * 7));
+  const k = e.setup > 0 ? 1 - e.setup / e.cfg.setupTime : 0;
+  const since = now - a.atkAt, shot = since >= 0 && since < 0.45 ? 1 - since / 0.45 : 0, hot = Math.max(k, shot);
+  const bump = driving ? Math.abs(Math.sin(a.roll * 1.5)) * r * 0.06 : 0;
+  const shake = k > 0.5 ? Math.sin(now * 55) * r * 0.025 * k : 0;
+
+  ctx.fillStyle = 'rgba(20,10,5,0.5)'; ell(e.x, e.y + r * 1.08, r * 1.6, r * 0.36); ctx.fill();
+  if (driving) for (let i = 0; i < 3; i++) {
+    const q = (t * 2.4 + i / 3) % 1;
+    ctx.globalAlpha = 0.5 * (1 - q); ctx.fillStyle = i % 2 ? C.stone : CAT2.mud;
+    ell(e.x - face * r * (1.2 + q * 0.7), e.y + r * (1.0 - q * 0.45), r * (0.16 + q * 0.2), r * (0.13 + q * 0.16)); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.save(); ctx.translate(e.x + shake, e.y - bump);
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+
+  // три мортиры веером за миномётчиком: крайние — за средней
+  const rec = shot * r * 0.2;
+  for (const off of [-0.6, 0.6, 0]) {
+    ctx.save(); ctx.translate(-face * r * 0.38, -r * 0.1); ctx.rotate(-face * 0.35 + off);
+    const len = r * (off ? 1.15 : 1.35);
+    cat2Tube(len, r * 0.55, rec, hot);
+    if (shot > 0) for (let i = 0; i < 3; i++) {
+      const q = 1 - shot; ctx.globalAlpha = shot * 0.7; ctx.fillStyle = i % 2 ? C.stone : CAT2.mud;
+      ell((i - 1) * r * 0.18 * (1 + q), -len - r * (0.2 + q * 0.7) - (i % 2) * r * 0.12, r * (0.15 + q * 0.22), r * (0.13 + q * 0.18)); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    launchGlob(0, -len - r * 0.05, r * 0.8, shot);
+    ctx.restore();
+  }
+
+  // упоры: встал для залпа — из-под днища в пол
+  if (a.brace > 0.02) {
+    for (const sx of [-1, 1]) {
+      const fx = sx * r * (1.0 + 0.5 * a.brace), fy = r * (0.5 + 0.55 * a.brace);
+      ctx.lineWidth = r * 0.26; ctx.strokeStyle = C.ink; ctx.beginPath(); ctx.moveTo(sx * r * 0.9, r * 0.4); ctx.lineTo(fx, fy); ctx.stroke();
+      ctx.lineWidth = r * 0.16; ctx.strokeStyle = C.stone; ctx.beginPath(); ctx.moveTo(sx * r * 0.9, r * 0.4); ctx.lineTo(fx, fy); ctx.stroke();
+      ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.fillStyle = C.stone; ell(fx, fy, r * 0.24, r * 0.1); ctx.fill(); ctx.stroke();
+    }
+    ctx.lineWidth = 2; ctx.strokeStyle = C.ink;
+  }
+
+  // повозка: верх палубы, борт с досками и золотыми полосами «II», железный таран спереди
+  ctx.fillStyle = C.stone; ctx.beginPath();
+  ctx.moveTo(face * r * 1.15, r * 0.2); ctx.lineTo(face * r * 1.7, r * 0.36); ctx.lineTo(face * r * 1.15, r * 0.52); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = CAT2.woodD; ctx.beginPath(); ctx.roundRect(-r * 1.18, r * 0.02, r * 2.36, r * 0.6, 6); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = CAT2.wood; ctx.beginPath(); ctx.roundRect(-r * 1.18, r * 0.02, r * 2.36, r * 0.18, 5); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = C.gold;
+  for (const sx of [-0.16, 0.06]) { ctx.beginPath(); ctx.roundRect(sx * r, r * 0.26, r * 0.12, r * 0.3, 2); ctx.fill(); ctx.stroke(); }
+
+  // колёса — поверх борта
+  cat2Wheel(-face * r * 0.72, r * 0.66, r * 0.5, a.roll);
+  cat2Wheel(face * r * 0.72, r * 0.66, r * 0.5, a.roll);
+
+  // сам миномётчик на палубе — как у Катапульты
+  const w = Math.sin(t * 4);
+  const rx = r * 0.78 * (1 + 0.04 * w + 0.12 * shot), ry = r * 0.7 * (1 - 0.04 * w - 0.12 * shot + 0.06 * k);
+  ctx.save(); ctx.translate(face * r * 0.1, -r * 0.24);
+  edgePath(rx, ry, t, 'wobble', a.seed); ctx.fillStyle = CAT2.redD; ctx.fill();
+  ctx.save(); edgePath(rx, ry, t, 'wobble', a.seed); ctx.clip();
+  ctx.fillStyle = CAT2.red; ell(-rx * 0.05, -ry * 0.12, rx * 0.92, ry * 0.85); ctx.fill();
+  ctx.strokeStyle = hexA(C.gold, 0.35); ctx.lineWidth = r * 0.2; ell(0, -r * 0.15, rx * 1.02, ry); ctx.stroke();
+  flashOver(rx, ry, fl);
+  ctx.restore();
+  edgePath(rx, ry, t, 'wobble', a.seed); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke();
+  const ex = face * r * 0.12, ey = -r * 0.1, er = r * (0.33 + 0.06 * k);
+  glowEye(ex, ey, er, k > 0.4 ? C.cream : C.gold, 0, 1 - 0.45 * k);
+  const look = stopped ? f : (face > 0 ? 0 : Math.PI);
+  ctx.fillStyle = C.ink; ell(ex + Math.cos(look) * er * 0.25, ey + Math.sin(look) * er * 0.2, er * 0.25, er * 0.75 * (1 - 0.45 * k)); ctx.fill();
+  if (k > 0.3 || shot > 0) { ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(ex - er * 1.1, ey - er * 1.1); ctx.lineTo(ex + er * 1.1, ey - er * 0.8); ctx.stroke(); }
+  ctx.restore();
+  ctx.restore(); ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
+}
+
 // мина: тёмный колючий комок, наполовину в земле, красный глаз часто мигает
 function drawMine(m, a) {
   const r = m.r, t = state.time + a.seed;
@@ -605,12 +721,14 @@ function drawPortal(e, a) {
   ctx.restore();
 }
 
-const SPECIAL = { tower: drawCatapult, mine: drawMine, portal: drawPortal };
+const SPECIAL = { tower: drawCatapult, catapult2: drawCatapult2, mine: drawMine, portal: drawPortal };
+// полоска HP — на столько r над центром (у портала и Катапульты II над тем, что торчит вверх)
+const BAR_UP = { portal: 2.4, catapult2: 2.05 };
 
 function drawSpecial(e) {
   const a = track(e);
   SPECIAL[e.type](e, a);
-  if (e.type !== 'mine' && e.hp < e.maxHp) hpBar(e.x, e.y - e.r * (e.type === 'portal' ? 2.4 : 1.3) - 8, Math.min(e.r, 40), e.hp / e.maxHp);
+  if (e.type !== 'mine' && e.hp < e.maxHp) hpBar(e.x, e.y - e.r * (BAR_UP[e.type] || 1.3) - 8, Math.min(e.r, 40), e.hp / e.maxHp);
 }
 
 // Демон — Пасть: тёмно-красная голова парит над полом (под ней тёмный дым), почти вся — пасть с клыками,
@@ -821,13 +939,18 @@ function swallowed(x, y, r) {
   ell(x, y, r, r * 0.95); ctx.fill(); ctx.stroke();
 }
 
-// погибшие с прошлого кадра лопаются тёмными кусочками
+// погибшие с прошлого кадра лопаются тёмными кусочками (Катапульта II — красными и деревянными)
+const POP = { catapult2: { col: CAT2.red, sh: CAT2.wood } };
 function sweep() {
   const now = new Set();
-  for (const e of state.enemies) if (LOOK[e.type]) now.add(e);
-  for (const e of lastDrawn) if (!now.has(e) && e.hp <= 0) G.blobs.pop(e, LOOK[e.type].col, LOOK[e.type].sh);
+  for (const e of state.enemies) if (LOOK[e.type] || POP[e.type]) now.add(e);
+  for (const e of lastDrawn) {
+    const look = LOOK[e.type] || POP[e.type];
+    if (!now.has(e) && e.hp <= 0) G.blobs.pop(e, look.col, look.sh);
+  }
   lastDrawn = now;
 }
 
-G.foes = { has, draw, drawsHook, farPoint, sweep, maw, mawSpikeShot, kraken, swallowed };
+// kit — приёмы рисования тёмной расы для render/ambushart.js (колышущийся край, светящийся глаз, звёздочка, полоска HP)
+G.foes = { has, draw, drawsHook, farPoint, sweep, maw, mawSpikeShot, kraken, swallowed, kit: { ell, hexA, edgePath, glowEye, star, hpBar } };
 })(window.Game = window.Game || {});

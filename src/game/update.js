@@ -6,15 +6,15 @@
 const { CONFIG, COLORS, state } = G;
 const { clamp, dist, removeFrom, pickWeighted, angleDiff } = G.math;
 const { moveAndCollide, slideAlongWall, circleRectOverlap } = G.collision;
-const { world, setDoorsOpen } = G.world;
+const { world, setDoorsOpen, hasLineOfSight } = G.world;
 const { leader, leaderSpeedMul, chainMass, currentRoom, chainUnits, enemyTargets, isSpotted, spawnEnemy, upgrade, boostMul, cameraTarget } = G.session;
 const { freeSpotNear } = G.world;
-const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, knockOutAlly, displaceAlly, cutChain, canBeDisplaced } = G.chain;
+const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, updateCharmed, knockOutAlly, displaceAlly, cutChain, canBeDisplaced, charmAlly } = G.chain;
 const { updatePads, updateAllySpawns } = G.pads;
-const { updateWaves } = G.waves;
+const { updateWaves, allWavesOut, perkDue } = G.waves;
 const { updatePod } = G.pod;
 const { updateRace } = G.race;
-const { updateFlags, allFlagsHeld } = G.flags;
+const { updateFlags, allFlagsHeld, allGatesSealed } = G.flags;
 const combat = G.combat;
 const { updateProjectiles, updateBurns, updateClouds, applySpikes, applyFirewalls, updateEffects, updateCannons } = combat;
 const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
@@ -28,8 +28,11 @@ const chaserTypes = Object.keys(enemyTypes).filter((k) => enemyTypes[k].chaseSpe
 // враг, которого можно бить вплотную (кулаком, копьём, шипастостью, тараном Героя): обнаруженный и без флага rangedOnly
 function meleeHittable(e) { return isSpotted(e) && !enemyTypes[e.type].rangedOnly; }
 
-// случайный тип для порождения порталом: подвижные типы с весами уровня (enemyWeights)
-function pickChaser() { return pickWeighted(chaserTypes, state.level.enemyWeights || {}); }
+// случайный тип для порождения порталом: подвижные типы из пула уровня с его весами (enemyWeights)
+function pickChaser() {
+  const pool = state.level.enemyPool, list = chaserTypes.filter((k) => !pool || pool.includes(k));
+  return pickWeighted(list.length ? list : chaserTypes, state.level.enemyWeights || {});
+}
 
 // то, что игра даёт записям типов из content/ параметром: сами они game/ не подключают
 const game = {
@@ -38,8 +41,8 @@ const game = {
   spawnProjectile: combat.spawnProjectile, spawnMortar: combat.spawnMortar,
   spawnBigMortar: combat.spawnBigMortar, spawnHook: combat.spawnHook,
   spawnFirewall: combat.spawnFirewall,
-  knockOutAlly, displaceAlly, cutChain, canBeDisplaced, wanderStep, stepOffSpikes, chaseStep, removeFrom,
-  spawnEnemy, freeSpotNear, pickChaser,
+  knockOutAlly, displaceAlly, cutChain, canBeDisplaced, charmAlly, wanderStep, stepOffSpikes, chaseStep, removeFrom,
+  spawnEnemy, freeSpotNear, pickChaser, hasLineOfSight,
 };
 
 // джойстик: куда тянут (aim), туда Герой поворачивает с обычной скоростью поворота
@@ -286,6 +289,7 @@ function updateDoors() {
 function isVictory() {
   const rule = state.level.victory;
   if (rule.kind === 'none') return false; // тестовый уровень: играть, пока не надоест
+  if (rule.kind === 'endless') return false; // «Endless»: волнам нет конца, партия идёт, пока жив Герой
   // продержаться заданное время (база цела — иначе партия уже проиграна)
   if (rule.kind === 'survive') return state.time >= rule.time;
   if (rule.kind === 'destroyType') return !state.enemies.some((e) => e.type === rule.type);
@@ -295,6 +299,10 @@ function isVictory() {
   if (rule.kind === 'laps') return !!state.race && state.race.laps.length >= rule.laps;
   // «Capture the Flags»: горят все флаги — на каждой площадке лежит союзник или едет цепочка (см. game/flags.js)
   if (rule.kind === 'flags') return allFlagsHeld();
+  // «Seal the Gates»: закрыты все гнёзда — на каждом флаге часовой пролежал свои секунды и лежит до сих пор
+  if (rule.kind === 'seals') return allGatesSealed();
+  // «Ambush»: все заранее заданные волны вышли и все враги перебиты
+  if (rule.kind === 'waves') return allWavesOut() && !state.enemies.some((e) => !enemyTypes[e.type].ignoredForVictory);
   // дойти до финишной зоны уровня (см. world.finish)
   if (rule.kind === 'reachPoint') {
     const lead = leader();
@@ -335,6 +343,7 @@ function update(dt) {
   updatePod(dt);
   updateRace();
   for (const d of state.downed) updateDowned(d, dt);
+  updateCharmed(dt);
   // выбитые союзники не выходят из боя: стреляют, рубят и лечат лёжа
   for (const d of state.downed.slice()) updateWeapons(d, dt);
   updateDoors();
@@ -358,6 +367,8 @@ function update(dt) {
   // победа открывает портал выхода (на «Обороне» — после волны от базы); заехал в него — уровень пройден
   if (state.status === 'play' && !state.cleared && isVictory()) onVictory();
   updateExit(dt);
+  // «Endless»: перебиты все враги очередной perkEvery-й волны — игра встаёт на выбор улучшения (экран — main.js)
+  if (state.status === 'play' && perkDue()) { state.perks += 1; state.status = 'perk'; }
 
   // камера
   const target = cameraTarget();

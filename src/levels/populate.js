@@ -6,6 +6,7 @@
 'use strict';
 
 const { clamp, pickOne, pickWeighted, sampleWeighted, shuffled } = G.math;
+const { enemyTypes } = G;
 
 // раскладывает типы по точкам так, чтобы каждый выбранный тип встретился хотя бы раз;
 // с весами (weights) остальные точки добираются чаще из тех типов, у которых вес больше
@@ -70,5 +71,27 @@ function rollWave(count, level) {
   return rollEnemySpec({ count, kinds: level.waves.kinds }, level).map(([type]) => type);
 }
 
-G.populate = { rollEnemies, rollLevelAllies, rollWave };
+// состав волны по сценарию («Ambush», «Endless»): spec.kinds типов из spec.pool (или пула уровня; с весами уровня),
+// каждый выбранный — хотя бы spec.copies раз (по умолчанию раз; набираются по кругу — сперва по одному каждого),
+// остальные места бюджета spec.size добираются из них же. Тип с spawnCost занимает столько мест (новые враги — два);
+// если оставшееся место никому не впору, оно пропадает. Возвращает типы
+function rollSlots(spec, level) {
+  const pool = spec.pool || level.enemyPool, weights = level.enemyWeights;
+  const kinds = clamp(spec.kinds || 1, 1, pool.length);
+  const chosen = weights ? sampleWeighted(pool, kinds, weights) : shuffled(pool).slice(0, kinds);
+  const cost = (t) => enemyTypes[t].spawnCost || 1;
+  let left = spec.size;
+  const out = [];
+  for (let c = 0; c < (spec.copies || 1); c++) for (const t of chosen) if (cost(t) <= left) { out.push(t); left -= cost(t); }
+  for (;;) {
+    const fits = chosen.filter((t) => cost(t) <= left);
+    if (!fits.length) break;
+    const t = weights ? pickWeighted(fits, weights) : pickOne(fits);
+    out.push(t);
+    left -= cost(t);
+  }
+  return shuffled(out);
+}
+
+G.populate = { rollEnemies, rollLevelAllies, rollWave, rollSlots };
 })(window.Game = window.Game || {});

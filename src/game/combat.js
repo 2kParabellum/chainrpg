@@ -51,9 +51,10 @@ function damageUnit(u, dmg, hit) {
   if (u.hp <= 0) return;
   if (state.leaving && u.kind === 'ally') return; // цепочка уже уходит в портал выхода
   dmg = coverDefense(u, dmg);
+  const type = u.kind === 'enemy' && enemyTypes[u.type];
+  if (type && type.damageMul) dmg *= type.damageMul(u); // броня (черепаха в панцире)
   u.hp -= dmg;
   u.regenTimer = 0;
-  const type = u.kind === 'enemy' && enemyTypes[u.type];
   if (type && type.onDamage) type.onDamage(u, dmg, hit || {}, { state });
   if (u.hp <= 0) {
     // усиление «воля»: смертельный урон не убивает союзника (в цепочке или выбитого), он остаётся с 1 HP
@@ -263,8 +264,9 @@ function updateClouds(dt) {
 }
 
 // стенка огня: жжёт всех, кто её касается. growing — пока true, жизнь не убывает и урон уже идёт
-// (так луч босса прожигает свою линию по мере роста), а когда growing снимают — начинается 10-секундный
-// отсчёт «дожигания» на месте. Возвращает созданный объект: вызывающий сам обновляет его x2/y2 по кадрам
+// (так луч босса прожигает свою линию по мере роста), а когда growing снимают — начинается отсчёт
+// «дожигания» на месте. Возвращает созданный объект: вызывающий сам обновляет его x2/y2 по кадрам
+// (и может записать в него owner — погиб владелец посреди роста, полоса больше не растёт и начинает догорать)
 function spawnFirewall(x1, y1, x2, y2, radius, dps, life, growing) {
   const f = { x1, y1, x2, y2, r: radius, dps, life, maxLife: life, growing: !!growing };
   state.firewalls.push(f);
@@ -276,6 +278,7 @@ function applyFirewalls(dt) {
   const victims = chainUnits().concat(state.downed);
   for (let i = state.firewalls.length - 1; i >= 0; i--) {
     const f = state.firewalls[i];
+    if (f.growing && f.owner && !state.enemies.includes(f.owner)) f.growing = false;
     if (!f.growing) f.life -= dt;
     if (f.life <= 0) { state.firewalls.splice(i, 1); continue; }
     for (const u of victims) {

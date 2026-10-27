@@ -17,6 +17,8 @@ const state = {
   moveTarget: null,    // куда Герой едет мышью — точка мира { x, y }; null — никуда
   neutrals: [],      // ждут вербовки
   downed: [],        // выбитые из цепочки, лежат до подбора
+  charmed: [],       // зазомбированные дудочником («Ambush»): идут к нему, не дерутся, подобрать и ранить нельзя
+                     // (u.charmedBy — дудочник; см. game/chain.js)
   enemies: [],
   projectiles: [],
   effects: [],
@@ -25,7 +27,7 @@ const state = {
   cannons: [],       // таймеры неуязвимых пушек-ловушек мира, по одному на world.cannons
   trail: [],         // след Героя, по которому бегут остальные звенья
   camera: { x: 0, y: 0 },
-  status: 'play',    // menu | play | dead | win
+  status: 'play',    // menu | play | pause | dead | win | perk («Endless»: выбор улучшения посреди партии)
   time: 0,           // время партии: для анимаций
   pads: [],          // подиумы на карте: появляются и исчезают по ходу партии (см. game/pads.js)
   padMarks: [],      // метки-тени будущих подиумов: через несколько секунд на их месте появится подиум
@@ -34,7 +36,16 @@ const state = {
   allySpawnIn: null, // то же для случайных дружочков
   targetableEnemies: [], // враги, по которым можно стрелять: считаются раз за кадр
   base: null,        // уровень «Оборона»: база — цель врагов с запасом HP (null на других уровнях)
-  nests: [],         // гнёзда врагов: таймер следующей волны и сколько волн уже вышло (см. game/waves.js)
+  // «Ambush» и «Endless»: сколько волн по сценарию (level.waves.script / endless) уже вышло и последняя вышедшая —
+  // { n, types, hpMul, at }
+  // (для плашки); у гнёзд тогда ещё queue — кто выйдет из гнезда следующей волной, done — волн больше не будет
+  waveNo: 0,
+  waveNews: null,
+  perks: 0,          // «Endless»: сколько раз посреди партии уже выбирали улучшение (см. waves.perkDue)
+  // гнёзда врагов: таймер следующей волны и сколько волн уже вышло (см. game/waves.js); в «Seal the Gates» ещё заслонка
+  // (см. game/flags.js) — seal: 0..1, насколько закрыта, sealed: закрыто, guarded: на его флаге лежит часовой, openedAt:
+  // когда гнездо открылось снова
+  nests: [],
   // «Hit the Count»: Под (см. game/pod.js) — count: сколько дружочков за текущий или последний проезд, passing: идёт
   // проезд, touched: кто из цепочки уже проехал за него, lastTouch: когда цепочка последний раз касалась, cooldown: секунд
   // до того, как Под снова взведётся, countAt: когда прибавился последний (по state.time), dropped: выдача за этот проезд
@@ -47,12 +58,15 @@ const state = {
   // Героя), counted: дружочки, уже посчитанные за последний круг, prev: где было каждое звено в прошлом кадре (Map).
   // null на других уровнях
   race: null,
-  // «Capture the Flags»: флаги по площадкам мира (см. game/flags.js) — btn: площадка (кнопка мира с flag: true),
-  // guard: союзник, лежащий на ней (часовой, или null), held: флаг горит (есть часовой или на площадке звено цепочки),
-  // raise: 0..1 — насколько флаг поднят (рисунок), guardHp: HP часового в прошлом кадре, hitAt: когда часового последний
-  // раз ранили. На других уровнях пусто
+  // «Capture the Flags», «Seal the Gates»: флаги по площадкам мира (см. game/flags.js) — btn: площадка (кнопка мира с
+  // flag: true), guard: союзник, лежащий на ней (часовой, или null), held: флаг горит (есть часовой или — кроме «Seal the
+  // Gates» — на площадке звено цепочки), raise: 0..1 — насколько флаг поднят (рисунок), guardHp: HP часового в прошлом
+  // кадре, hitAt: когда часового последний раз ранили, nest: гнездо из state.nests, которое флаг закрывает («Seal the
+  // Gates», иначе null). На других уровнях пусто
   flags: [],
-  flagNews: null,    // последнее событие флагов для плашки: { up: поднят или потерян, count: сколько поднято, at }
+  // последнее событие флагов для плашки: { kind, count, at } — kind: 'up' (часовой поднял флаг) или 'lost' (флаг потерян),
+  // в «Seal the Gates» — 'sealed' (гнездо закрыто) или 'open' (снова открыто); count — сколько флагов горит (гнёзд закрыто)
+  flagNews: null,
   allyFlow: null,   // поле путей к союзникам и когда оно посчитано (см. game/roaming.js); null — посчитать заново
   notice: null,      // надпись на экране о взятом усилении: { key, at, packed } — что взято, когда (по state.time)
                      // и не ушло ли в рюкзак
@@ -173,7 +187,7 @@ function spawnEnemy(type, x, y, room, extra) {
 function resetGame(level) {
   state.level = level;
   buildWorld(level);
-  state.party = []; state.moveInput = { throttle: 0, turn: 0, aim: null, toward: null, holdOnly: false }; state.moveTarget = null; state.neutrals = []; state.downed = []; state.enemies = [];
+  state.party = []; state.moveInput = { throttle: 0, turn: 0, aim: null, toward: null, holdOnly: false }; state.moveTarget = null; state.neutrals = []; state.downed = []; state.charmed = []; state.enemies = [];
   state.projectiles = []; state.effects = []; state.trail = [];
   state.clouds = []; state.firewalls = [];
   state.pads = []; state.padMarks = []; state.jobSpawnIn = null; state.buffSpawnIn = null; state.allySpawnIn = null;
@@ -184,18 +198,28 @@ function resetGame(level) {
   state.base = world.base ? makeBase(world.base) : null;
   state.pod = world.pod ? { count: 0, passing: false, touched: [], lastTouch: 0, cooldown: 0, countAt: -99, dropped: false, lastSide: -1, streak: 0, drops: [] } : null;
   state.race = world.track ? { gates: 0, best: 0, startAt: null, lapAt: 0, laps: [], counted: [], prev: new Map() } : null;
-  state.flags = world.buttons.filter((b) => b.flag).map((btn) => ({ btn, guard: null, held: false, raise: 0, guardHp: 0, hitAt: -99 }));
+  state.flags = world.buttons.filter((b) => b.flag).map((btn) => ({ btn, guard: null, held: false, raise: 0, guardHp: 0, hitAt: -99, nest: null }));
   state.flagNews = null;
   state.allyFlow = null;
   state.notice = null;
   state.backpack = { open: false, stored: null };
   state.room = null; state.roomAt = 0;
   state.cleared = false; state.clearedAt = 0; state.shockwave = null; state.exit = null; state.leaving = null;
+  state.waveNo = 0; state.waveNews = null; state.perks = 0;
   // у каждого гнезда свой таймер волн; порядок, в котором гнёзда выпускают первые волны, бросается заново
   const waves = level.waves;
+  // carry — дробный остаток врагов при общем потоке (waves.share)
   state.nests = waves ? shuffled(world.nests).map((p, k) => ({
-    x: p.x, y: p.y, wave: 0, nextIn: waves.firstAt + k * waves.stagger, releasedAt: -99, lastCount: 0,
+    x: p.x, y: p.y, wave: 0, nextIn: waves.firstAt + k * (waves.stagger || 0), releasedAt: -99, lastCount: 0, carry: 0,
+    seal: 0, sealed: false, guarded: false, openedAt: -99,
   })) : [];
+  // «Seal the Gates»: каждый флаг закрывает ближайшее к нему гнездо
+  if (level.seals && state.nests.length) {
+    for (const f of state.flags) {
+      const c = { x: f.btn.x + f.btn.w / 2, y: f.btn.y + f.btn.h / 2 };
+      f.nest = state.nests.reduce((a, b) => (dist(b, c) < dist(a, c) ? b : a));
+    }
+  }
 
   const spawn = localToWorld(level.spawn.room, level.spawn.at[0], level.spawn.at[1]);
   const hero = makeAlly('ally', 'hero', spawn.x, spawn.y);
