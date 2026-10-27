@@ -124,7 +124,7 @@ src/
                     interval; победа — waves (все волны вышли и все враги перебиты); в прохождении — после Логова
     level10.js      «Endless»: как «Ambush» (rect, колонны, два гнезда у коротких стен), но волны без конца — waves.endless
                     (формула волны: size — first + grow·k, stages — с какой волны сколько типов и из кого, copies — сколько
-                    раз хотя бы каждого типа, hpGrow), waves.ramp (пауза сокращается), waves.maxAlive; победа — endless
+                    раз хотя бы каждого типа), waves.ramp (пауза сокращается), waves.maxAlive; победа — endless
                     (никогда); последний в прохождении, после Ambush
     testRam.js      тестовый «Ram Test» (G.levelTestRam): квадратная комната (kind: 'rect'), мишень-манекен (dummy), точки
                     дружочков, постоянный подиум «скорости», без случайных подиумов; победа kind: 'none' (никогда),
@@ -163,7 +163,7 @@ src/
                     таймеры гнёзд, размер и состав отряда (nextCount — сколько выйдет следующей волной, с общим потоком
                     waves.share), ускорение по ходу партии, выход врагов; закрытое гнездо молчит; волны по сценарию
                     waves.script (общий таймер, состав заранее в nest.queue, allWavesOut) и бесконечные waves.endless
-                    (waveSpec — состав волны k по формуле, HP врагов ×hpMul)
+                    (waveSpec — состав волны k по формуле)
     bodies.js       тела: расталкивание врагов между собой и цепочки с врагами по массе
     exit.js         выход с уровня: после победы — волна от базы (если есть база) и светлый портал (level.exit; с
                     exit.spots — в ближайшей к Герою из точек; радиус — exit.radius или общий), Герой в портале — цепочка втягивается следом, затем state.status = 'win'
@@ -425,14 +425,14 @@ src/
   `render/nestart.js` над гнездом с `done` плашку не рисует; «WAVE N/5» и плашка новой волны — `hud.js`.
 - **Уровень «Endless» (`levels/level10.js`, `game/waves.js`)**. Те же волны по сценарию, только состав волны номер `k` не
   из списка, а по формуле: `waveSpec(cfg, k)` (внутри `waves.js`) — для `script` берёт `script[k]`, для `waves.endless` считает
-  `{ size, kinds, pool, copies, hpMul }` (`size` — `first + grow·k`; `kinds` и `pool` — из последней ступени `stages` с
-  `from ≤ k`; `copies` — `endless.copies`; `hpMul = 1 + hpGrow·k`), `null` — волн больше нет (у бесконечных не бывает).
+  `{ size, kinds, pool, copies }` (`size` — `first + grow·k`; `kinds` и `pool` — из последней ступени `stages` с
+  `from ≤ k`; `copies` — `endless.copies`), `null` — волн больше нет (у бесконечных не бывает).
   `populate.rollSlots` набирает каждого выбранного типа хотя бы `copies` раз (по кругу). `planScripted` раздаёт состав
   отсортированным по типу — гнёздам по очереди (тип, которого не меньше, чем гнёзд, достаётся каждому), очередь гнезда
-  перемешивает так, чтобы типы чередовались (`alternate`), и кладёт `hpMul` в гнёзда; `updateScripted` выпускает гнёзда
-  по очереди по одному (`spawnAt(nest, type, cfg, hpMul)` умножает HP). Пауза после волны — `intervalNow` (с
+  перемешивает так, чтобы типы чередовались (`alternate`); `updateScripted` выпускает гнёзда по очереди по одному
+  (`spawnAt`). Враги — с обычным HP. Пауза после волны — `intervalNow` (с
   `waves.ramp` сокращается по времени партии, как у обычных волн); `waves.maxAlive` — пока живых врагов из гнёзд
-  столько, остальные из очереди пропадают. `state.waveNews` несёт ещё `hpMul` (плашка «— HP +N%»). Победа
+  столько, остальные из очереди пропадают. Победа
   `victory.kind: 'endless'` — `isVictory` всегда `false`; счётчик «WAVE N» — `hud.js`; экран поражения показывает
   `state.waveNo` и рекорд (`main.js`, ключ `chainrpg.endlessBest` в `localStorage`, без хранилища — без рекорда).
 - **Катапульта II (`content/enemies.js` — `catapult2`, `render/foes.js` — `drawCatapult2`)**. Числа — от `tower.stats`
