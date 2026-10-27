@@ -197,20 +197,31 @@ function applyHeroRam() {
   }
 }
 
-// усиление «шипастость»: раз в contactInterval бьёт всех врагов, которых сейчас касается тело
+// усиление «шипастость»: раз в contactInterval колет всех врагов, до которых достают зубья (просвет до reach).
+// Урон — от скорости самого звена (по сдвигу за кадр, сглаженно): стоя dmgStill, на полной скорости хода dmgFull
 function applySpikyContact(a, dt) {
+  const def = G.buffs.spiky;
+  if (a.spikyX !== undefined && dt > 0) {
+    const sp = Math.hypot(a.x - a.spikyX, a.y - a.spikyY) / dt;
+    a.spikySpeed += (sp - a.spikySpeed) * Math.min(1, dt * 10);
+  } else a.spikySpeed = 0;
+  a.spikyX = a.x; a.spikyY = a.y;
   a.spikyCd = (a.spikyCd || 0) - dt;
   if (a.spikyCd > 0) return;
-  const def = G.buffs.spiky;
+  const k = Math.min(def.speedCap, a.spikySpeed / CONFIG.LEADER.speed);
+  const dmg = (def.dmgStill + (def.dmgFull - def.dmgStill) * k) * boostMul('dmgAdd');
   let hit = false;
   for (const e of state.enemies) {
     if (!meleeHittable(e)) continue;
-    if (dist(a, e) <= a.r + e.r) { combat.damageUnit(e, def.contactDmg * boostMul('dmgAdd')); hit = true; }
+    const d = dist(a, e);
+    if (d - a.r - e.r > def.reach) continue;
+    combat.damageUnit(e, dmg);
+    hit = true;
+    // укол виден искрой там, где зубья достали врага
+    const k = (a.r + def.reach * 0.5) / (d || 1);
+    state.effects.push({ type: 'ring', x: a.x + (e.x - a.x) * k, y: a.y + (e.y - a.y) * k, r: 5, life: 0.15, color: def.color });
   }
-  if (hit) {
-    a.spikyCd = def.contactInterval;
-    state.effects.push({ type: 'ring', x: a.x, y: a.y, r: a.r + 6, life: 0.15, color: def.color });
-  }
+  if (hit) a.spikyCd = def.contactInterval;
 }
 
 // долечивание после лечения медика с улучшением «Lasting Cure»: rate HP в секунду, пока не выйдет время
@@ -226,7 +237,7 @@ function applyCure(a, dt) {
 // заодно тикает долечивание
 function updateWeapons(a, dt) {
   for (const w of a.gear) weapons[w.type].update(a, w, dt * (a.rateMul || 1), game);
-  if (a.buffs.spiky > 0) applySpikyContact(a, dt);
+  if (a.buffs.spiky > 0) applySpikyContact(a, dt); else a.spikyX = undefined; // без шипов скорость не меряется
   applyCure(a, dt);
 }
 
