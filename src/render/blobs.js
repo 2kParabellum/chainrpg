@@ -320,68 +320,20 @@ function drawAlly(u, mode, alpha = 1) {
 }
 
 // «воля»: ангельские крылья за спиной — веер из пяти перьев от плеча и пушистое плечо сверху; машут
-// «шипастость» у каждого звена цепочки: зубья пилы крутятся вокруг тела (за ним — его край прячет основания);
-// кончики — ровно там, докуда достаёт укол (тело + reach), так что задетый враг касается зубьев
+// «шипастость» у каждого звена цепочки: красная пила — зубья крутятся вокруг тела (за ним — его край прячет
+// основания), передний край зуба круче заднего. Кончики — ровно там, докуда достаёт укол (тело + reach)
 function drawSpikes(u, a, r) {
-  const style = G.blobs.spikeStyle || 'A';
-  const tip = u.r + G.buffs.spiky.reach, base = r * 0.9;
-  if (style === 'A') { // пила: 8 зубьев, передний край круче, тёмно-красные с тонкой обводкой
-    const n = 8, w = Math.PI / n * 0.62;
-    ctx.fillStyle = C.blood; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.2; ctx.lineJoin = 'round';
-    ctx.beginPath();
-    for (let i = 0; i < n; i++) {
-      const g = a.spin + i / n * TAU;
-      ctx.moveTo(Math.cos(g - w) * base, Math.sin(g - w) * base);
-      ctx.lineTo(Math.cos(g + w * 0.55) * tip, Math.sin(g + w * 0.55) * tip);
-      ctx.lineTo(Math.cos(g + w) * base, Math.sin(g + w) * base);
-      ctx.closePath();
-    }
-    ctx.fill(); ctx.stroke();
-  } else if (style === 'B') { // диск: тонкое кольцо и 7 ровных зубьев ярко-красных
-    const n = 7, w = Math.PI / n * 0.5;
-    ctx.strokeStyle = C.blood; ctx.lineWidth = 2; ctx.globalAlpha = baseA * 0.7;
-    ctx.beginPath(); ctx.arc(0, 0, base + 1.5, 0, TAU); ctx.stroke();
-    ctx.globalAlpha = baseA;
-    ctx.fillStyle = C.red; ctx.strokeStyle = C.ink; ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let i = 0; i < n; i++) {
-      const g = a.spin + i / n * TAU;
-      ctx.moveTo(Math.cos(g - w) * base, Math.sin(g - w) * base);
-      ctx.lineTo(Math.cos(g) * tip, Math.sin(g) * tip);
-      ctx.lineTo(Math.cos(g + w) * base, Math.sin(g + w) * base);
-      ctx.closePath();
-    }
-    ctx.fill(); ctx.stroke();
-  } else if (style === 'D') { // пила ярко-красная: 7 зубьев, передний край круче, тонкая обводка
-    const n = 7, w = Math.PI / n * 0.6;
-    ctx.fillStyle = C.red; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.1; ctx.lineJoin = 'round';
-    ctx.beginPath();
-    for (let i = 0; i < n; i++) {
-      const g = a.spin + i / n * TAU;
-      ctx.moveTo(Math.cos(g - w) * base, Math.sin(g - w) * base);
-      ctx.lineTo(Math.cos(g + w * 0.5) * tip, Math.sin(g + w * 0.5) * tip);
-      ctx.lineTo(Math.cos(g + w) * base, Math.sin(g + w) * base);
-      ctx.closePath();
-    }
-    ctx.fill(); ctx.stroke();
-  } else { // минимум: 6 тёмно-красных зубьев без обводки, светлый кончик
-    const n = 6, w = Math.PI / n * 0.45;
-    ctx.fillStyle = C.blood;
-    ctx.beginPath();
-    for (let i = 0; i < n; i++) {
-      const g = a.spin + i / n * TAU;
-      ctx.moveTo(Math.cos(g - w) * base, Math.sin(g - w) * base);
-      ctx.lineTo(Math.cos(g) * tip, Math.sin(g) * tip);
-      ctx.lineTo(Math.cos(g + w) * base, Math.sin(g + w) * base);
-      ctx.closePath();
-    }
-    ctx.fill();
-    ctx.fillStyle = C.orange;
-    for (let i = 0; i < n; i++) {
-      const g = a.spin + i / n * TAU;
-      ctx.beginPath(); ctx.arc(Math.cos(g) * (tip - 1.5), Math.sin(g) * (tip - 1.5), 1.3, 0, TAU); ctx.fill();
-    }
+  const n = 7, w = Math.PI / n * 0.6, tip = u.r + G.buffs.spiky.reach, base = r * 0.9;
+  ctx.fillStyle = C.red; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.1; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const g = a.spin + i / n * TAU;
+    ctx.moveTo(Math.cos(g - w) * base, Math.sin(g - w) * base);
+    ctx.lineTo(Math.cos(g + w * 0.5) * tip, Math.sin(g + w * 0.5) * tip);
+    ctx.lineTo(Math.cos(g + w) * base, Math.sin(g + w) * base);
+    ctx.closePath();
   }
+  ctx.fill(); ctx.stroke();
 }
 
 function feather(a, L, w) {
