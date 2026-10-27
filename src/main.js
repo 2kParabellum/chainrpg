@@ -29,7 +29,7 @@ const { drawHud } = G.hud;
 const screenInfo = G.screen;
 
 // уровни в порядке их показа в меню; за фоном меню при запуске стоит первый
-const LEVELS = [G.level1, G.level2, G.level6, G.level3, G.level8, G.level7, G.level4, G.level5, G.level9];
+const LEVELS = [G.level1, G.level2, G.level6, G.level3, G.level8, G.level7, G.level4, G.level5, G.level9, G.level10];
 const START_LEVEL = LEVELS[0];
 // тестовые уровни: только из меню выбора уровней, в прохождение не входят; стартуют с улучшениями level.upgrades
 const TEST_LEVELS = [G.levelTestRam, G.levelTestChain, G.levelTestRace];
@@ -81,10 +81,24 @@ function syncOverlay() {
 // подпись клавиши в скобках на кнопке экрана: « (ПРОБЕЛ)»; на телефоне клавиш нет — без неё
 function keyHint(name) { return screenInfo.isTouch() ? '' : ` (${keyLabel(name)})`; }
 
-// поражение: Герой выбит или база разрушена — кнопки «Заново» и «В меню» поверх замершей партии
+// рекорд «Endless» — до какой волны дошли; хранится в этом браузере (нет хранилища — рекорд только этой партии).
+// Дошли до волны n: прежний рекорд побит — запоминается; возвращает прежний рекорд
+const BEST_KEY = 'chainrpg.endlessBest';
+function recordWave(n) {
+  let best = 0;
+  try { best = Number(localStorage.getItem(BEST_KEY)) || 0; } catch (e) { /* без рекорда */ }
+  if (n > best) { try { localStorage.setItem(BEST_KEY, String(n)); } catch (e) { /* не запомнится */ } }
+  return best;
+}
+
+// поражение: Герой выбит или база разрушена — кнопки «Заново» и «В меню» поверх замершей партии;
+// в «Endless» — ещё до какой волны дошли и рекорд
 function showDead() {
   const lostBase = state.base && state.base.hp <= 0;
   document.getElementById('deadTitle').textContent = lostBase ? 'BASE DESTROYED' : 'DEFEAT';
+  const n = state.waveNo, endless = state.level.victory.kind === 'endless', best = endless ? recordWave(n) : 0;
+  document.getElementById('deadText').textContent = !endless ? ''
+    : `Reached wave ${n}` + (n > best && best > 0 ? ' — new best!' : n > best ? '' : ` · best: wave ${best}`);
   document.getElementById('deadRestartBtn').textContent = 'Restart' + keyHint('restart');
   showPanel('dead');
 }

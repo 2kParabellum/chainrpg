@@ -289,6 +289,7 @@ function updateDoors() {
 function isVictory() {
   const rule = state.level.victory;
   if (rule.kind === 'none') return false; // тестовый уровень: играть, пока не надоест
+  if (rule.kind === 'endless') return false; // «Endless»: волнам нет конца, партия идёт, пока жив Герой
   // продержаться заданное время (база цела — иначе партия уже проиграна)
   if (rule.kind === 'survive') return state.time >= rule.time;
   if (rule.kind === 'destroyType') return !state.enemies.some((e) => e.type === rule.type);

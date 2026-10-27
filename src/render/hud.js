@@ -166,11 +166,13 @@ function drawBanners() {
     }
     if (fn.kind === 'open') drawBanner('GATE OPEN', `${fn.count} of ${nests} sealed — the guard is gone`, age, 3, UI.red, 220);
   }
-  // «Ambush»: вышла волна — какая по счёту и кто в ней
+  // «Ambush» и «Endless»: вышла волна — какая по счёту и кто в ней (в «Endless» — ещё на сколько крепче враги)
   const wn = state.waveNews, script = w && w.script;
-  if (wn && script) {
+  if (wn && (script || w.endless)) {
     const names = [...new Set(wn.types)].map((k) => enemyTypes[k].stats.name).join(' · ');
-    drawBanner(wn.n >= script.length ? 'LAST WAVE' : `WAVE ${wn.n}/${script.length}`, names, state.time - wn.at, 3.2, COLORS.nest, 220);
+    const tough = wn.hpMul > 1 ? ` — HP +${Math.round((wn.hpMul - 1) * 100)}%` : '';
+    const title = !script ? `WAVE ${wn.n}` : wn.n >= script.length ? 'LAST WAVE' : `WAVE ${wn.n}/${script.length}`;
+    drawBanner(title, names + tough, state.time - wn.at, 3.2, COLORS.nest, 220);
   }
   if (state.cleared && state.base) drawBanner('THE BASE HELD', 'A blast from the base wipes out every enemy and nest', state.time - state.clearedAt, 3.2, COLORS.baseEdge);
   if (state.exit && !state.leaving) drawBanner('PORTAL OPEN', 'Drive into the bright portal to finish the level', state.time - state.exit.at, 4, COLORS.exitGlow);
@@ -418,6 +420,8 @@ function drawHud() {
     const total = level.waves.script.length, n = state.waveNo;
     chips.push({ text: `${rule.label} ${n}/${total}`, color: n < total ? UI.gold : UI.teal });
   }
+  // «Endless»: сколько волн уже вышло
+  if (rule.kind === 'endless') chips.push({ text: `${rule.label} ${state.waveNo}`, color: UI.gold });
   // «Seal the Gates»: сколько гнёзд закрыто из всех (все — бирюзой)
   if (rule.kind === 'seals') {
     const sealed = G.flags.gatesSealed(), total = state.nests.length;

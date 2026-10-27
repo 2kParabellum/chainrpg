@@ -67,6 +67,8 @@
   #overlay.pause { background: rgba(29,20,10,0.8); }
   #overlay.dead { background: rgba(29,20,10,0.6); }
   #panelDead h1 { color: #ef3a0c; }
+  #deadText { margin: 0 0 10px; font-size: 16px; color: #efd8a1; }   /* «Endless»: до какой волны дошли и рекорд */
+  #deadText:empty { display: none; }
   /* подписи только для клавиатуры или только для касаний */
   body.touch .kbd-only, body:not(.touch) .touch-only { display: none !important; }
   /* телефон: крупные кнопки под палец, всё влезает в низкий горизонтальный экран */
@@ -316,6 +318,7 @@
       </div>
       <div id="panelDead" class="panel">
         <h1 id="deadTitle">DEFEAT</h1>
+        <p id="deadText"></p>
         <div class="btnRow">
           <button id="deadRestartBtn">Restart</button>
           <button id="deadMenuBtn">Main Menu</button>
@@ -357,7 +360,7 @@
           <button id="backBtn">Back</button>
         </div>
       </div>
-      <div id="build">build 42</div>
+      <div id="build">build 43</div>
     </div>
   </div>
   <script src="src/core/debug.js"></script>
@@ -382,6 +385,7 @@
   <script src="src/levels/level7.js"></script>
   <script src="src/levels/level8.js"></script>
   <script src="src/levels/level9.js"></script>
+  <script src="src/levels/level10.js"></script>
   <script src="src/levels/testRam.js"></script>
   <script src="src/levels/testChain.js"></script>
   <script src="src/levels/testRace.js"></script>
