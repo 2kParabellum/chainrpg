@@ -302,17 +302,17 @@ const backpack = {
 };
 
 // с шансом chance подиум профессии даёт звену ещё levels уровней сверх обычного (не выше последнего уровня профессии):
-// новая профессия — сразу 3-й уровень, прокачка 1-го — тоже 3-й
+// новая профессия — сразу 2-й уровень, прокачка 1-го — сразу 3-й
 const quickLearning = {
   name: 'Quick Learning',
   who: 'pods',
   tier: 2,
-  desc: 'Half the time, a profession pad gives two extra levels',
+  desc: 'Half the time, a profession pad gives an extra level',
   chance: 0.5,
-  levels: 2,
+  levels: 1,
   art(ctx, k) {
     k.ally(100, 76, 'shooter', 0);
-    k.plus(64, 40, 7, COLORS.exitGlow); k.plus(100, 28, 9, COLORS.exitGlow); k.plus(136, 40, 7, COLORS.exitGlow);
+    k.plus(76, 36, 7, COLORS.exitGlow); k.plus(124, 36, 7, COLORS.exitGlow);
   },
 };
 
