@@ -444,11 +444,22 @@ src/
   — начать наводку, нет — ехать (`chaseStep` на 0.6 дальности / `wanderStep`). `spawnCost: 2`, в пуле только у
   «Endless». Рисует `foes.js` (SPECIAL, живьём): своё в кэше врага — путь колёс и сторона по ходу (`a.px/a.py`, `a.roll`,
   `a.side`), выдвинутость упоров `a.brace`; полоска HP — выше (`BAR_UP`), гибель — кусочки (`POP` в `sweep`).
+- **Улучшения посреди «Endless» (`game/waves.js`, `game/update.js`, `main.js`)**. Враг волны по сценарию помнит, с какой
+  он волны (`e.wave`, ставит `updateScripted`; `spawnAt` возвращает врага). `waves.perkDue()` — у `waves.endless` есть
+  `perkEvery`, вышла волна `perkEvery·(state.perks + 1)` и ни одного врага с этим `e.wave`; тогда `update` делает
+  `state.perks += 1`, `state.status = 'perk'` (кадр больше не идёт). `main.js` на переходе в `perk` — `showPerk`: тот же
+  экран карточек (`panelWin`, оверлей с классом `perk` — полупрозрачный), после выбора улучшение кладётся в
+  `state.upgrades`, всем своим (`party`, `downed`, `neutrals`, `charmed`) — `recalcStats`, `status = 'play'`. Плашка
+  волны с наградой (`hud.js`) дописывает «clear it for an upgrade».
 - **Враги «Ambush» (`content/enemies.js`, `game/chain.js`, `render/ambushart.js`)**. Рывок Бычка вынесен в общую функцию
   `charger(type, e, …)`: Бычок и улитка-рыцарь — одна и та же машина состояний (`idle` → `telegraph` → `charge`), различия
   — в числах `e.cfg`: `brakeOnHit: false` (не тормозить о цепочку), `repeatDamage`, `fireDps` (на старте рывка
   `game.spawnFirewall` с `growing`, конец полосы тянется за улиткой, в конце рывка `growing` снимается; у полосы есть
-  `owner` — погиб владелец посреди роста, `combat.applyFirewalls` сам снимает `growing`). Броня — поле типа
+  `owner` — погиб владелец посреди роста, `combat.applyFirewalls` сам снимает `growing`). У улитки рывки двух видов:
+  на входе в замах с шансом `fireChance` ставится `e.fiery`, на старте рывка его числа — `e.mode` (`fireCharge` поверх
+  `e.cfg`: не тормозить, не выбивать, медленнее, огонь; обычный — сам `e.cfg`), рывок читает `e.mode`. Рисунок
+  (`ambushart.snailFoe`) по `e.fiery` выбирает пламя или пыль и цвет пунктира. Облако черепахи несёт свой `dps`
+  (`combat.updateClouds` берёт его вместо зомбиного). Броня — поле типа
   `damageMul(e)`: его применяет `combat.damageUnit` до вычитания HP (черепаха в панцире — 0.15). Дудочник: дозыв
   `e.charm = { target, t }`, зазомбированный — `game.charmAlly(u, e)`: союзник уходит из `state.party` / `state.downed` в
   `state.charmed` (`kind: 'charmed'`, `charmedBy`), враги его не видят (он не в `enemyTargets`), подобрать нельзя (не в

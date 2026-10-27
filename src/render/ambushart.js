@@ -46,7 +46,8 @@ function foeBody(rx, ry, t, kind, seed, col, sh, eye, glowA = 0.35) {
 // ===== улитка-рыцарь =====
 // Бордовый слизняк на красной доске (одна золотая полоса): раковина с толстой спиралью и тремя шипами, простой красный
 // флажок, крупная голова с клыкастой пастью, глаза на толстых стебельках; копьё на переднем плане — поверх тела, под
-// пастью, наружу выходит кончик. st: idle | walk | aim | charge | skid; k — доля состояния (0..1)
+// пастью, наружу выходит кончик. st: idle | walk | aim | charge | skid; k — доля состояния (0..1); fire — огненный рывок
+// (пламя из-под доски уже в замахе и хвост огня в рывке; обычный — без огня, в рывке за доской пыль)
 function snailBoard(r) {
   const y0 = r * 0.66, y1 = r * 0.92;
   const path = () => {
@@ -141,7 +142,7 @@ function tailFire(x, y, r, t, k = 1) {
 }
 
 function drawSnail(o) {
-  const r = o.r, face = o.face, t = o.t + (o.seed || 0), st = o.st, k = o.k || 0;
+  const r = o.r, face = o.face, t = o.t + (o.seed || 0), st = o.st, k = o.k || 0, fire = !!o.fire;
   const aim = st === 'aim', charge = st === 'charge', skid = st === 'skid';
   const w = Math.sin(t * 4);
   let sx = 1 + 0.035 * w, sy = 1 - 0.035 * w, dx = 0, lean = 0, bob = 0;
@@ -157,11 +158,15 @@ function drawSnail(o) {
     ctx.strokeStyle = C.cream; ctx.lineWidth = r * 0.09;
     for (let i = 0; i < 3; i++) { const q = (t * 4 + i * 0.33) % 1, yy = -r * 0.8 + i * r * 0.55; ctx.globalAlpha = 0.55 * (1 - q); ctx.beginPath(); ctx.moveTo(-r * (1.45 + q * 0.6), yy); ctx.lineTo(-r * (2.2 + q * 1.2), yy); ctx.stroke(); }
     ctx.globalAlpha = 1;
-    tailFire(-r * 1.45, r * 0.8, r, t);
+    // огненный рывок — хвост пламени, обычный — пыль из-под доски
+    if (fire) tailFire(-r * 1.45, r * 0.8, r, t);
+    else for (let i = 0; i < 4; i++) { const q = (t * 3.2 + i / 4) % 1; ctx.globalAlpha = 0.6 * (1 - q); ctx.fillStyle = i % 2 ? C.stone : C.mud; ell(-r * (1.5 + q * 1.1), r * (0.8 - q * 0.4), r * (0.18 + q * 0.26), r * (0.14 + q * 0.2)); ctx.fill(); }
+    ctx.globalAlpha = 1;
   }
   if (aim) {
     for (let i = 0; i < 3; i++) { const q = (t * 2.2 + i / 3) % 1; ctx.globalAlpha = 0.55 * (1 - q); ctx.fillStyle = i % 2 ? C.stone : C.mud; ell(-r * (1.6 + q * 0.7), r * (0.75 - q * 0.55), r * (0.16 + q * 0.2), r * (0.13 + q * 0.16)); ctx.fill(); }
     ctx.globalAlpha = 1;
+    if (fire) tailFire(-r * 1.4, r * 0.8, r, t, 0.25 + 0.5 * k); // огненный — пламя из-под доски уже в замахе
   }
   snailBoard(r);
   snailFlag(r, t, st);
@@ -530,14 +535,14 @@ function snailFoe(e, a) {
   if (e.state === 'telegraph') { st = 'aim'; k = clamp(1 - e.timer / e.cfg.telegraph, 0, 1); }
   else if (e.state === 'charge') st = 'charge';
   else if (now - a.skidAt < 0.5) { st = 'skid'; k = (now - a.skidAt) / 0.5; }
-  // замах: пунктир на всю длину рывка (он короче, чем у Бычка)
+  // замах: пунктир на всю длину рывка (он короче, чем у Бычка); огненный — оранжевый, обычный — светлый
   if (st === 'aim') {
     const f = e.facing || 0, L = e.cfg.chargeMaxDist, y0 = e.y + e.r * 0.45;
-    ctx.strokeStyle = hexA(C.gold, 0.3 + 0.35 * k); ctx.lineWidth = 3; ctx.setLineDash([8, 6]);
+    ctx.strokeStyle = hexA(e.fiery ? C.orange : C.cream, 0.3 + 0.35 * k); ctx.lineWidth = 3; ctx.setLineDash([8, 6]);
     ctx.beginPath(); ctx.moveTo(e.x, y0); ctx.lineTo(e.x + Math.cos(f) * L, y0 + Math.sin(f) * L); ctx.stroke();
     ctx.setLineDash([]);
   }
-  drawSnail({ x: e.x, y: e.y, r: e.r * SIZE.snail, face: a.face, t: now, seed: a.seed, st, k });
+  drawSnail({ x: e.x, y: e.y, r: e.r * SIZE.snail, face: a.face, t: now, seed: a.seed, st, k, fire: e.fiery });
 }
 
 // дудочник: связь от морды — под телом, кольцо дозыва — поверх зазываемого; пьёт — ручеёк от зазомбированного в морду

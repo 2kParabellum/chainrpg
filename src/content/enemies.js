@@ -283,7 +283,9 @@ const hunter = {
 
 // рывок Бычка (и улитки-рыцаря, у неё — свои числа): бродит; увидев цепочку ближе aggro, подходит, по таймеру
 // замахивается (telegraph) и несётся по прямой сквозь союзников. Поля типа type: chaseSpeed, wanderSpeed; числа — e.cfg:
-// brakeOnHit: false — после столкновений не тормозит (проносится всю длину рывка), fireDps — оставляет огненную полосу
+// brakeOnHit: false — после столкновений не тормозит (проносится всю длину рывка), fireDps — оставляет огненную полосу.
+// С fireCharge рывки двух видов: на замахе с шансом fireChance выпадает огненный (e.fiery) — на время рывка его числа
+// (fireCharge поверх e.cfg, в e.mode) заменяют обычные
 function charger(type, e, dt, chain, game) {
   const foe = game.nearestTarget(e, chain, e.cfg.aggro);
 
@@ -294,7 +296,11 @@ function charger(type, e, dt, chain, game) {
     e.facing = Math.atan2(foe.y - e.y, foe.x - e.x);
     game.chaseStep(e, dt, e.cfg.walkSpeed, 0, foe); // подходит к цели, обходя пропасти и стены
     e.timer -= dt;
-    if (e.timer <= 0) { e.state = 'telegraph'; e.timer = e.cfg.telegraph; }
+    if (e.timer <= 0) {
+      e.state = 'telegraph';
+      e.timer = e.cfg.telegraph;
+      e.fiery = !!e.cfg.fireCharge && Math.random() < e.cfg.fireChance;
+    }
     return;
   }
 
@@ -308,10 +314,11 @@ function charger(type, e, dt, chain, game) {
       e.travelled = 0;
       e.hitThisCharge = [];
       e.pushes = 0;
-      e.chargeSpeed = e.cfg.chargeStartSpeed;
-      // огненная полоса (улитка-рыцарь): растёт от места старта за ним, пока он в рывке
-      if (e.cfg.fireDps) {
-        e.fire = game.spawnFirewall(e.x, e.y, e.x, e.y, e.cfg.fireRadius, e.cfg.fireDps, e.cfg.fireLife, true);
+      const m = e.mode = e.fiery ? { ...e.cfg, ...e.cfg.fireCharge } : e.cfg;
+      e.chargeSpeed = m.chargeStartSpeed;
+      // огненная полоса (огненный рывок улитки-рыцаря): растёт от места старта за ним, пока он в рывке
+      if (m.fireDps) {
+        e.fire = game.spawnFirewall(e.x, e.y, e.x, e.y, m.fireRadius, m.fireDps, m.fireLife, true);
         e.fire.owner = e;
       }
     }
@@ -320,7 +327,7 @@ function charger(type, e, dt, chain, game) {
 
   // рывок: сначала разгон, после первого столкновения бычок начинает тормозить (с brakeOnHit: false — нет). На льду тормозит слабее (iceBrake),
   // а пройдя chargeMaxDist, не встаёт как вкопанный, а тоже тормозит и докатывается
-  const cfg = e.cfg, ice = !!game.world.ice;
+  const cfg = e.mode || e.cfg, ice = !!game.world.ice;
   const braking = (cfg.brakeOnHit !== false && e.hitThisCharge.length) || (ice && e.travelled > cfg.chargeMaxDist);
   e.chargeSpeed += (braking ? -(ice ? cfg.iceBrake : cfg.chargeBrake) : cfg.chargeAccel) * dt;
   e.chargeSpeed = Math.min(e.chargeSpeed, cfg.chargeSpeed);
@@ -468,19 +475,25 @@ const chariot = {
 };
 
 // Улитка-рыцарь («Ambush»): демоническая улитка с копьём на доске. Ведёт себя как Бычок (тот же рывок,
-// см. charger), но подходит ближе (aggro меньше), рывок короче и не тормозит о цепочку — проносится насквозь всю длину,
-// каждому задетому полный урон, и оставляет за собой огненную полосу (как стена огня Демона, только слабее).
+// см. charger), но подходит ближе (aggro меньше), рывок короче, каждому задетому полный урон. Рывки двух видов, наугад
+// поровну: обычный — как у Бычка (тормозит о цепочку, выбивает), огненный — не тормозит, проносится насквозь всю длину
+// и оставляет огненную полосу (как стена огня Демона, только слабее), но никого не выбивает и чуть медленнее.
 // Шаг на 15% быстрее Бычка, HP втрое больше и ещё +30%. В волне занимает два места
 const snail = {
   stats: { ...bull.stats, name: 'Snail Knight', hp: 343, radius: 20, dmg: 15,
            aggro: 300,              // замахивается, только когда цепочка ближе этого (Бычок — 430)
            walkSpeed: 70,           // шаг на 15% быстрее Бычка
            chargeMaxDist: 440,      // рывок короче (Бычок — 720)
-           brakeOnHit: false,       // после столкновений не тормозит: проносится насквозь всю длину рывка
            repeatDamage: 1,         // каждому задетому — полный урон
-           fireRadius: 16,          // огненная полоса за рывком: полуширина ..
-           fireDps: 10,             // .. урон в секунду ..
-           fireLife: 3 },           // .. и сколько секунд горит после рывка (потом тлеет без урона)
+           fireChance: 0.5,         // доля огненных рывков; их числа — поверх обычных:
+           fireCharge: {
+             brakeOnHit: false,     // после столкновений не тормозит: проносится насквозь всю длину рывка
+             knockoutChance: 0,     // никого не выбивает
+             chargeSpeed: bull.stats.chargeSpeed * 0.85, // на 15% медленнее
+             chargeStartSpeed: bull.stats.chargeStartSpeed * 0.85,
+             fireRadius: 16,        // огненная полоса за рывком: полуширина ..
+             fireDps: 10,           // .. урон в секунду ..
+             fireLife: 3 } },       // .. и сколько секунд горит после рывка (потом тлеет без урона)
   wanderSpeed: 53,
   chaseSpeed: 121,
   spawnCost: 2,
@@ -577,17 +590,20 @@ const piper = {
 
 // Черепаха-циклоп («Ambush»): мозг-циклоп в панцире-чаше на толстых ногах, под ней — пулемёт с частыми выстрелами
 // (бродит и стреляет, как Стрелок). Звено цепочки или лежачий подошли ближе hideGap (просвет между телами) — прячется в
-// панцирь: не ходит и не стреляет, урон по ней — только (1 − armor) от обычного, а из щелей валит облако, как у Зомби
-// (сразу и потом раз в cloudCooldown, пока сидит). Вылезает, когда рядом никого нет дольше showDelay. В волне — два места
+// панцирь: не ходит и не стреляет, урон по ней — только (1 − armor) от обычного, а из щелей валит облако, как у Зомби,
+// только шире и злее (сразу и потом раз в cloudCooldown, пока сидит). Вылезает, когда рядом никого нет дольше showDelay.
+// В волне — два места
 const turtle = {
-  stats: { name: 'Turtle Cyclop', hp: 172, radius: 18, mass: 2.5, range: 320, cooldown: 0.4, dmg: 3,
+  stats: { name: 'Turtle Cyclop', hp: 172, radius: 18, mass: 2.5, range: 352, cooldown: 0.4, dmg: 3,
            projSpeed: 360, projRadius: 4,
            hideGap: 60,             // ближе — прячется ..
            showGap: 110,            // .. а вылезает, когда все дальше этого ..
            showDelay: 1,            // .. уже столько секунд
            hideTime: 0.25,          // за сколько прячется и вылезает (пока не вылезла совсем — не стреляет)
            armor: 0.85,             // в панцире урон меньше на столько
-           cloudRadius: 95, cloudLife: 3.5, // облако — как у Зомби
+           cloudRadius: zombie.stats.cloudRadius * 1.1, // облако — на 10% шире, чем у Зомби ..
+           cloudDps: zombie.stats.cloudDps * 1.25,      // .. и на 25% злее ..
+           cloudLife: 3.5,                              // .. а висит столько же
            cloudCooldown: 4.5 },
   wanderSpeed: 40,
   chaseSpeed: 70,
@@ -607,7 +623,7 @@ const turtle = {
     e.cloudCd -= dt;
     if (e.hidden) {
       if (e.cloudCd <= 0) {
-        game.state.clouds.push({ x: e.x, y: e.y, r: cfg.cloudRadius, cur: 0, t: 0, life: cfg.cloudLife });
+        game.state.clouds.push({ x: e.x, y: e.y, r: cfg.cloudRadius, cur: 0, t: 0, life: cfg.cloudLife, dps: cfg.cloudDps });
         e.cloudCd = cfg.cloudCooldown;
       }
       return;

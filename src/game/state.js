@@ -27,7 +27,7 @@ const state = {
   cannons: [],       // таймеры неуязвимых пушек-ловушек мира, по одному на world.cannons
   trail: [],         // след Героя, по которому бегут остальные звенья
   camera: { x: 0, y: 0 },
-  status: 'play',    // menu | play | dead | win
+  status: 'play',    // menu | play | pause | dead | win | perk («Endless»: выбор улучшения посреди партии)
   time: 0,           // время партии: для анимаций
   pads: [],          // подиумы на карте: появляются и исчезают по ходу партии (см. game/pads.js)
   padMarks: [],      // метки-тени будущих подиумов: через несколько секунд на их месте появится подиум
@@ -41,6 +41,7 @@ const state = {
   // (для плашки); у гнёзд тогда ещё queue — кто выйдет из гнезда следующей волной, done — волн больше не будет
   waveNo: 0,
   waveNews: null,
+  perks: 0,          // «Endless»: сколько раз посреди партии уже выбирали улучшение (см. waves.perkDue)
   // гнёзда врагов: таймер следующей волны и сколько волн уже вышло (см. game/waves.js); в «Seal the Gates» ещё заслонка
   // (см. game/flags.js) — seal: 0..1, насколько закрыта, sealed: закрыто, guarded: на его флаге лежит часовой, openedAt:
   // когда гнездо открылось снова
@@ -204,7 +205,7 @@ function resetGame(level) {
   state.backpack = { open: false, stored: null };
   state.room = null; state.roomAt = 0;
   state.cleared = false; state.clearedAt = 0; state.shockwave = null; state.exit = null; state.leaving = null;
-  state.waveNo = 0; state.waveNews = null;
+  state.waveNo = 0; state.waveNews = null; state.perks = 0;
   // у каждого гнезда свой таймер волн; порядок, в котором гнёзда выпускают первые волны, бросается заново
   const waves = level.waves;
   // carry — дробный остаток врагов при общем потоке (waves.share)

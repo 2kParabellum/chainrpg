@@ -11,7 +11,7 @@ const { leader, leaderSpeedMul, chainMass, currentRoom, chainUnits, enemyTargets
 const { freeSpotNear } = G.world;
 const { pushTrail, followChain, touchPads, updateBuffs, updateDowned, updateCharmed, knockOutAlly, displaceAlly, cutChain, canBeDisplaced, charmAlly } = G.chain;
 const { updatePads, updateAllySpawns } = G.pads;
-const { updateWaves, allWavesOut } = G.waves;
+const { updateWaves, allWavesOut, perkDue } = G.waves;
 const { updatePod } = G.pod;
 const { updateRace } = G.race;
 const { updateFlags, allFlagsHeld, allGatesSealed } = G.flags;
@@ -367,6 +367,8 @@ function update(dt) {
   // победа открывает портал выхода (на «Обороне» — после волны от базы); заехал в него — уровень пройден
   if (state.status === 'play' && !state.cleared && isVictory()) onVictory();
   updateExit(dt);
+  // «Endless»: перебиты все враги очередной perkEvery-й волны — игра встаёт на выбор улучшения (экран — main.js)
+  if (state.status === 'play' && perkDue()) { state.perks += 1; state.status = 'perk'; }
 
   // камера
   const target = cameraTarget();

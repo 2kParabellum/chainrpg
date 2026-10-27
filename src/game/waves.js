@@ -57,15 +57,16 @@ function nextCount(cfg, nest) {
   return Math.floor(dueCount(cfg, nest) + 1e-9);
 }
 
-// враг type выходит из гнезда nest: место рядом с норой, вспышка; HP — в hpMul раз больше обычного; false — места не нашлось
+// враг type выходит из гнезда nest: место рядом с норой, вспышка; HP — в hpMul раз больше обычного. Возвращает врага,
+// null — места не нашлось
 function spawnAt(nest, type, cfg, hpMul = 1) {
   const spot = freeSpotNear(nest.x, nest.y, 20, cfg.spawnRadius, 20);
-  if (!spot) return false;
+  if (!spot) return null;
   const e = spawnEnemy(type, spot.x, spot.y, 0, { chasing: true, fromNest: true, siege: !!state.base, hunt: !!cfg.hunt });
   if (hpMul !== 1) e.hp = e.maxHp = Math.round(e.maxHp * hpMul);
   state.effects.push({ type: 'ring', x: spot.x, y: spot.y, r: 24, life: 0.4, color: COLORS.nest });
   nest.lastCount += 1;
-  return true;
+  return e;
 }
 
 // отряд из гнезда: не больше kinds типов; пока живых врагов волн maxAlive, лишние не выходят.
@@ -136,14 +137,22 @@ function updateScripted(cfg, dt) {
   const most = Math.max(...state.nests.map((n) => n.queue.length));
   for (let i = 0; i < most; i++) {
     for (const n of state.nests) {
-      const type = n.queue[i];
-      if (type && room > 0 && spawnAt(n, type, cfg, n.hpMul)) { types.push(type); room -= 1; }
+      const type = n.queue[i], e = type && room > 0 && spawnAt(n, type, cfg, n.hpMul);
+      if (e) { e.wave = state.waveNo + 1; types.push(type); room -= 1; } // с какой волны — для perkDue
     }
   }
   state.waveNo += 1;
   state.waveNews = { n: state.waveNo, types, hpMul, at: state.time };
   planScripted(cfg);
   for (const n of state.nests) if (!n.done) n.nextIn = intervalNow(cfg);
+}
+
+// «Endless»: пора выбрать улучшение — вышла волна номер perkEvery·(state.perks + 1) и перебиты все её враги (e.wave)
+function perkDue() {
+  const cfg = state.level.waves, every = cfg && cfg.endless && cfg.endless.perkEvery;
+  if (!every) return false;
+  const n = every * (state.perks + 1);
+  return state.waveNo >= n && !state.enemies.some((e) => e.wave === n);
 }
 
 // waves.script: все волны уже вышли (у бесконечных — никогда)
@@ -167,5 +176,5 @@ function updateWaves(dt) {
   }
 }
 
-G.waves = { updateWaves, waveSize, nextCount, surgeActive, allWavesOut };
+G.waves = { updateWaves, waveSize, nextCount, surgeActive, allWavesOut, perkDue };
 })(window.Game = window.Game || {});

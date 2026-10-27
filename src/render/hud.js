@@ -166,13 +166,15 @@ function drawBanners() {
     }
     if (fn.kind === 'open') drawBanner('GATE OPEN', `${fn.count} of ${nests} sealed — the guard is gone`, age, 3, UI.red, 220);
   }
-  // «Ambush» и «Endless»: вышла волна — какая по счёту и кто в ней (в «Endless» — ещё на сколько крепче враги)
+  // «Ambush» и «Endless»: вышла волна — какая по счёту и кто в ней (в «Endless» — ещё на сколько крепче враги и что за
+  // волну с наградой дадут выбрать улучшение)
   const wn = state.waveNews, script = w && w.script;
   if (wn && (script || w.endless)) {
     const names = [...new Set(wn.types)].map((k) => enemyTypes[k].stats.name).join(' · ');
     const tough = wn.hpMul > 1 ? ` — HP +${Math.round((wn.hpMul - 1) * 100)}%` : '';
+    const every = w.endless && w.endless.perkEvery, perk = every && wn.n % every === 0 ? ' — clear it for an upgrade' : '';
     const title = !script ? `WAVE ${wn.n}` : wn.n >= script.length ? 'LAST WAVE' : `WAVE ${wn.n}/${script.length}`;
-    drawBanner(title, names + tough, state.time - wn.at, 3.2, COLORS.nest, 220);
+    drawBanner(title, names + tough + perk, state.time - wn.at, 3.2, COLORS.nest, 220);
   }
   if (state.cleared && state.base) drawBanner('THE BASE HELD', 'A blast from the base wipes out every enemy and nest', state.time - state.clearedAt, 3.2, COLORS.baseEdge);
   if (state.exit && !state.leaving) drawBanner('PORTAL OPEN', 'Drive into the bright portal to finish the level', state.time - state.exit.at, 4, COLORS.exitGlow);

@@ -1,13 +1,15 @@
 // Точка входа: связывает ввод, экраны и игровой цикл.
 // Устройство кода и правила зависимостей — в architecture.md.
 //
-// Экран определяет state.status (menu | play | pause | dead | win) — это единственный источник правды.
+// Экран определяет state.status (menu | play | pause | dead | win | perk) — это единственный источник правды.
 // Оверлей главного меню в HTML только отражает его и сам ничего не решает: при menu — меню, при win —
 // экран «уровень пройден» с тремя карточками улучшений и переходом к следующему уровню (после последнего —
 // «вы прошли игру»). Прохождение — это цепочка уровней подряд через этот экран; уровень, выбранный из меню,
 // начинает новое прохождение: с первого — без улучшений, с N-го — сперва N−1 раз выбор карточки (как будто
 // предыдущие уровни пройдены), потом сам уровень. Пауза (ESC, кнопка паузы, свернули вкладку, телефон повернули
 // вертикально) — тот же оверлей с панелью «Продолжить / Заново / Управление / В меню»; пока пауза, игра стоит.
+// На «Endless» каждая третья волна, когда перебита, ставит игру на выбор улучшения (perk) — экран карточек, как между
+// уровнями, но после выбора та же партия идёт дальше.
 (function (G) {
 'use strict';
 
@@ -18,7 +20,7 @@ const { shuffled, pickWeighted, removeFrom } = G.math;
 const { drawCard, whoOf } = G.cards;
 const { tryRecruit, dropLastAlly, nearestPickup, usePack } = G.chain;
 const { buttonUnder } = G.world;
-const { leader, upgrade } = G.session;
+const { leader, upgrade, recalcStats } = G.session;
 const touchUI = G.touch;
 const controlsPanel = G.controlsPanel;
 const tuner = G.tuner;
@@ -38,8 +40,8 @@ const TEST_LEVELS = [G.levelTestRam, G.levelTestChain, G.levelTestRace];
 
 initInput(canvas, {
   onCommand(name) {
-    // на экране карточек (уровень пройден или выбор перед стартом): 1/2/3 — выбрать карточку, пробел — дальше
-    if (state.status === 'win' || (state.status === 'menu' && afterPick)) {
+    // на экране карточек (уровень пройден, выбор посреди «Endless» или перед стартом): 1/2/3 — выбрать карточку, пробел — дальше
+    if (state.status === 'win' || state.status === 'perk' || (state.status === 'menu' && afterPick)) {
       if (name === 'recruit') goNext();
       else if (name.startsWith('pick')) pickCard(Number(name.slice(4)) - 1);
       return;
@@ -71,9 +73,10 @@ function showPanel(name) {
   for (const [key, el] of Object.entries(panels)) el.classList.toggle('active', key === name);
 }
 function syncOverlay() {
-  overlay.classList.toggle('hidden', !['menu', 'win', 'pause', 'dead'].includes(state.status));
+  overlay.classList.toggle('hidden', !['menu', 'win', 'pause', 'dead', 'perk'].includes(state.status));
   overlay.classList.toggle('menu', state.status === 'menu');
   overlay.classList.toggle('win', state.status === 'win');
+  overlay.classList.toggle('perk', state.status === 'perk');
   overlay.classList.toggle('pause', state.status === 'pause');
   overlay.classList.toggle('dead', state.status === 'dead');
 }
@@ -225,6 +228,27 @@ function showWin() {
   offers = next ? rollOffers() : [];
   picked = null;
   afterPick = next ? () => startLevel(next) : null;
+  renderCards();
+  showPanel('win');
+}
+
+// «Endless»: перебита очередная волна с наградой — карточки улучшений посреди партии; выбранное сразу действует
+// (пересчёт HP и урона всех своих), потом та же партия идёт дальше. Брать нечего — сразу дальше
+function showPerk() {
+  offers = rollOffers();
+  picked = null;
+  afterPick = () => {
+    for (const u of [...state.party, ...state.downed, ...state.neutrals, ...state.charmed]) recalcStats(u);
+    state.status = 'play';
+    syncOverlay();
+  };
+  if (!offers.length) { goNext(); return; }
+  const n = state.perks * state.level.waves.endless.perkEvery;
+  document.getElementById('winTitle').textContent = `WAVE ${n} CLEARED`;
+  document.getElementById('winText').textContent = 'Pick an upgrade — then the waves go on';
+  const btn = document.getElementById('nextBtn');
+  btn.style.display = '';
+  btn.textContent = 'Continue' + keyHint('recruit');
   renderCards();
   showPanel('win');
 }
@@ -402,6 +426,7 @@ function loop(now) {
   // партия только что выиграна (цепочка ушла в портал) — экран «уровень пройден»
   if (state.status === 'win' && lastStatus !== 'win') showWin();
   if (state.status === 'dead' && lastStatus !== 'dead') showDead();
+  if (state.status === 'perk' && lastStatus !== 'perk') showPerk();
   lastStatus = state.status;
   syncOverlay();
   syncTouch();
