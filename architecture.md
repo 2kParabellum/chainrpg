@@ -307,7 +307,8 @@ src/
 - **content/weapons.js** — реестр оружий. Одна запись = одно оружие: стартовые характеристики и поведение
   за кадр (`update`), при необходимости рисование (`draw`). Оружие получает от игры сервисы параметром `game`
   и не подключает `game/` и `render/`. У каждого носителя своя копия оружия с личной перезарядкой.
-- **content/abilities.js** — реестр способностей подиумов (`G.abilities`) и временных усилений (`G.buffs`: скорость, сила, регенерация, крепкость, шипастость, воля — каждое своим набором полей: множители, `regenRate`, флаг `sturdy`, `contactDmg`/`contactInterval`, флаг `revive`; выдаёт `giveBuff`, снимает `updateBuffs` в `game/chain.js`). Подиум усиления берёт только Герой; таймеры живут на Герое, `syncChainBuffs` каждый кадр копирует их звеньям цепочки и очищает у выбитых, так что все проверки по-прежнему смотрят на `u.buffs` своего звена. `canBeDisplaced` в `chain.js` спрашивает `isSturdy(u)`, `damageUnit` в `combat.js` проверяет флаг `revive` перед смертью союзника, контактный урон «шипастости» считает `applySpikyContact` в `game/update.js`.
+- **content/abilities.js** — реестр способностей подиумов (`G.abilities`) и временных усилений (`G.buffs`: скорость, сила, регенерация, крепкость, шипастость, воля — каждое своим набором полей: множители, `regenRate`, флаг `sturdy`, шипы `reach`/`dmgStill`/`dmgFull`/`speedCap`/`contactInterval`, флаг `revive`; выдаёт `giveBuff`, снимает `updateBuffs` в `game/chain.js`). Подиум усиления берёт только Герой; таймеры живут на Герое, `syncChainBuffs` каждый кадр копирует их звеньям цепочки и очищает у выбитых, так что все проверки по-прежнему смотрят на `u.buffs` своего звена. `canBeDisplaced` в `chain.js` спрашивает `isSturdy(u)`, `damageUnit` в `combat.js` проверяет флаг `revive` перед смертью союзника, уколы «шипастости» считает `applySpikyContact` в `game/update.js` (скорость звена меряет сам по сдвигу за кадр — поля
+`u.spikyX/Y`, `u.spikySpeed`); зубья рисует `blobs.drawSpikes`, вращение — `spin` в кэше анимации звена.
   Реестр способностей: Одна запись = одна способность; её ключ — это и тип
   подиума на карте. Запись хранит оружие способности (в том же формате, что `base` у союзника), цвет, знак на теле
   и значок подиума. Способность одинакова для Героя и дружочка.
@@ -526,6 +527,7 @@ src/
 - **Улучшения (`content/upgrades.js`)**. Взятые лежат в `state.upgrades` (ключи) — единственное поле состояния, которое
   сброс партии не трогает: так улучшения переходят на следующий уровень. `session.startRun()` очищает их (уровень из меню),
   `session.upgrade(key)` — запись, если взято, иначе `null`; оружию тот же вызов отдаётся как `game.upgrade`.
+  Класс улучшения — `who`: ключ профессии, `'hero'`, `'general'` или `'pods'` (подпись и цвет — `cards.whoOf`).
   Общие улучшения (`who: 'general'`) задают прибавки к базе полями `dmgAdd`, `moveAdd`, `hpAdd`; `session.boostMul(field)`
   складывает их по всем взятым (1 + сумма). Урон и HP входят в `recalcStats` (`u.dmgMul`, `u.maxHp`; `makeAlly` сразу
   зовёт его, поэтому прибавка HP есть у каждого нового союзника), скорость — в полную скорость `update.updateLeader`,
@@ -535,7 +537,9 @@ src/
   урон (`combat.damageUnit(u, dmg, hit)`: ближние атаки врагов передают `hit = { by, melee: true }`; прикрытие
   `coverDefense` снижает любой урон соседям копейщика), копьё (`weapons.spear`: сторона удара, «Double Edge», «Berserk»),
   пробивающие стрелы (поле снаряда `passChance`, задетые — `p.hit`, флаг типа врага `boss` — в `combat.updateProjectiles`),
-  долгое лечение (поле звена `u.cure`, тикает `applyCure` в `update.updateWeapons`), «Lucky Foot» (`pads.settings`),
+  долгое лечение (поле звена `u.cure`, тикает `applyCure` в `update.updateWeapons`), «Lucky Foot» и «Talent Scout» (`pads.settings`), «Quick Learning»
+  (`chain.touchPads`), «Buff Stacking» (`chain.giveBuff`), «Quick Charge» (прицел молнии `b.aimTotal` в `weapons.spark`),
+  бесплатные звенья «March» / «March 2» (сумма полей `links` — `session.upgradeSum` в `heavyLinks`),
   рюкзак (`state.backpack`, команда `pack` → `chain.usePack`, перехват подиума в `chain.touchPads`; ячейка — `hud.drawBackpack`), тяжесть цепочки (`chainMass` — масса для разгона, торможения и сцепления на повороте в `update.updateLeader`, `chainSpeedMul` — потолок скорости), таран Героя (`update.applyHeroRam` сразу после
   движения Героя: масса `ramMass` × скорость, `ramDamage`; силу для дуги кладёт в `lead.ramPower`, дугу рисует `renderer.drawChain`;
   в `damageUnit` передаёт `hit = { ram, mass, speed }`). Тип врага может задать `onDamage(e, dmg, hit, game)` — `damageUnit`

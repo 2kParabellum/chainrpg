@@ -86,10 +86,12 @@ function endBuff(u, key) {
 }
 
 // временное усиление Герою; разом их сколько угодно. Повторное взятие того же обновляет таймер
-// и делает его самым свежим
+// и делает его самым свежим. «Buff Stacking» — остальные действующие продлеваются на add с (не дальше полного времени)
 function giveBuff(u, key) {
   const def = G.buffs[key];
   const fresh = !(u.buffs[key] > 0);
+  const stack = upgrade('buffStacking');
+  if (stack) for (const k of u.buffOrder) if (k !== key && u.buffs[k] > 0) u.buffs[k] = Math.min(G.buffs[k].duration, u.buffs[k] + stack.add);
   u.buffs[key] = def.duration;
   removeFrom(u.buffOrder, key);
   u.buffOrder.push(key);
@@ -180,7 +182,12 @@ function touchPads() {
     const target = jobTarget(pad.ability);
     if (!target) continue;
     const def = G.abilities[pad.ability];
-    setAbility(target, pad.ability, target.ability === pad.ability ? target.abilityLevel + 1 : 1);
+    // «Quick Learning»: с шансом chance — ещё levels уровней сверх обычного, не выше последнего
+    const quick = upgrade('quickLearning');
+    const bonus = quick && Math.random() < quick.chance ? quick.levels : 0;
+    const level = (target.ability === pad.ability ? target.abilityLevel + 1 : 1) + bonus;
+    setAbility(target, pad.ability, Math.min(level, (def.levels || [{}]).length));
+    if (bonus) state.effects.push({ type: 'ring', x: target.x, y: target.y, r: target.r + 14, life: 0.6, color: COLORS.exitGlow });
     consumePad(pad);
     // шапка слетает с подиума на голову получившего, над ним — ромбики уровня (render/jobart.js)
     state.effects.push({ type: 'jobGet', unit: target, pad, key: pad.ability, lvl: target.abilityLevel,

@@ -4,7 +4,7 @@
 (function (G) {
 'use strict';
 
-const { state, allyTypes } = G;
+const { CONFIG, state, allyTypes } = G;
 const { clamp } = G.math;
 const { glow, stamp, snap, frameAt, dirOf } = G.shapes;
 let ctx = G.shapes.ctx; // на время рисования готовой картинки — её холст
@@ -32,6 +32,7 @@ const BUFF_COL = {};
 for (const k of Object.keys(G.buffs)) BUFF_COL[k] = G.buffs[k].color;
 BUFF_COL.will = C.gold; // значок «воли» — золотой нимб
 
+const SPIN = { still: 1.2, full: 7 }; // скорость вращения зубьев «шипастости», рад/с: стоя и прибавка на полной скорости
 const anim = new WeakMap();
 const bits = [];       // кусочки от ударов и лопнувших тел: { x, y, vx, vy, life, max, r, col }
 let bitsAt = 0;
@@ -82,7 +83,8 @@ function track(u) {
   let a = anim.get(u);
   if (!a) {
     a = { x: u.x, y: u.y, t, speed: 0, face: Math.cos(u.facing || 0) < 0 ? -1 : 1, hp: u.hp, hurtAt: -9, atkAt: -9,
-      happyAt: -9, ph: Math.random() * 10, seed: Math.random() * 10, cds: [], kind: u.kind, lvl: u.abilityLevel || 0 };
+      happyAt: -9, ph: Math.random() * 10, seed: Math.random() * 10, cds: [], kind: u.kind, lvl: u.abilityLevel || 0,
+      spin: Math.random() * TAU };
     anim.set(u, a);
   }
   const dt = t - a.t;
@@ -90,6 +92,8 @@ function track(u) {
     const sp = Math.min(400, Math.hypot(u.x - a.x, u.y - a.y) / dt);
     a.speed += (sp - a.speed) * Math.min(1, dt * 10);
     if (a.speed > 15) a.ph += dt * 8;
+    // зубья «шипастости» крутятся: стоя — медленно, чем быстрее звено, тем быстрее
+    a.spin += dt * (SPIN.still + SPIN.full * Math.min(1.4, a.speed / CONFIG.LEADER.speed));
   }
   a.x = u.x; a.y = u.y; a.t = t;
   // Герой смотрит туда, куда едет; звенья — туда, куда целится оружие
@@ -229,17 +233,7 @@ function drawAlly(u, mode, alpha = 1) {
   const rk = Math.round(r * 4) / 4, fist = weapon === 'fist' ? 1 : 0;
   if (charmed) stamp(part(`k|${rk}|1`, r, BOX.hand, () => drawHand(0, 0, r, 'fist')), face * r * 0.98, -r * 0.16 + Math.sin(t * 5 + a.seed) * r * 0.06);
   else stamp(part(`k|${rk}|${fist}`, r, BOX.hand, () => drawHand(0, 0, r, weapon)), -face * r * 0.88, r * 0.3 - swing * r * 0.12);
-  if (buffs.includes('spiky')) {
-    ctx.fillStyle = C.blood; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
-    for (let i = 0; i < 9; i++) {
-      const ang = i / 9 * TAU + t * 0.4;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(ang - 0.22) * rx * 0.9, Math.sin(ang - 0.22) * ry * 0.9);
-      ctx.lineTo(Math.cos(ang) * rx * 1.35, Math.sin(ang) * ry * 1.35);
-      ctx.lineTo(Math.cos(ang + 0.22) * rx * 0.9, Math.sin(ang + 0.22) * ry * 0.9);
-      ctx.closePath(); ctx.fill(); ctx.stroke();
-    }
-  }
+  if (mode === 'chain' && u.buffs && u.buffs.spiky > 0) drawSpikes(u, a, r);
 
   // тело: тёмный низ, светлый верх, блик — готовой картинкой, растянутой на сплющивание; вспышка от удара — поверх
   const tired = eyes === 'tired' ? 1 : 0;
@@ -326,6 +320,22 @@ function drawAlly(u, mode, alpha = 1) {
 }
 
 // «воля»: ангельские крылья за спиной — веер из пяти перьев от плеча и пушистое плечо сверху; машут
+// «шипастость» у каждого звена цепочки: красная пила — зубья крутятся вокруг тела (за ним — его край прячет
+// основания), передний край зуба круче заднего. Кончики — ровно там, докуда достаёт укол (тело + reach)
+function drawSpikes(u, a, r) {
+  const n = 7, w = Math.PI / n * 0.6, tip = u.r + G.buffs.spiky.reach, base = r * 0.9;
+  ctx.fillStyle = C.red; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.1; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const g = a.spin + i / n * TAU;
+    ctx.moveTo(Math.cos(g - w) * base, Math.sin(g - w) * base);
+    ctx.lineTo(Math.cos(g + w * 0.5) * tip, Math.sin(g + w * 0.5) * tip);
+    ctx.lineTo(Math.cos(g + w) * base, Math.sin(g + w) * base);
+    ctx.closePath();
+  }
+  ctx.fill(); ctx.stroke();
+}
+
 function feather(a, L, w) {
   const cx = Math.cos(a) * L / 2, cy = Math.sin(a) * L / 2;
   ctx.beginPath(); ctx.ellipse(cx, cy, L / 2, w, a, 0, TAU);

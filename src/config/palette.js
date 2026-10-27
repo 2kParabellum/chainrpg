@@ -8,7 +8,7 @@ const COLORS = {
   pit: '#2a1d0d', pitEdge: '#684c3c',
   spikeFloor: '#550f0a', spikeTeeth: '#927e6a', warning: '#efac28', mine: '#efac28',
   // цвета профессий = цвета их шапок (graphics.md), усилений — цвета их значков
-  hero: '#efac28', general: '#efb775', medic: '#efd8a1', buddy: '#efb775', shooter: '#a58c27', speed: '#efac28', power: '#ef3a0c',
+  hero: '#efac28', general: '#efb775', pods: '#927e6a', medic: '#efd8a1', buddy: '#efb775', shooter: '#a58c27', speed: '#efac28', power: '#ef3a0c',
   regen: '#3c9f9c', spear: '#ef692f', sturdy: '#927e6a', spiky: '#9b1a0a', will: '#efd8a1', spark: '#3c9f9c',
   neutral: '#927e6a', enemy: '#ef3a0c', bull: '#ab5c1c', tower: '#a56243', piper: '#efac28', snail: '#ef692f', turtle: '#724113', catapult2: '#9b1a0a',
   scorpion: '#927e6a', hunter: '#ef692f', zombie: '#39571c', cloud: '#a58c27', portal: '#9b1a0a',

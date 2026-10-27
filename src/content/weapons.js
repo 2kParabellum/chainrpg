@@ -126,14 +126,16 @@ const spear = {
 // Разгон: каждая полная секунда непрерывного удара по одной цели прибавляет rampStep базового урона
 // (через 1 с — 120%, через 2 с — 140% …), но не дольше rampMax секунд (дальше — 180%, не растёт);
 // новая цель или разрыв молнии сбрасывают разгон.
-// Молний — w.beams ({ target, aim, held }): обычно одна; улучшение «двойное напряжение» — до двух на разных целях,
-// «электрическая дуга» — во столько же раз дальше и замечает цель, и рвётся (урон к краю падает, как без неё)
+// Молний — w.beams ({ target, aim, aimTotal, held }): обычно одна; улучшение «двойное напряжение» — до двух на разных
+// целях, «электрическая дуга» — во столько же раз дальше и замечает цель, и рвётся (урон к краю падает, как без неё),
+// «Quick Charge» — прицеливание короче в aimMul раз
 const spark = {
   stats: { range: 230, fullRange: 110, farMul: 0.5, breakMul: 1.25, aimTime: 1.2, dps: 31.2, bossMul: 0.3,
            rampStep: 0.2, rampMax: 4, color: COLORS.spark },
   update(u, w, dt, game) {
-    const two = game.upgrade('doubleSpark'), arc = game.upgrade('arc');
+    const two = game.upgrade('doubleSpark'), arc = game.upgrade('arc'), quick = game.upgrade('quickCharge');
     const reach = w.range * (arc ? arc.rangeMul : 1);
+    const aimTime = w.aimTime * (quick ? quick.aimMul : 1);
     const breakDist = reach * w.breakMul;
     w.beams = (w.beams || []).filter((b) => game.state.enemies.includes(b.target) && dist(u, b.target) <= breakDist);
     while (w.beams.length < (two ? two.targets : 1)) {
@@ -141,7 +143,7 @@ const spark = {
       const free = game.state.targetableEnemies.filter((e) => !taken.includes(e));
       const foe = game.nearestTarget(u, free, reach);
       if (!foe) break;
-      w.beams.push({ target: foe, aim: w.aimTime, held: 0 });
+      w.beams.push({ target: foe, aim: aimTime, aimTotal: aimTime, held: 0 });
     }
     if (!w.beams.length) return;
     u.facing = Math.atan2(w.beams[0].target.y - u.y, w.beams[0].target.x - u.x);
@@ -165,7 +167,7 @@ const spark = {
     const dx = foe.x - u.x, dy = foe.y - u.y;
     const d = Math.hypot(dx, dy) || 1;
     if (b.aim > 0) {
-      ctx.globalAlpha = 0.2 + 0.6 * (1 - b.aim / w.aimTime);
+      ctx.globalAlpha = 0.2 + 0.6 * (1 - b.aim / b.aimTotal);
       ctx.strokeStyle = w.color;
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 6]);
@@ -175,7 +177,7 @@ const spark = {
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.beginPath();
-      ctx.arc(foe.x, foe.y, foe.r + 4 + 10 * (b.aim / w.aimTime), 0, Math.PI * 2);
+      ctx.arc(foe.x, foe.y, foe.r + 4 + 10 * (b.aim / b.aimTotal), 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
       return;

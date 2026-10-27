@@ -3,8 +3,8 @@
 //
 // Поля записи:
 //   name  — название на карточке
-//   who   — чьё улучшение: ключ способности (стрелок, искра…), 'hero' или 'general' (вся цепочка); от него цвет и
-//           подпись карточки
+//   who   — чьё улучшение (класс): ключ способности (стрелок, искра…), 'hero', 'general' (вся цепочка) или 'pods'
+//           (подиумы); от него цвет и подпись карточки
 //   desc  — что даёт, в несколько слов; {команда} заменяется подписью кнопки ({pack} — «C» или «BAG»)
 //   tier  — ранг: без поля — 1-й; 2 — выпадает, только если у того же who уже взято улучшение 1-го ранга
 //   needs — ключ улучшения: 2-й ранг выпадает, только если взято именно оно (вместо правила по who)
@@ -120,8 +120,8 @@ const doubleEdge = {
 const cover = {
   name: 'Cover',
   who: 'spear',
-  desc: 'The Brawler’s neighbors take less damage',
-  cut: 0.3,          // на такую долю меньше урона от любых атак получают оба соседа копейщика в цепочке (не он сам)
+  desc: 'The Brawler and its neighbors take less damage',
+  cut: 0.4,          // на такую долю меньше урона от любых атак получают копейщик в цепочке и оба его соседа
   art(ctx, k) {
     k.enemy(14, 68, 'hunter', 0);
     k.enemy(186, 68, 'hunter');
@@ -130,6 +130,7 @@ const cover = {
     k.ally(144, 68, null, 0);
     k.shield(56, 66, 24, true);
     k.shield(144, 66, 24);
+    k.ring(100, 66, 20, COLORS.sturdy, true);
   },
 };
 
@@ -137,7 +138,7 @@ const march = {
   name: 'March',
   who: 'hero',
   desc: 'A long chain is lighter to drive',
-  links: 4,          // столько звеньев сверх обычного не утяжеляют цепочку
+  links: 4,          // столько звеньев сверх обычного не утяжеляют цепочку (с «March 2» — складываются)
   art(ctx, k) {
     k.speedLines(10, 64);
     for (let i = 4; i >= 1; i--) k.ally(170 - i * 30, 68, null, 0);
@@ -210,13 +211,26 @@ const hpBoost = {
   },
 };
 
+// --- PODS: подиумы — как часто появляются и что дают ---
+
 const luckyFoot = {
   name: 'Lucky Foot',
-  who: 'general',
+  who: 'pods',
   desc: 'Boost pads show up more often',
-  mul: 1.25,         // подиумы усилений появляются во столько раз чаще (пауза между ними — во столько же раз короче)
+  mul: 1.35,         // подиумы усилений появляются во столько раз чаще (пауза между ними — во столько же раз короче)
   art(ctx, k) {
     k.pad(40, 36, 'speed', 0.42); k.pad(160, 36, 'power', 0.42); k.pad(40, 94, 'regen', 0.42); k.pad(160, 94, 'will', 0.42);
+    k.hero(100, 68, 0);
+  },
+};
+
+const talentScout = {
+  name: 'Talent Scout',
+  who: 'pods',
+  desc: 'Profession pads show up more often',
+  mul: 1.35,         // подиумы профессий появляются во столько раз чаще (пауза между ними — во столько же раз короче)
+  art(ctx, k) {
+    k.ally(40, 40, 'shooter', 0); k.ally(160, 40, 'medic', Math.PI); k.ally(40, 96, 'spear', 0); k.ally(160, 96, 'spark', Math.PI);
     k.hero(100, 68, 0);
   },
 };
@@ -287,6 +301,68 @@ const backpack = {
   },
 };
 
+// с шансом chance подиум профессии даёт звену ещё levels уровней сверх обычного (не выше последнего уровня профессии):
+// новая профессия — сразу 2-й уровень, прокачка 1-го — сразу 3-й
+const quickLearning = {
+  name: 'Quick Learning',
+  who: 'pods',
+  tier: 2,
+  desc: 'Half the time, a profession pad gives an extra level',
+  chance: 0.5,
+  levels: 1,
+  art(ctx, k) {
+    k.ally(100, 76, 'shooter', 0);
+    k.plus(76, 36, 7, COLORS.exitGlow); k.plus(124, 36, 7, COLORS.exitGlow);
+  },
+};
+
+// взятое усиление (с подиума или из рюкзака) продлевает остальные действующие на add секунд, но не дальше их полного
+// времени; само взятое, как всегда, — на полное время
+const buffStacking = {
+  name: 'Buff Stacking',
+  who: 'pods',
+  tier: 2,
+  desc: 'A new boost adds a few seconds to your other boosts',
+  add: 5,
+  art(ctx, k) {
+    k.pad(40, 66, 'power', 0.5);
+    k.trail(62, 64, 120, 64, COLORS.power);
+    k.ring(150, 66, 24, COLORS.speed, true);
+    k.ring(150, 66, 32, COLORS.regen, true);
+    k.hero(150, 68, 0);
+  },
+};
+
+// прицеливание молнии (aimTime) короче: во столько раз
+const quickCharge = {
+  name: 'Quick Charge',
+  who: 'spark',
+  tier: 2,
+  desc: 'Lightning locks on much faster',
+  aimMul: 0.4,
+  art(ctx, k) {
+    k.speedLines(4, 64);
+    k.ally(56, 66, 'spark', 0);
+    k.enemy(166, 66);
+    k.bolt(74, 62, 152, 62, COLORS.spark);
+  },
+};
+
+// ещё links бесплатных звеньев сверх «March»; только после него (needs)
+const march2 = {
+  name: 'March 2',
+  who: 'hero',
+  tier: 2,
+  needs: 'march',
+  desc: 'Even more mates don’t weigh the chain down',
+  links: 3,
+  art(ctx, k) {
+    k.speedLines(4, 64);
+    for (let i = 5; i >= 1; i--) k.ally(176 - i * 26, 68, null, 0);
+    k.hero(176, 68, 0);
+  },
+};
+
 // General 2-го ранга: ещё +10% к базе, только если взят 1-й ранг того же (needs)
 const damageBoost2 = {
   name: 'Damage Boost 2',
@@ -332,6 +408,7 @@ const hpBoost2 = {
 };
 
 G.upgrades = { tripleShot, fireArrows, arc, medicRegen, adrenaline, doubleEdge, cover, march, ram,
-               damageBoost, speedBoost, hpBoost, luckyFoot,
-               piercing, lastingCure, berserk, doubleSpark, backpack, damageBoost2, speedBoost2, hpBoost2 };
+               damageBoost, speedBoost, hpBoost, luckyFoot, talentScout,
+               piercing, lastingCure, berserk, doubleSpark, quickCharge, backpack, march2,
+               quickLearning, buffStacking, damageBoost2, speedBoost2, hpBoost2 };
 })(window.Game = window.Game || {});
