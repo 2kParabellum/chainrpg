@@ -15,7 +15,8 @@
 //   update       — (e, dt, chain, game): поведение за кадр, когда враг активен и жив
 //   lateUpdate   — (e, chain, game): шаг после боя и среды (мина: обнаружение и подрыв)
 //   draw         — (e, g): тело врага; полоску HP рисует сцена
-//                  (у врагов «Ambush» — улитки, дудочника, черепахи — поля нет: их целиком рисует render/ambushart.js)
+//                  (у врагов «Ambush» — улитки, дудочника, черепахи — поля нет: их целиком рисует render/ambushart.js;
+//                  у Катапульты II тоже — её рисует render/foes.js)
 //   damageMul    — (e): множитель входящего урона сейчас (черепаха в панцире — 0.15)
 //   hiddenUntilRevealed — враг невидим и неуязвим для прицеливания, пока e.revealed не станет true
 //   ignoredForVictory   — не считается в условии победы
@@ -618,6 +619,47 @@ const turtle = {
 const turtleShoot = ranged(turtle, (e, foe, game) => {
   game.spawnProjectile(e, foe.x, foe.y, e.cfg.projSpeed, e.cfg.dmg, 'enemy', e.cfg.projRadius);
 });
+
+// Катапульта II («Endless»): миномётчик на колёсной повозке с тремя мортирами. Ездит (бродит, враг волны — подходит на
+// 0.6 дальности, как Стрелок), а для залпа встаёт: setupTime наводится (e.setup), бьёт тремя навесными снарядами —
+// в точку цели и в две точки по сторонам от неё (spread поперёк линии выстрела, с разбросом spreadJitter) — и ещё
+// holdTime стоит (e.hold). Снаряды — как у Катапульты (spawnMortar с числами e.cfg), залп раз в cooldown (наводка входит
+// в него). В волне занимает два места
+const catapult2 = {
+  stats: { ...tower.stats, name: 'Catapult II', hp: tower.stats.hp * 3, radius: 22, mass: 4,
+           dmg: tower.stats.dmg * 2, edgeDmg: tower.stats.edgeDmg * 2,
+           setupTime: 0.9,          // сколько стоит и наводится перед залпом
+           holdTime: 0.5,           // сколько ещё стоит после залпа
+           spread: 140,             // боковые снаряды — на таком расстоянии от точки цели ..
+           spreadJitter: 0.35 },    // .. поперёк линии выстрела, с разбросом угла (рад)
+  wanderSpeed: 35,
+  chaseSpeed: 65,
+  spawnCost: 2,
+  init(e) { e.cd = 1; e.setup = 0; e.hold = 0; },
+  update(e, dt, chain, game) {
+    const cfg = e.cfg;
+    e.cd -= dt;
+    const foe = game.nearestTarget(e, chain, cfg.range);
+    if (foe) e.facing = Math.atan2(foe.y - e.y, foe.x - e.x);
+    if (e.setup > 0) {
+      e.setup -= dt;
+      if (e.setup > 0) return;
+      if (!foe) return; // цель ушла из дальности — залпа нет, снова едет
+      const a = e.facing + Math.PI / 2 + (Math.random() * 2 - 1) * cfg.spreadJitter;
+      const ox = Math.cos(a) * cfg.spread, oy = Math.sin(a) * cfg.spread;
+      game.spawnMortar(e, foe.x, foe.y);
+      game.spawnMortar(e, foe.x + ox, foe.y + oy);
+      game.spawnMortar(e, foe.x - ox, foe.y - oy);
+      e.cd = cfg.cooldown - cfg.setupTime;
+      e.hold = cfg.holdTime;
+      return;
+    }
+    if (e.hold > 0) { e.hold -= dt; return; }
+    if (foe && e.cd <= 0) { e.setup = cfg.setupTime; return; }
+    if (e.chasing) game.chaseStep(e, dt, catapult2.chaseSpeed, cfg.range * 0.6);
+    else if (!game.stepOffSpikes(e, dt, catapult2.wanderSpeed * 1.6)) game.wanderStep(e, dt, catapult2.wanderSpeed);
+  },
+};
 
 // мина: не блуждает и сама не действует; цепочка её замечает вблизи, она взрывается под ногами
 // и простреливается союзниками, как любой враг — но только после обнаружения
@@ -1513,6 +1555,6 @@ const kraken = {
   },
 };
 
-const TYPES = { shooter, bull, tower, scorpion, zombie, hunter, chariot, snail, piper, turtle, mine, portal, boss, doorTarget, kraken, dummy };
+const TYPES = { shooter, bull, tower, scorpion, zombie, hunter, chariot, snail, piper, turtle, catapult2, mine, portal, boss, doorTarget, kraken, dummy };
 G.enemyTypes = TYPES;
 })(window.Game = window.Game || {});

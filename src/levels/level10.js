@@ -1,6 +1,7 @@
 // Данные уровня «Endless» — последнего в прохождении: как «Ambush» (по гнезду у левой и правой стены, все гнёзда выходят
 // разом), только комната чуть больше, а волнам нет конца — каждая следующая больше, пестрее и крепче, пауза между ними
-// сокращается. Враги — все обычные подвижные, с 4-й волны к ним присоединяются новые демоны «Ambush». Победы нет: партия
+// сокращается. Враги — все обычные подвижные, с 4-й волны к ним присоединяются новые демоны «Ambush» и Катапульта II
+// (миномётчик на колёсах, бьёт залпом в три точки — есть только здесь). Победы нет: партия
 // идёт, пока жив Герой. Здесь только данные — никакой игровой логики (волны — game/waves.js, их состав — populate.rollSlots).
 (function (G) {
 'use strict';
@@ -25,9 +26,9 @@ const ROOM_PLAN = {
   nests: [[150, H / 2], [W - 150, H / 2]],
 };
 
-// обычные подвижные враги (катапульта стоять на месте не умеет) и новые демоны «Ambush»
+// обычные подвижные враги (катапульта стоять на месте не умеет), новые демоны «Ambush» и Катапульта II
 const BASE = ['shooter', 'bull', 'scorpion', 'zombie', 'hunter', 'chariot'];
-const NEW = ['snail', 'piper', 'turtle'];
+const NEW = ['snail', 'piper', 'turtle', 'catapult2'];
 
 G.level10 = {
   name: 'Endless',
@@ -36,7 +37,7 @@ G.level10 = {
   geometry: { kind: 'rect', width: W + 80, height: H + 80, wall: 40 },
   spawn: { room: 0, at: [W / 2, H - 340], heading: -Math.PI / 2 }, // у южной стены посередине (над колонной), лицом к центру
   enemyPool: BASE.concat(NEW),
-  enemyWeights: { shooter: 3, zombie: 2, hunter: 2, bull: 2, scorpion: 1, chariot: 1, snail: 2, piper: 2, turtle: 2 },
+  enemyWeights: { shooter: 3, zombie: 2, hunter: 2, bull: 2, scorpion: 1, chariot: 1, snail: 2, piper: 2, turtle: 2, catapult2: 2 },
   zoneNames: ['ENDLESS'],
   // волны по формуле (k — номер волны с нуля): мест size.first + size.grow·k (новый враг и колесница — два), типов
   // kinds.first + kinds.grow·k (не больше max), пул — последний из pools с from ≤ k, HP врагов ×(1 + hpGrow·k).
