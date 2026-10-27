@@ -8,7 +8,8 @@
 // свой бюджет мест, число типов и пул (populate.rollSlots); состав следующей волны бросается заранее (его видно на
 // плашках над норами) и делится между гнёздами по очереди. Последняя вышла — гнёзда молчат.
 // С waves.endless («Endless») — так же, но волнам нет конца: состав волны номер k считается по формуле (waveSpec), каждая
-// следующая больше, пестрее и крепче (HP врагов растёт), пауза сокращается (waves.ramp); живых не больше waves.maxAlive.
+// следующая больше и крепче (HP врагов растёт), с какой-то — пестрее (stages), пауза сокращается (waves.ramp); живых не
+// больше waves.maxAlive. Состав делится так, чтобы каждому гнезду досталось по каждому типу, которого хватает на всех.
 // Таймеры гнёзд — часть состояния партии (state.nests), параметры — у уровня (level.waves).
 (function (G) {
 'use strict';
@@ -86,18 +87,27 @@ function releaseWave(nest, cfg) {
   }
 }
 
-// состав волны номер k (с нуля) у волн по сценарию: { size, kinds, pool, hpMul }; null — волн больше нет.
-// waves.script — k-я из списка; waves.endless — по формуле: мест size.first + size.grow·k, типов kinds.first +
-// kinds.grow·k (не больше kinds.max, с округлением вниз), пул — последний из pools с from ≤ k, HP ×(1 + hpGrow·k)
+// состав волны номер k (с нуля) у волн по сценарию: { size, kinds, pool, copies, hpMul }; null — волн больше нет.
+// waves.script — k-я из списка; waves.endless — по формуле: мест size.first + size.grow·k, типов и пул — из последней
+// ступени stages с from ≤ k, каждого типа хотя бы copies раз, HP ×(1 + hpGrow·k)
 function waveSpec(cfg, k) {
   if (cfg.script) return cfg.script[k] || null;
-  const e = cfg.endless;
+  const e = cfg.endless, stage = e.stages.filter((s) => s.from <= k).pop();
   return {
     size: Math.floor(e.size.first + e.size.grow * k),
-    kinds: Math.min(e.kinds.max, Math.floor(e.kinds.first + e.kinds.grow * k + 1e-9)),
-    pool: e.pools.filter((p) => p.from <= k).pop().pool,
+    kinds: stage.kinds,
+    pool: stage.pool,
+    copies: e.copies,
     hpMul: 1 + e.hpGrow * k,
   };
+}
+
+// очередь так, чтобы типы чередовались (A B A B A …): если мест не хватит на всех, не пропадёт целый тип
+function alternate(list) {
+  const groups = [...new Set(list)].map((t) => list.filter((x) => x === t));
+  const out = [];
+  while (out.length < list.length) for (const g of groups) if (g.length) out.push(g.pop());
+  return out;
 }
 
 // волны по сценарию: состав следующей волны (номер state.waveNo) — по гнёздам в nest.queue; волн больше нет — гнёзда
@@ -106,11 +116,14 @@ function planScripted(cfg) {
   const spec = waveSpec(cfg, state.waveNo);
   for (const n of state.nests) { n.queue = []; n.hpMul = spec ? spec.hpMul || 1 : 1; n.done = !spec; if (!spec) n.nextIn = Infinity; }
   if (!spec) return;
-  rollSlots(spec, state.level).forEach((type, i) => state.nests[i % state.nests.length].queue.push(type));
+  // раздаём по типам подряд и гнёздам по очереди: тип, которого хватает на все гнёзда, достаётся каждому
+  rollSlots(spec, state.level).sort().forEach((type, i) => state.nests[i % state.nests.length].queue.push(type));
+  for (const n of state.nests) n.queue = alternate(n.queue);
 }
 
-// волны по сценарию: таймер у всех гнёзд один; вышел — все выпускают назначенных разом (с maxAlive — пока живых врагов
-// волн меньше него, лишние пропадают), бросается состав следующей волны; пауза — interval (с ramp — сокращается)
+// волны по сценарию: таймер у всех гнёзд один; вышел — все выпускают назначенных разом, гнёзда по очереди по одному
+// (с maxAlive — пока живых врагов волн меньше него, лишние пропадают), бросается состав следующей волны; пауза —
+// interval (с ramp — сокращается)
 function updateScripted(cfg, dt) {
   if (!state.nests.length) return;
   if (!state.nests[0].queue) planScripted(cfg);
@@ -119,11 +132,13 @@ function updateScripted(cfg, dt) {
   if (state.nests[0].nextIn > 0) return;
   const types = [], hpMul = state.nests[0].hpMul;
   let room = cfg.maxAlive ? cfg.maxAlive - state.enemies.filter((e) => e.fromNest).length : Infinity;
-  for (const n of state.nests) {
-    n.wave += 1;
-    n.releasedAt = state.time;
-    n.lastCount = 0;
-    for (const type of n.queue) if (room > 0 && spawnAt(n, type, cfg, n.hpMul)) { types.push(type); room -= 1; }
+  for (const n of state.nests) { n.wave += 1; n.releasedAt = state.time; n.lastCount = 0; }
+  const most = Math.max(...state.nests.map((n) => n.queue.length));
+  for (let i = 0; i < most; i++) {
+    for (const n of state.nests) {
+      const type = n.queue[i];
+      if (type && room > 0 && spawnAt(n, type, cfg, n.hpMul)) { types.push(type); room -= 1; }
+    }
   }
   state.waveNo += 1;
   state.waveNews = { n: state.waveNo, types, hpMul, at: state.time };

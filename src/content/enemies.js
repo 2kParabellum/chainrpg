@@ -622,16 +622,17 @@ const turtleShoot = ranged(turtle, (e, foe, game) => {
 
 // Катапульта II («Endless»): миномётчик на колёсной повозке с тремя мортирами. Ездит (бродит, враг волны — подходит на
 // 0.6 дальности, как Стрелок), а для залпа встаёт: setupTime наводится (e.setup), бьёт тремя навесными снарядами —
-// в точку цели и в две точки по сторонам от неё (spread поперёк линии выстрела, с разбросом spreadJitter) — и ещё
-// holdTime стоит (e.hold). Снаряды — как у Катапульты (spawnMortar с числами e.cfg), залп раз в cooldown (наводка входит
-// в него). В волне занимает два места
+// в точку цели и в две случайные точки вокруг неё (sidePoints: круги не накладываются) — и ещё holdTime стоит (e.hold).
+// Основной снаряд — как у Катапульты (spawnMortar с числами e.cfg), боковые — с меньшим радиусом и уроном (side).
+// Залп раз в cooldown (наводка входит в него). В волне занимает два места
 const catapult2 = {
   stats: { ...tower.stats, name: 'Catapult II', hp: tower.stats.hp * 3, radius: 22, mass: 4,
-           dmg: tower.stats.dmg * 2, edgeDmg: tower.stats.edgeDmg * 2,
+           dmg: tower.stats.dmg * 2 * 0.8, edgeDmg: tower.stats.edgeDmg * 2 * 0.8, // вдвое сильнее Катапульты, потом −20%
            setupTime: 0.9,          // сколько стоит и наводится перед залпом
            holdTime: 0.5,           // сколько ещё стоит после залпа
-           spread: 140,             // боковые снаряды — на таком расстоянии от точки цели ..
-           spreadJitter: 0.35 },    // .. поперёк линии выстрела, с разбросом угла (рад)
+           sideBlast: 0.8,          // боковые снаряды: радиус — такая доля основного ..
+           sideDmg: 0.6,            // .. урон — такая доля основного ..
+           sideGap: [10, 60] },     // .. а между краями кругов — случайный просвет из этого отрезка
   wanderSpeed: 35,
   chaseSpeed: 65,
   spawnCost: 2,
@@ -645,11 +646,10 @@ const catapult2 = {
       e.setup -= dt;
       if (e.setup > 0) return;
       if (!foe) return; // цель ушла из дальности — залпа нет, снова едет
-      const a = e.facing + Math.PI / 2 + (Math.random() * 2 - 1) * cfg.spreadJitter;
-      const ox = Math.cos(a) * cfg.spread, oy = Math.sin(a) * cfg.spread;
+      const side = { ...cfg, dmg: cfg.dmg * cfg.sideDmg, edgeDmg: cfg.edgeDmg * cfg.sideDmg,
+        blastRadius: cfg.blastRadius * cfg.sideBlast };
       game.spawnMortar(e, foe.x, foe.y);
-      game.spawnMortar(e, foe.x + ox, foe.y + oy);
-      game.spawnMortar(e, foe.x - ox, foe.y - oy);
+      for (const p of sidePoints(foe.x, foe.y, cfg.blastRadius, side.blastRadius, cfg.sideGap)) game.spawnMortar(e, p.x, p.y, side);
       e.cd = cfg.cooldown - cfg.setupTime;
       e.hold = cfg.holdTime;
       return;
@@ -660,6 +660,22 @@ const catapult2 = {
     else if (!game.stepOffSpikes(e, dt, catapult2.wanderSpeed * 1.6)) game.wanderStep(e, dt, catapult2.wanderSpeed);
   },
 };
+
+// две точки боковых снарядов вокруг (x, y): каждая в случайную сторону, так, чтобы её круг (радиус r) не задевал круг
+// основного (радиус R) и круг другой — между краями просвет из gap; не нашлось за несколько бросков — вторая
+// напротив первой (там они точно не задевают друг друга)
+function sidePoints(x, y, R, r, gap) {
+  const at = (a) => {
+    const d = R + r + gap[0] + Math.random() * (gap[1] - gap[0]);
+    return { x: x + Math.cos(a) * d, y: y + Math.sin(a) * d, a };
+  };
+  const first = at(Math.random() * Math.PI * 2);
+  for (let i = 0; i < 12; i++) {
+    const p = at(Math.random() * Math.PI * 2);
+    if (Math.hypot(p.x - first.x, p.y - first.y) >= 2 * r + gap[0]) return [first, p];
+  }
+  return [first, at(first.a + Math.PI)];
+}
 
 // мина: не блуждает и сама не действует; цепочка её замечает вблизи, она взрывается под ногами
 // и простреливается союзниками, как любой враг — но только после обнаружения

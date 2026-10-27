@@ -77,7 +77,7 @@ const fist = {
 // подошедший спереди или сзади тоже получил. Стоя на месте и выбитым — полукруг вокруг себя (aroundReach) в сторону
 // врага (с «Double Edge» — круг). «Berserk» — урон растёт с потерей HP копейщика
 const spear = {
-  stats: { dmg: 24, cooldown: 1.33, zoneDist: 30, zoneRadius: 24, closeReach: 14, aroundReach: 40, color: COLORS.spear },
+  stats: { dmg: 27.6, cooldown: 1.33, zoneDist: 30, zoneRadius: 24, closeReach: 14, aroundReach: 40, color: COLORS.spear },
   update(u, w, dt, game) {
     if (!ready(w, dt)) return;
     const both = !!game.upgrade('doubleEdge');
@@ -211,7 +211,7 @@ const spark = {
 };
 
 const bow = {
-  stats: { range: 345, dmg: 8.05, cooldown: 1.0, projSpeed: 560, projRadius: 4 },
+  stats: { range: 345, dmg: 9.26, cooldown: 1.0, projSpeed: 560, projRadius: 4 },
   update: shootUpdate(arrow),
 };
 

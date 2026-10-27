@@ -71,9 +71,10 @@ function rollWave(count, level) {
   return rollEnemySpec({ count, kinds: level.waves.kinds }, level).map(([type]) => type);
 }
 
-// состав заранее заданной волны («Ambush», waves.script): spec.kinds типов из spec.pool (или пула уровня; с весами
-// уровня), каждый выбранный — хотя бы раз, остальные места бюджета spec.size добираются из них же. Тип с spawnCost
-// занимает столько мест (новые враги — два); если оставшееся место никому не впору, оно пропадает. Возвращает типы
+// состав волны по сценарию («Ambush», «Endless»): spec.kinds типов из spec.pool (или пула уровня; с весами уровня),
+// каждый выбранный — хотя бы spec.copies раз (по умолчанию раз; набираются по кругу — сперва по одному каждого),
+// остальные места бюджета spec.size добираются из них же. Тип с spawnCost занимает столько мест (новые враги — два);
+// если оставшееся место никому не впору, оно пропадает. Возвращает типы
 function rollSlots(spec, level) {
   const pool = spec.pool || level.enemyPool, weights = level.enemyWeights;
   const kinds = clamp(spec.kinds || 1, 1, pool.length);
@@ -81,7 +82,7 @@ function rollSlots(spec, level) {
   const cost = (t) => enemyTypes[t].spawnCost || 1;
   let left = spec.size;
   const out = [];
-  for (const t of chosen) if (cost(t) <= left) { out.push(t); left -= cost(t); }
+  for (let c = 0; c < (spec.copies || 1); c++) for (const t of chosen) if (cost(t) <= left) { out.push(t); left -= cost(t); }
   for (;;) {
     const fits = chosen.filter((t) => cost(t) <= left);
     if (!fits.length) break;

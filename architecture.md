@@ -123,8 +123,9 @@ src/
                     сценарию waves.script (пять волн: бюджет мест size, число типов kinds, пул pool у каждой), общий таймер
                     interval; победа — waves (все волны вышли и все враги перебиты); в прохождении — после Логова
     level10.js      «Endless»: как «Ambush» (rect, колонны, два гнезда у коротких стен), но волны без конца — waves.endless
-                    (формула волны: size/kinds — first + grow·k, pools — пул с какой волны, hpGrow), waves.ramp (пауза
-                    сокращается), waves.maxAlive; победа — endless (никогда); последний в прохождении, после Ambush
+                    (формула волны: size — first + grow·k, stages — с какой волны сколько типов и из кого, copies — сколько
+                    раз хотя бы каждого типа, hpGrow), waves.ramp (пауза сокращается), waves.maxAlive; победа — endless
+                    (никогда); последний в прохождении, после Ambush
     testRam.js      тестовый «Ram Test» (G.levelTestRam): квадратная комната (kind: 'rect'), мишень-манекен (dummy), точки
                     дружочков, постоянный подиум «скорости», без случайных подиумов; победа kind: 'none' (никогда),
                     level.upgrades — улучшения на старте. В прохождение не входит: main.js держит его в TEST_LEVELS и
@@ -424,17 +425,22 @@ src/
   `render/nestart.js` над гнездом с `done` плашку не рисует; «WAVE N/5» и плашка новой волны — `hud.js`.
 - **Уровень «Endless» (`levels/level10.js`, `game/waves.js`)**. Те же волны по сценарию, только состав волны номер `k` не
   из списка, а по формуле: `waveSpec(cfg, k)` (внутри `waves.js`) — для `script` берёт `script[k]`, для `waves.endless` считает
-  `{ size, kinds, pool, hpMul }` (`size/kinds` — `first + grow·k`, `kinds` не больше `max`; `pool` — последний из `pools`
-  с `from ≤ k`; `hpMul = 1 + hpGrow·k`), `null` — волн больше нет (у бесконечных не бывает). `planScripted` кладёт
-  `hpMul` в гнёзда, `spawnAt(nest, type, cfg, hpMul)` умножает HP вышедшего врага. Пауза после волны — `intervalNow`
-  (с `waves.ramp` сокращается по времени партии, как у обычных волн); `waves.maxAlive` — пока живых врагов из гнёзд
+  `{ size, kinds, pool, copies, hpMul }` (`size` — `first + grow·k`; `kinds` и `pool` — из последней ступени `stages` с
+  `from ≤ k`; `copies` — `endless.copies`; `hpMul = 1 + hpGrow·k`), `null` — волн больше нет (у бесконечных не бывает).
+  `populate.rollSlots` набирает каждого выбранного типа хотя бы `copies` раз (по кругу). `planScripted` раздаёт состав
+  отсортированным по типу — гнёздам по очереди (тип, которого не меньше, чем гнёзд, достаётся каждому), очередь гнезда
+  перемешивает так, чтобы типы чередовались (`alternate`), и кладёт `hpMul` в гнёзда; `updateScripted` выпускает гнёзда
+  по очереди по одному (`spawnAt(nest, type, cfg, hpMul)` умножает HP). Пауза после волны — `intervalNow` (с
+  `waves.ramp` сокращается по времени партии, как у обычных волн); `waves.maxAlive` — пока живых врагов из гнёзд
   столько, остальные из очереди пропадают. `state.waveNews` несёт ещё `hpMul` (плашка «— HP +N%»). Победа
   `victory.kind: 'endless'` — `isVictory` всегда `false`; счётчик «WAVE N» — `hud.js`; экран поражения показывает
   `state.waveNo` и рекорд (`main.js`, ключ `chainrpg.endlessBest` в `localStorage`, без хранилища — без рекорда).
 - **Катапульта II (`content/enemies.js` — `catapult2`, `render/foes.js` — `drawCatapult2`)**. Числа — от `tower.stats`
-  (HP ×3, урон ×2) плюс `setupTime`, `holdTime`, `spread`, `spreadJitter`. Своя машина в `update`: `e.cd` тикает всегда;
-  `e.setup > 0` — стоит и наводится, по окончании три `game.spawnMortar` (цель и две точки `±spread` поперёк линии
-  выстрела), `e.cd = cooldown − setupTime`, `e.hold = holdTime`; `e.hold > 0` — стоит; иначе цель в дальности и `cd ≤ 0`
+  (HP ×3, урон ×2 ×0.8) плюс `setupTime`, `holdTime`, `sideBlast`, `sideDmg`, `sideGap`. Своя машина в `update`: `e.cd`
+  тикает всегда; `e.setup > 0` — стоит и наводится, по окончании `game.spawnMortar` в цель и ещё два — в точки
+  `sidePoints` (случайно вокруг цели, круги не накладываются; при неудаче вторая — напротив первой) с числами `side`
+  (радиус ×`sideBlast`, урон ×`sideDmg`, четвёртый параметр `spawnMortar`), `e.cd = cooldown − setupTime`,
+  `e.hold = holdTime`; `e.hold > 0` — стоит; иначе цель в дальности и `cd ≤ 0`
   — начать наводку, нет — ехать (`chaseStep` на 0.6 дальности / `wanderStep`). `spawnCost: 2`, в пуле только у
   «Endless». Рисует `foes.js` (SPECIAL, живьём): своё в кэше врага — путь колёс и сторона по ходу (`a.px/a.py`, `a.roll`,
   `a.side`), выдвинутость упоров `a.brace`; полоска HP — выше (`BAR_UP`), гибель — кусочки (`POP` в `sweep`).
