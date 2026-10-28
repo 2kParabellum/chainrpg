@@ -175,12 +175,12 @@ function burrow(x, y, soon, just, p, t, seed, seal = 0, op = 99) {
   burst(x, y, op, 9);
 }
 
-// плашка над норой: череп, сколько врагов и через сколько секунд; перед волной краснеет и пульсирует.
+// плашка над норой: череп, сколько врагов и через сколько секунд (sec null — без секунд); перед волной краснеет и пульсирует.
 // Готовой картинкой на каждый текст (спокойная и красная)
 const chips = G.shapes.spriteCache(paintOn, 200);
 const CHIP_FONT = 'bold 14px "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
 function chip(x, y, n, sec, soon, t) {
-  const txt = `×${n}  ${sec}s`, hot = soon > 0, key = (hot ? 'h' : 'c') + txt;
+  const txt = sec === null ? `×${n}` : `×${n}  ${sec}s`, hot = soon > 0, key = (hot ? 'h' : 'c') + txt;
   let sp = chips.get(key);
   if (!sp) {
     ctx.font = CHIP_FONT;
@@ -319,7 +319,8 @@ function draw(n, cfg) {
   else liveBurrow(n, P, soon, just, p, t, seal, op);
   if (n.sealed) sealChip(n.x, n.y - 74, 'SEALED');
   else if (n.guarded && seal > 0) sealChip(n.x, n.y - 74, `${Math.ceil((1 - seal) * state.level.seals.time)}s`);
-  else if (!n.done) chip(n.x, n.y - 74, G.waves.nextCount(cfg, n), Math.max(0, Math.ceil(n.nextIn)), soon, t); // волн больше нет — без плашки
+  // волн больше нет — без плашки; гнездо ждёт заряда («Endless Run»: волну зовёт проезд старта) — без секунд
+  else if (!n.done) chip(n.x, n.y - 74, G.waves.nextCount(cfg, n), isFinite(n.nextIn) ? Math.max(0, Math.ceil(n.nextIn)) : null, soon, t);
 }
 
 G.nestArt = { draw, R: NEST_R };

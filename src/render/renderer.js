@@ -965,6 +965,7 @@ function drawScene() {
   drawDoors();
   drawButtons();
   G.flagArt.drawPlates();      // площадки флагов «Capture the Flags» — на полу, под телами
+  G.flagArt.drawGateLines();   // пунктир флажков-чекпоинтов «Endless Run» — тоже на полу
   drawCannons();
   if (world.pod && onScreen({ x: world.pod.x, y: world.pod.y, r: world.pod.r + 170 })) G.podArt.draw(); // Под «Hit the Count»
   drawPadMarks();
@@ -982,6 +983,7 @@ function drawScene() {
   drawEnemies();
   drawChain();
   G.flagArt.drawPoles();       // древки и полотнища флагов — выше тел
+  G.flagArt.drawGatePoles();   // древки флажков-чекпоинтов — тоже
   G.ground.drawOccluders();    // стена поверх спрятанных за ней: полупрозрачная, с окошком вокруг каждого
   drawWeapons();
   drawProjectiles();

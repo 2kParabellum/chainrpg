@@ -225,6 +225,10 @@ function spawnMates(area, count) {
 // тень, потом падает; в предел maxActive входит, но и сам его не спрашивает. false, если места не нашлось
 function spawnJobPad(area) { return spawnPad(settings(), 'jobs', false, area); }
 
+// то же для подиума усиления (их вместе с подиумами профессий и дружочками раскладывает по дороге проезд старта
+// «Endless Run»)
+function spawnBuffPad(area) { return spawnPad(settings(), 'buffs', false, area); }
+
 // ждущие вербовки дружочки уходят по таймеру; новые появляются, как подиумы.
 // Завербованного это больше не касается: он уже не в state.neutrals
 function updateAllySpawns(dt) {
@@ -241,5 +245,5 @@ function updateAllySpawns(dt) {
   runSpawner('allySpawnIn', cfg, state.neutrals.length, spawnAlly, dt);
 }
 
-G.pads = { padKind, padUnder, markPadUsed, consumePad, updatePads, settings, updateAllySpawns, allySettings, spawnMates, spawnJobPad };
+G.pads = { padKind, padUnder, markPadUsed, consumePad, updatePads, settings, updateAllySpawns, allySettings, spawnMates, spawnJobPad, spawnBuffPad };
 })(window.Game = window.Game || {});

@@ -18,9 +18,10 @@ const world = {
   // уровень «Оборона»: база (прямоугольник здания с запасом HP), двор вокруг неё и гнёзда врагов (точки)
   base: null, home: null, nests: [],
   pod: null,         // «Hit the Count»: Под — круг на полу { x, y, r } и его числа из плана (см. game/pod.js)
-  // «Dead Race»: дорога-кольцо — отрезки оси segments ({ ax, ay, bx, by, tx, ty, len, hw } по ходу гонки), длина круга
-  // length и ворота gates ([0] — старт-финиш, дальше невидимые чекпоинты по ходу: { x, y, tx, ty, half } — середина,
-  // направление гонки, полудлина поперёк дороги). См. game/race.js
+  // «Dead Race», «Endless Run»: дорога-кольцо — отрезки оси segments ({ ax, ay, bx, by, tx, ty, len, hw, from } по ходу
+  // гонки; from — сколько пути от начала оси до отрезка), длина круга length и ворота gates ([0] — старт-финиш, дальше
+  // чекпоинты по ходу: { x, y, tx, ty, half, along } — середина, направление гонки, полудлина поперёк дороги, где на
+  // оси); flags — чекпоинты видны флажками («Endless Run»), иначе невидимые. См. game/race.js
   track: null,
   ice: null,         // скользкий пол уровня ({ brake, drift, controlLag } поверх CONFIG.LEADER) или null — пол обычный
   solids: [],       // твёрдые постройки (база): держат движение, но не обзор и не выстрелы
@@ -146,8 +147,8 @@ function addChasm(chasm, i, toRect) {
 // по ходу гонки; соседние точки — на одной горизонтали или вертикали). Проходимо: прямоугольник вокруг каждого отрезка,
 // шире его на полширины во все стороны (углы — прямые), и карманы pockets ([cx, cy, w, h] — закутки сбоку; гнёзда в них —
 // обычные plan.nests). Остальное в комнате — стены прямоугольниками (complementRects, как у пропасти). start — точка на
-// оси, где линия старта-финиша, checkpoints — точки невидимых ворот (на прямых и подальше от карманов: через карман ворота
-// можно объехать). Шипы (spikes) раскладываются сами: полосами толщиной size вплотную к стенам — по местам длиной step;
+// оси, где линия старта-финиша, checkpoints — точки ворот-чекпоинтов (на прямых и подальше от карманов: через карман ворота
+// можно объехать; с flags: true их видно флажками). Шипы (spikes) раскладываются сами: полосами толщиной size вплотную к стенам — по местам длиной step;
 // доля занятых мест — outer на внешней стороне поворота (ближе двух полуширин к углу), inner — на внутренней, straight —
 // на прямой; и квадратами size посреди дороги через middle px пути (не ближе middleGap к колоннам). В зонах clear
 // ([cx, cy, w, h]: старт, портал) и в карманах шипов нет. Расклад не случайный — каждую партию один и тот же
@@ -215,6 +216,8 @@ function addTrack(spec, i) {
     const b = pts[(j + 1) % n], len = Math.hypot(b.x - a.x, b.y - a.y);
     return { ax: a.x, ay: a.y, bx: b.x, by: b.y, tx: (b.x - a.x) / len, ty: (b.y - a.y) / len, len, hw: a.hw };
   });
+  let along = 0;
+  for (const s of segs) { s.from = along; along += s.len; }
   // повороты на концах отрезка: плюс — направо по ходу
   segs.forEach((s, j) => {
     const p = segs[(j + n - 1) % n], q = segs[(j + 1) % n];
@@ -230,10 +233,17 @@ function addTrack(spec, i) {
   // ворота: поперёк дороги, концами уходят в стены
   const gate = ([x, y]) => {
     const { s, x: gx, y: gy } = nearestOnTrack(segs, localToWorld(i, x, y));
-    return { x: gx, y: gy, tx: s.tx, ty: s.ty, half: s.hw + 30 };
+    return { x: gx, y: gy, tx: s.tx, ty: s.ty, half: s.hw + 30, along: s.from + Math.hypot(gx - s.ax, gy - s.ay) };
   };
-  world.track = { segments: segs, length: segs.reduce((sum, s) => sum + s.len, 0),
+  world.track = { segments: segs, length: along, flags: !!spec.flags,
                   gates: [gate(spec.start), ...(spec.checkpoints || []).map(gate)] };
+}
+
+// точка оси дороги-кольца в d px пути по ходу гонки от линии старта: { x, y, tx, ty, hw } (hw — полуширина дороги там)
+function trackAt(d) {
+  const t = world.track, segs = t.segments, a = (((t.gates[0].along + d) % t.length) + t.length) % t.length;
+  const s = segs.find((q) => a < q.from + q.len) || segs[segs.length - 1], k = a - s.from;
+  return { x: s.ax + s.tx * k, y: s.ay + s.ty * k, tx: s.tx, ty: s.ty, hw: s.hw };
 }
 
 // препятствия и знаки комнаты из её плана; координаты плана — доли внутреннего размера комнаты
@@ -707,6 +717,6 @@ function freeSquareIn(area, size, avoid, accept) {
 G.world = {
   world, roomCount, roomIndexAt, roomInterior, localToWorld, buildWorld, hasLineOfSight,
   spikeRectAt, standsOnSpikes, buttonUnder, freeSpotInRoom, scatterSpot, freeSpotNear, freeSquareNear, freeSquareIn, setDoorsOpen,
-  flowDir, buildFlowField, pathClear, inHome,
+  flowDir, buildFlowField, pathClear, inHome, trackAt,
 };
 })(window.Game = window.Game || {});

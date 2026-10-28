@@ -9,7 +9,7 @@
 // предыдущие уровни пройдены), потом сам уровень. Пауза (ESC, кнопка паузы, свернули вкладку, телефон повернули
 // вертикально) — тот же оверлей с панелью «Продолжить / Заново / Управление / В меню»; пока пауза, игра стоит.
 // На «Endless» каждая третья волна, когда перебита, ставит игру на выбор улучшения (perk) — экран карточек, как между
-// уровнями, но после выбора та же партия идёт дальше.
+// уровнями, но после выбора та же партия идёт дальше; на «Endless Run» — каждые три круга (новый уровень).
 (function (G) {
 'use strict';
 
@@ -31,7 +31,7 @@ const { drawHud } = G.hud;
 const screenInfo = G.screen;
 
 // уровни в порядке их показа в меню; за фоном меню при запуске стоит первый
-const LEVELS = [G.level1, G.level2, G.level6, G.level3, G.level8, G.level7, G.level4, G.level5, G.level9, G.level10];
+const LEVELS = [G.level1, G.level2, G.level6, G.level3, G.level8, G.level7, G.level4, G.level5, G.level9, G.level10, G.level11];
 const START_LEVEL = LEVELS[0];
 // тестовые уровни: только из меню выбора уровней, в прохождение не входят; стартуют с улучшениями level.upgrades
 const TEST_LEVELS = [G.levelTestRam, G.levelTestChain, G.levelTestRace];
@@ -84,24 +84,32 @@ function syncOverlay() {
 // подпись клавиши в скобках на кнопке экрана: « (ПРОБЕЛ)»; на телефоне клавиш нет — без неё
 function keyHint(name) { return screenInfo.isTouch() ? '' : ` (${keyLabel(name)})`; }
 
-// рекорд «Endless» — до какой волны дошли; хранится в этом браузере (нет хранилища — рекорд только этой партии).
-// Дошли до волны n: прежний рекорд побит — запоминается; возвращает прежний рекорд
-const BEST_KEY = 'chainrpg.endlessBest';
-function recordWave(n) {
+// рекорды бесконечных уровней: «Endless» — до какой волны дошли, «Endless Run» — сколько кругов проехали; хранятся в
+// этом браузере (нет хранилища — рекорд только этой партии). Дошли до n: прежний рекорд побит — запоминается; возвращает
+// прежний рекорд
+const BEST_KEYS = { wave: 'chainrpg.endlessBest', laps: 'chainrpg.endlessRunBest' };
+function recordBest(what, n) {
   let best = 0;
-  try { best = Number(localStorage.getItem(BEST_KEY)) || 0; } catch (e) { /* без рекорда */ }
-  if (n > best) { try { localStorage.setItem(BEST_KEY, String(n)); } catch (e) { /* не запомнится */ } }
+  try { best = Number(localStorage.getItem(BEST_KEYS[what])) || 0; } catch (e) { /* без рекорда */ }
+  if (n > best) { try { localStorage.setItem(BEST_KEYS[what], String(n)); } catch (e) { /* не запомнится */ } }
   return best;
 }
 
+// итог бесконечного уровня с рекордом: «Reached wave 7 · best: wave 9» или «… — new best!»
+function bestLine(text, what, n, unit) {
+  const best = recordBest(what, n);
+  return text + (n > best && best > 0 ? ' — new best!' : n > best ? '' : ` · best: ${unit(best)}`);
+}
+
 // поражение: Герой выбит или база разрушена — кнопки «Заново» и «В меню» поверх замершей партии;
-// в «Endless» — ещё до какой волны дошли и рекорд
+// в «Endless» — ещё до какой волны дошли и рекорд, в «Endless Run» — уровень, сколько кругов и рекорд кругов
 function showDead() {
   const lostBase = state.base && state.base.hp <= 0;
   document.getElementById('deadTitle').textContent = lostBase ? 'BASE DESTROYED' : 'DEFEAT';
-  const n = state.waveNo, endless = state.level.victory.kind === 'endless', best = endless ? recordWave(n) : 0;
+  const endless = state.level.victory.kind === 'endless', n = state.waveNo, laps = state.race ? state.race.laps.length : 0;
   document.getElementById('deadText').textContent = !endless ? ''
-    : `Reached wave ${n}` + (n > best && best > 0 ? ' — new best!' : n > best ? '' : ` · best: wave ${best}`);
+    : state.level.run ? bestLine(`Reached level ${G.race.runLevel()} · ${laps} laps`, 'laps', laps, (b) => `${b} laps`)
+    : bestLine(`Reached wave ${n}`, 'wave', n, (b) => `wave ${b}`);
   document.getElementById('deadRestartBtn').textContent = 'Restart' + keyHint('restart');
   showPanel('dead');
 }
@@ -232,8 +240,8 @@ function showWin() {
   showPanel('win');
 }
 
-// «Endless»: перебита очередная волна с наградой — карточки улучшений посреди партии; выбранное сразу действует
-// (пересчёт HP и урона всех своих), потом та же партия идёт дальше. Брать нечего — сразу дальше
+// «Endless»: перебита очередная волна с наградой, «Endless Run»: новый уровень — карточки улучшений посреди партии;
+// выбранное сразу действует (пересчёт HP и урона всех своих), потом та же партия идёт дальше. Брать нечего — сразу дальше
 function showPerk() {
   offers = rollOffers();
   picked = null;
@@ -243,9 +251,14 @@ function showPerk() {
     syncOverlay();
   };
   if (!offers.length) { goNext(); return; }
-  const n = state.perks * state.level.waves.endless.perkEvery;
-  document.getElementById('winTitle').textContent = `WAVE ${n} CLEARED`;
-  document.getElementById('winText').textContent = 'Pick an upgrade — then the waves go on';
+  const run = state.level.run;
+  if (run) {
+    document.getElementById('winTitle').textContent = `LEVEL ${state.perks + 1}`;
+    document.getElementById('winText').textContent = `${state.perks * run.levelEvery} laps done — pick an upgrade, the enemies get tougher`;
+  } else {
+    document.getElementById('winTitle').textContent = `WAVE ${state.perks * state.level.waves.endless.perkEvery} CLEARED`;
+    document.getElementById('winText').textContent = 'Pick an upgrade — then the waves go on';
+  }
   const btn = document.getElementById('nextBtn');
   btn.style.display = '';
   btn.textContent = 'Continue' + keyHint('recruit');

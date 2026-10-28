@@ -12,7 +12,7 @@ const { nearestPickup, buffDuration } = G.chain;
 const { ctx, screenTransform } = G.shapes;
 const { withKeys, keyLabel } = G.input;
 const { isTouch, isPortrait } = G.screen;
-const { raceClock, lapTime } = G.race;
+const { raceClock, lapTime, nextGate, runLevel } = G.race;
 
 // шрифт интерфейса: округлый, жирный (graphics.md); цвета — из палитры fantasy-24
 const UI_FONT = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
@@ -103,6 +103,13 @@ function drawFlagMarkers() {
   }
 }
 
+// «Endless Run»: метка у края экрана к следующим флажкам-чекпоинтам (все флажки круга пройдены — к линии старта)
+function drawGateMarker() {
+  if (state.status !== 'play' || !world.track || !world.track.flags) return;
+  const i = nextGate(), g = world.track.gates[i];
+  drawEdgeMarker(g.x, g.y, UI.gold, i === 0 ? 'START' : 'FLAG');
+}
+
 // яркость надписи, которая видна duration секунд с момента age = 0: быстро проявляется, в конце гаснет
 function bannerAlpha(age, duration) {
   return clamp(age / 0.25, 0, 1) * clamp((duration - age) / 0.6, 0, 1);
@@ -146,12 +153,13 @@ function drawBanners() {
     const at = state.level.victory.time - w.surge.lastSeconds;
     drawBanner('ONSLAUGHT', `Last ${Math.round(w.surge.lastSeconds / 60)} minutes — bigger waves`, state.time - at, 4, COLORS.nest);
   }
-  // «Dead Race»: круг пройден — его время и сколько дружочков уже пересекли линию (число растёт, пока проезжает хвост)
-  const laps = state.race ? state.race.laps : [];
+  // «Dead Race»: круг пройден — его время и сколько дружочков уже пересекли линию (число растёт, пока проезжает хвост).
+  // «Endless Run»: «LAP N», а на круге с новым уровнем — «LEVEL N»
+  const laps = state.race ? state.race.laps : [], run = state.level.run;
   if (laps.length) {
     const l = laps[laps.length - 1], k = laps.length, total = state.level.victory.laps;
-    drawBanner(k >= total ? 'FINISH' : `LAP ${k}/${total}`, `${raceClock(l.time)} · mates across the line: ${l.mates}`,
-      state.time - l.at, 3.5, '#efac28', 220);
+    const title = run ? (k % run.levelEvery ? `LAP ${k}` : `LEVEL ${runLevel()}`) : k >= total ? 'FINISH' : `LAP ${k}/${total}`;
+    drawBanner(title, `${raceClock(l.time)} · mates across the line: ${l.mates}`, state.time - l.at, 3.5, '#efac28', 220);
   }
   // «Capture the Flags»: часовой поднял флаг или флаг потерян (часового убили, утащили, сбили с площадки) — сколько горит.
   // «Seal the Gates»: гнездо закрылось или открылось снова — сколько закрыто
@@ -422,7 +430,7 @@ function drawHud() {
     chips.push({ text: `${rule.label} ${n}/${total}`, color: n < total ? UI.gold : UI.teal });
   }
   // «Endless»: сколько волн уже вышло
-  if (rule.kind === 'endless') chips.push({ text: `${rule.label} ${state.waveNo}`, color: UI.gold });
+  if (rule.kind === 'endless' && !level.run) chips.push({ text: `${rule.label} ${state.waveNo}`, color: UI.gold });
   // «Seal the Gates»: сколько гнёзд закрыто из всех (все — бирюзой)
   if (rule.kind === 'seals') {
     const sealed = G.flags.gatesSealed(), total = state.nests.length;
@@ -434,6 +442,14 @@ function drawHud() {
     const done = race.laps.length, t = lapTime();
     chips.push({ text: `${rule.label} ${Math.min(done + 1, rule.laps)}/${rule.laps}`, color: UI.gold });
     if (!state.cleared) chips.push(t === null ? { text: 'GO!', color: UI.teal } : { text: raceClock(t), icon: 'clock' });
+  }
+  // «Endless Run»: уровень, какой круг уровня из скольких и время текущего круга (до старта — «GO!»)
+  const run = level.run && state.race;
+  if (run) {
+    const every = level.run.levelEvery, t = lapTime();
+    chips.push({ text: `LEVEL ${runLevel()}`, color: UI.gold });
+    chips.push({ text: `${rule.label} ${(run.laps.length % every) + 1}/${every}` });
+    chips.push(t === null ? { text: 'GO!', color: UI.teal } : { text: raceClock(t), icon: 'clock' });
   }
   const speed = Math.round(leaderSpeedMul() * 100);
   if (!podRule) chips.push({ text: `${state.party.length}`, icon: 'mate' });
@@ -459,15 +475,17 @@ function drawHud() {
       for (const line of wrapLines(task.split(' '), maxX - 12)) { bottom += 20; ctx.fillText(line, 12, bottom); }
     });
   }
-  // «Dead Race»: пройденные круги — время и сколько дружочков пересекли линию; лучший круг — золотом
-  if (race && race.laps.length) {
-    const best = Math.min(...race.laps.map((l) => l.time));
+  // «Dead Race»: пройденные круги — время и сколько дружочков пересекли линию; лучший круг — золотом.
+  // «Endless Run» — только три последних
+  const done = (race || run) ? state.race.laps : [];
+  if (done.length) {
+    const best = Math.min(...done.map((l) => l.time)), from = run ? Math.max(0, done.length - 3) : 0;
     ctx.font = `bold 13px ${UI_FONT}`;
     shadowText(() => {
-      race.laps.forEach((l, i) => {
+      done.slice(from).forEach((l, j) => {
         bottom += 17;
-        ctx.fillStyle = l.time === best && race.laps.length > 1 ? UI.gold : UI.text;
-        ctx.fillText(`Lap ${i + 1}   ${raceClock(l.time)}   ×${l.mates}`, 12, bottom);
+        ctx.fillStyle = l.time === best && done.length > 1 ? UI.gold : UI.text;
+        ctx.fillText(`Lap ${from + j + 1}   ${raceClock(l.time)}   ×${l.mates}`, 12, bottom);
       });
     });
   }
@@ -501,6 +519,7 @@ function drawHud() {
   drawEdgeMarkers();
   drawPodMarker();
   drawFlagMarkers();
+  drawGateMarker();
   drawBanners();
   drawNotice();
   ctx.font = `bold 14px ${UI_FONT}`;

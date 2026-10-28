@@ -4,12 +4,17 @@
 // старт, дальше круг засчитан, когда Герой впервые дошёл до линии, пройдя все чекпоинты. Время круга — от прошлого
 // пересечения линии. Дружочки цепочки, пересёкшие линию вперёд после Героя, идут в счёт этого круга, каждый — раз.
 // Числа — у уровня (world.track, level.victory.laps), счёт и время — в state.race.
+// «Endless Run» (level.run): та же гонка без конца. Каждый проезд линии (старт и каждый круг) раскладывает по дороге
+// впереди дружочков и подиумы и заряжает гнёзда (волна выйдет через waves.telegraph секунд; дальше — game/waves.js),
+// каждые run.levelEvery кругов — новый уровень (выбор улучшения, см. levelUpDue).
 (function (G) {
 'use strict';
 
 const { COLORS, state } = G;
-const { world } = G.world;
-const { leader } = G.session;
+const { shuffled } = G.math;
+const { world, trackAt } = G.world;
+const { leader, upgrade } = G.session;
+const { spawnMates, spawnJobPad, spawnBuffPad } = G.pads;
 
 // как отрезок движения p → q прошёл ворота g: 1 — вперёд по ходу гонки, −1 — назад, 0 — не пересёк (или мимо них)
 function crossing(p, q, g) {
@@ -20,8 +25,30 @@ function crossing(p, q, g) {
   return Math.abs((x - g.x) * -g.ty + (y - g.y) * g.tx) <= g.half ? dir : 0;
 }
 
-// Герой дошёл до линии с новым счётом ворот: первый раз — старт гонки, дальше — круг пройден
+// «Endless Run»: Герой проехал линию — на дороге впереди (от drop.from до drop.to длины круга) вразброс, примерно поровну
+// по пути, ложатся drop.mates дружочков, drop.jobs подиумов профессий и drop.buffs подиумов усилений (с «Talent Scout» и
+// «Lucky Foot» — во столько раз больше, во сколько они чаще на других уровнях), каждый — в свободном месте поперёк дороги;
+// гнёзда заряжаются — до волны telegraph секунд
+function supplyRun(run) {
+  const d = run.drop, scout = upgrade('talentScout'), lucky = upgrade('luckyFoot');
+  const jobs = Math.round(d.jobs * (scout ? scout.mul : 1)), buffs = Math.round(d.buffs * (lucky ? lucky.mul : 1));
+  const items = shuffled([...Array(d.mates).fill('mate'), ...Array(jobs).fill('jobs'), ...Array(buffs).fill('buffs')]);
+  items.forEach((kind, i) => {
+    const k = d.from + ((d.to - d.from) * (i + 0.2 + Math.random() * 0.6)) / items.length;
+    const p = trackAt(k * world.track.length), half = p.hw - 20;
+    const area = { x: p.x - half, y: p.y - half, w: half * 2, h: half * 2 };
+    if (kind === 'mate') spawnMates(area, 1);
+    else if (kind === 'jobs') spawnJobPad(area);
+    else spawnBuffPad(area);
+  });
+  const telegraph = state.level.waves.telegraph;
+  for (const n of state.nests) n.nextIn = Math.min(n.nextIn, telegraph);
+}
+
+// Герой дошёл до линии с новым счётом ворот: первый раз — старт гонки, дальше — круг пройден.
+// «Endless Run» — и в том и в другом случае раскладка по дороге и заряд гнёзд
 function passLine(r) {
+  if (state.level.run) supplyRun(state.level.run);
   if (r.startAt === null) { r.startAt = r.lapAt = state.time; return; }
   r.laps.push({ time: state.time - r.lapAt, mates: 0, at: state.time });
   r.lapAt = state.time;
@@ -59,6 +86,21 @@ function updateRace() {
   r.prev = seen;
 }
 
+// какие ворота Герой должен пройти следующими (номер в world.track.gates; 0 — линия старта)
+function nextGate() {
+  const n = world.track.gates.length;
+  return ((state.race.gates % n) + n) % n;
+}
+
+// «Endless Run»: какой сейчас уровень — с 1-го, следующий каждые run.levelEvery кругов
+function runLevel() { return Math.floor(state.race.laps.length / state.level.run.levelEvery) + 1; }
+
+// «Endless Run»: пора выбрать улучшение — проехано run.levelEvery·(state.perks + 1) кругов
+function levelUpDue() {
+  const run = state.level.run;
+  return !!run && !!state.race && state.race.laps.length >= run.levelEvery * (state.perks + 1);
+}
+
 // время гонки текстом: «1:05.3»
 function raceClock(t) {
   const m = Math.floor(t / 60), s = t - m * 60;
@@ -81,5 +123,5 @@ function raceSummary() {
     ...laps.map((l, i) => `Lap ${i + 1}: ${raceClock(l.time)} · ${l.mates} mates${l.time === best ? ' · best' : ''}`)];
 }
 
-G.race = { updateRace, raceClock, lapTime, raceSummary };
+G.race = { updateRace, raceClock, lapTime, raceSummary, nextGate, runLevel, levelUpDue };
 })(window.Game = window.Game || {});
