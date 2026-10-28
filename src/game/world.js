@@ -22,7 +22,7 @@ const world = {
   // length и ворота gates ([0] — старт-финиш, дальше невидимые чекпоинты по ходу: { x, y, tx, ty, half } — середина,
   // направление гонки, полудлина поперёк дороги). См. game/race.js
   track: null,
-  ice: null,         // скользкий пол уровня ({ brake, drift } поверх CONFIG.LEADER) или null — пол обычный
+  ice: null,         // скользкий пол уровня ({ brake, drift, controlLag } поверх CONFIG.LEADER) или null — пол обычный
   solids: [],       // твёрдые постройки (база): держат движение, но не обзор и не выстрелы
   moveBlockers: [], sightBlockers: [],
   pathBlockers: [],  // мешают идти по прямой: стены, колонны, двери и пропасти (без построек — база бывает целью)
