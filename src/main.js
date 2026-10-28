@@ -135,13 +135,13 @@ let picked = null; // выбранное; без выбора дальше не 
 // следующая карточка или сам уровень. null — дальше идти некуда (игра пройдена)
 let afterPick = null;
 
-// улучшение можно предложить: ещё не взято, а 2-й ранг — только если у того же персонажа уже есть 1-й
-// (с полем needs — только если взято именно то улучшение)
+// улучшение можно предложить: ещё не взято, а ранг выше 1-го — только если у того же класса уже взято улучшение
+// рангом ниже на один (2-й — после 1-го, 3-й — после 2-го); с полем needs — ещё и если взято то улучшение
 function offerable(key) {
-  const def = G.upgrades[key];
+  const def = G.upgrades[key], tier = def.tier || 1;
   if (state.upgrades.includes(key)) return false;
-  if (def.needs) return state.upgrades.includes(def.needs);
-  return def.tier !== 2 || state.upgrades.some((k) => G.upgrades[k].who === def.who && G.upgrades[k].tier !== 2);
+  if (def.needs && !state.upgrades.includes(def.needs)) return false;
+  return tier === 1 || state.upgrades.some((k) => G.upgrades[k].who === def.who && (G.upgrades[k].tier || 1) === tier - 1);
 }
 
 // случайные улучшения из тех, что можно предложить (см. CONFIG.UPGRADE_CARDS): каждая карточка — сперва класс (who),
@@ -184,10 +184,10 @@ function renderCards() {
     whoEl.style.color = who.color;
     whoEl.textContent = who.label;
     tags.append(whoEl);
-    if (def.tier === 2) {
+    if (def.tier > 1) {
       const tier = document.createElement('span');
       tier.className = 'tier';
-      tier.textContent = '★ TIER 2';
+      tier.textContent = `${'★'.repeat(def.tier - 1)} TIER ${def.tier}`;
       tags.append(tier);
     }
     const canvasEl = document.createElement('canvas');

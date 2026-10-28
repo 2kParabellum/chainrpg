@@ -128,12 +128,15 @@ const spear = {
 // новая цель или разрыв молнии сбрасывают разгон.
 // Молний — w.beams ({ target, aim, aimTotal, held }): обычно одна; улучшение «двойное напряжение» — до двух на разных
 // целях, «электрическая дуга» — во столько же раз дальше и замечает цель, и рвётся (урон к краю падает, как без неё),
-// «Quick Charge» — прицеливание короче в aimMul раз
+// «Quick Charge» — прицеливание короче в aimMul раз; «Shock» — враг под молнией бьёт слабее (game.shockFoe);
+// «Power Grid» — под усилением buff урон больше на per за каждую искру в цепочке
 const spark = {
   stats: { range: 230, fullRange: 110, farMul: 0.5, breakMul: 1.25, aimTime: 1.2, dps: 31.2, bossMul: 0.3,
            rampStep: 0.2, rampMax: 4, color: COLORS.spark },
   update(u, w, dt, game) {
     const two = game.upgrade('doubleSpark'), arc = game.upgrade('arc'), quick = game.upgrade('quickCharge');
+    const shock = game.upgrade('shock'), grid = game.upgrade('powerGrid');
+    const gridMul = grid && u.buffs[grid.buff] > 0 ? 1 + grid.per * game.state.party.filter((a) => a.ability === 'spark').length : 1;
     const reach = w.range * (arc ? arc.rangeMul : 1);
     const aimTime = w.aimTime * (quick ? quick.aimMul : 1);
     const breakDist = reach * w.breakMul;
@@ -154,7 +157,8 @@ const spark = {
       const bossMul = foe.type === 'boss' ? w.bossMul : 1;
       const ramp = 1 + w.rampStep * Math.min(w.rampMax, Math.floor(b.held));
       b.held += dt;
-      game.damageUnit(foe, w.dps * ramp * (1 - (1 - w.farMul) * k) * (u.dmgMul || 1) * bossMul * dt);
+      if (shock) game.shockFoe(foe);
+      game.damageUnit(foe, w.dps * ramp * (1 - (1 - w.farMul) * k) * (u.dmgMul || 1) * gridMul * bossMul * dt);
     }
   },
   // прицел — пунктир, который разгорается к выстрелу; молния — ломаная, каждый кадр новая

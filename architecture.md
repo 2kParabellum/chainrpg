@@ -532,18 +532,26 @@ src/
   складывает их по всем взятым (1 + сумма). Урон и HP входят в `recalcStats` (`u.dmgMul`, `u.maxHp`; `makeAlly` сразу
   зовёт его, поэтому прибавка HP есть у каждого нового союзника), скорость — в полную скорость `update.updateLeader`,
   шипы «шипастости» домножаются отдельно в `update.applySpikyContact`. Числа
-  улучшения лежат в его записи и читаются там, где оно действует: стрела (`weapons.arrow`: веер, поджог — поле снаряда
-  `burn`, горение врага `e.burn` тикает в `combat.updateBurns`), искра (молнии — список `w.beams`), лечение (`heal`),
-  урон (`combat.damageUnit(u, dmg, hit)`: ближние атаки врагов передают `hit = { by, melee: true }`; прикрытие
-  `coverDefense` снижает любой урон соседям копейщика), копьё (`weapons.spear`: сторона удара, «Double Edge», «Berserk»),
+  улучшения лежат в его записи и читаются там, где оно действует; поле `buff` — ключ усиления, под которым улучшение
+  действует (проверка `u.buffs[def.buff] > 0` там же). Стрела (`weapons.arrow`: веер, поджог — поле снаряда
+  `burn`; попадание зовёт `combat.ignite`: горения врага — список `e.burns` (одно, с «Wildfire» — до `stacks`), тикают в
+  `combat.updateBurns`, язычки — `renderer.drawBurn`), искра (молнии — список `w.beams`; «Shock» — `game.shockFoe(foe)`
+  ставит врагу `e.shockUntil`, «Power Grid» — множитель урона по числу искр в `party`), лечение (`heal`),
+  урон (`combat.damageUnit(u, dmg, hit)`: ближние атаки врагов передают `hit = { by, melee: true }`; урон врага `hit.by`
+  домножается на `combat.foeDmgMul` («Shock»), его же берут при выпуске `spawnProjectile` / `spawnMortar` / `spawnHook`
+  и облака врагов (`game.foeDmgMul` в content/enemies.js), обруч ослабленного — `renderer.drawShock`; прикрытие
+  `coverDefense` («Cover» / «Cover 2») снижает любой урон по расстоянию в цепочке до ближайшего копейщика, `thornGuard`
+  («Thorn Guard») — ближние атаки под шипами), «Rapid Fire» (множитель скорости атаки стрелка вместо `rate` усиления — в
+  `recalcStats`), «Field Hospital» (полное время усиления — `chain.buffDuration(key)`: его берут `giveBuff`, предел
+  «Buff Stacking» и полоска таймера в `hud`), «Power Ram» (множитель в `update.applyHeroRam`), копьё (`weapons.spear`: сторона удара, «Double Edge», «Berserk»),
   пробивающие стрелы (поле снаряда `passChance`, задетые — `p.hit`, флаг типа врага `boss` — в `combat.updateProjectiles`),
   долгое лечение (поле звена `u.cure`, тикает `applyCure` в `update.updateWeapons`), «Lucky Foot» и «Talent Scout» (`pads.settings`), «Quick Learning»
   (`chain.touchPads`), «Buff Stacking» (`chain.giveBuff`), «Quick Charge» (прицел молнии `b.aimTotal` в `weapons.spark`),
-  бесплатные звенья «March» / «March 2» (сумма полей `links` — `session.upgradeSum` в `heavyLinks`),
+  бесплатные звенья «March» / «March 2» / «March 3» (сумма полей `links` — `session.upgradeSum` в `heavyLinks`),
   рюкзак (`state.backpack`, команда `pack` → `chain.usePack`, перехват подиума в `chain.touchPads`; ячейка — `hud.drawBackpack`), тяжесть цепочки (`chainMass` — масса для разгона, торможения и сцепления на повороте в `update.updateLeader`, `chainSpeedMul` — потолок скорости), таран Героя (`update.applyHeroRam` сразу после
   движения Героя: масса `ramMass` × скорость, `ramDamage`; силу для дуги кладёт в `lead.ramPower`, дугу рисует `renderer.drawChain`;
   в `damageUnit` передаёт `hit = { ram, mass, speed }`). Тип врага может задать `onDamage(e, dmg, hit, game)` — `damageUnit`
-  зовёт его после каждого урона до проверки гибели (мишень-манекен: цифры урона — эффект `dmgText`). Ранг: запись с `tier: 2` предлагается (`main.offerable`), только если у того же `who` уже взято улучшение 1-го ранга; с полем `needs` — только если взято именно улучшение `needs`. Карточки показывает `main.js` на экране «уровень пройден» и перед стартом не с первого уровня (`prepareLevel`: N−1
+  зовёт его после каждого урона до проверки гибели (мишень-манекен: цифры урона — эффект `dmgText`). Ранг: запись с `tier: N` (2 или 3) предлагается (`main.offerable`), только если у того же `who` уже взято улучшение ранга N−1; с полем `needs` — ещё и если взято улучшение `needs`. Ярлык на карточке — «★ TIER 2» / «★★ TIER 3». Карточки показывает `main.js` на экране «уровень пройден» и перед стартом не с первого уровня (`prepareLevel`: N−1
   выборов, что дальше — в `afterPick`): три невзятых (`main.rollOffers`: каждая — класс `who` по весам, потом улучшение в нём по весу ранга; числа —
   `CONFIG.UPGRADE_CARDS`, недавние классы — хвост `state.upgrades`), без выбора дальше не пускает; рисунок — `render/cards.drawCard`, который зовёт `art(ctx, k)` записи с заготовками рисования.
 - **game/state.js** — единственный объект, в котором лежит вся партия: цепочка (`party`, первое звено —

@@ -85,14 +85,21 @@ function endBuff(u, key) {
   recalcStats(u);
 }
 
+// полное время усиления key: обычно его duration; «Field Hospital» — дольше на add с за каждого медика в цепочке
+function buffDuration(key) {
+  const fh = upgrade('fieldHospital');
+  const more = fh && key === fh.buff ? fh.add * state.party.filter((u) => u.ability === 'medic').length : 0;
+  return G.buffs[key].duration + more;
+}
+
 // временное усиление Герою; разом их сколько угодно. Повторное взятие того же обновляет таймер
 // и делает его самым свежим. «Buff Stacking» — остальные действующие продлеваются на add с (не дальше полного времени)
 function giveBuff(u, key) {
   const def = G.buffs[key];
   const fresh = !(u.buffs[key] > 0);
   const stack = upgrade('buffStacking');
-  if (stack) for (const k of u.buffOrder) if (k !== key && u.buffs[k] > 0) u.buffs[k] = Math.min(G.buffs[k].duration, u.buffs[k] + stack.add);
-  u.buffs[key] = def.duration;
+  if (stack) for (const k of u.buffOrder) if (k !== key && u.buffs[k] > 0) u.buffs[k] = Math.min(buffDuration(k), u.buffs[k] + stack.add);
+  u.buffs[key] = buffDuration(key);
   removeFrom(u.buffOrder, key);
   u.buffOrder.push(key);
   recalcStats(u);
@@ -365,7 +372,7 @@ function updateDowned(d, dt) {
 }
 
 G.chain = {
-  pushTrail, trailPointAt, followChain, touchPads, updateBuffs, jobTarget,
+  pushTrail, trailPointAt, followChain, touchPads, updateBuffs, buffDuration, jobTarget,
   usePack, nearestPickup, tryRecruit, canBeDisplaced, knockOutAlly, displaceAlly, cutChain, dropLastAlly, hookAlly, updateDowned,
   charmAlly, updateCharmed,
 };

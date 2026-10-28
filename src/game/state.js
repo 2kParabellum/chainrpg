@@ -118,14 +118,16 @@ function makeGear(u, key, level = 1) {
 }
 
 // пересчитать производные характеристики звена: множители активных усилений, прибавку HP от уровня
-// способности и прибавки улучшений General (урон, HP). Рост предела HP прибавляет столько же текущего HP,
-// падение — только обрезает текущее
+// способности и прибавки улучшений General (урон, HP). «Rapid Fire» — под его усилением стрелок атакует в rate раз
+// чаще вместо обычной прибавки. Рост предела HP прибавляет столько же текущего HP, падение — только обрезает текущее
 function recalcStats(u) {
   let dmg = 1, hp = 1, move = 1, rate = 1;
+  const rapid = upgrade('rapidFire');
   for (const [key, left] of Object.entries(u.buffs)) {
     if (!(left > 0)) continue;
     const d = G.buffs[key];
-    dmg *= d.dmg || 1; hp *= d.hp || 1; move *= d.move || 1; rate *= d.rate || 1;
+    dmg *= d.dmg || 1; hp *= d.hp || 1; move *= d.move || 1;
+    rate *= rapid && key === rapid.buff && u.ability === rapid.who ? rapid.rate : d.rate || 1;
   }
   if (u.ability) hp *= abilityLevelSpec(u.ability, u.abilityLevel).hp || 1;
   dmg *= boostMul('dmgAdd'); hp *= boostMul('hpAdd');

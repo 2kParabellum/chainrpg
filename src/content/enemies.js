@@ -28,7 +28,8 @@
 //   onDamage     — (e, dmg, hit, game): после каждого урона по врагу, до проверки гибели (мишень-манекен: цифры урона)
 //   drawReach    — рисовать, даже если тело дальше стольких px за краем экрана (у спрута тени и мины далеко от тела)
 // В stats может быть keepClear — радиус вокруг громадины, где не появляются подиумы и дружочки.
-// Ближние атаки (укус, таран) передают в game.damageUnit третий параметр { by: e, melee: true }.
+// Ближние атаки (укус, таран) передают в game.damageUnit третий параметр { by: e, melee: true }; облако берёт урон в
+// секунду с множителем game.foeDmgMul(e) — враг под молнией с «Shock» бьёт слабее (снарядам множитель ставит сам бой).
 // Всё, что нужно от игры, запись получает параметром game, а от рисования — параметром g
 // и никогда не подключает game/ и render/ сама.
 (function (G) {
@@ -209,7 +210,8 @@ const zombie = {
     }
 
     if (e.cd <= 0 && gap < near + 33) {
-      game.state.clouds.push({ x: e.x, y: e.y, r: e.cfg.cloudRadius, cur: 0, t: 0, life: e.cfg.cloudLife });
+      game.state.clouds.push({ x: e.x, y: e.y, r: e.cfg.cloudRadius, cur: 0, t: 0, life: e.cfg.cloudLife,
+                               dps: e.cfg.cloudDps * game.foeDmgMul(e) });
       e.cd = e.cfg.cooldown;
     }
   },
@@ -623,7 +625,8 @@ const turtle = {
     e.cloudCd -= dt;
     if (e.hidden) {
       if (e.cloudCd <= 0) {
-        game.state.clouds.push({ x: e.x, y: e.y, r: cfg.cloudRadius, cur: 0, t: 0, life: cfg.cloudLife, dps: cfg.cloudDps });
+        game.state.clouds.push({ x: e.x, y: e.y, r: cfg.cloudRadius, cur: 0, t: 0, life: cfg.cloudLife,
+                                 dps: cfg.cloudDps * game.foeDmgMul(e) });
         e.cloudCd = cfg.cloudCooldown;
       }
       return;

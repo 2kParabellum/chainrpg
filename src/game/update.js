@@ -38,6 +38,7 @@ function pickChaser() {
 const game = {
   state, world, chainUnits, isSpotted, meleeHittable, upgrade,
   nearestTarget: combat.nearestTarget, damageUnit: combat.damageUnit, blast: combat.blast,
+  shockFoe: combat.shockFoe, foeDmgMul: combat.foeDmgMul,
   spawnProjectile: combat.spawnProjectile, spawnMortar: combat.spawnMortar,
   spawnBigMortar: combat.spawnBigMortar, spawnHook: combat.spawnHook,
   spawnFirewall: combat.spawnFirewall,
@@ -183,6 +184,8 @@ function applyHeroRam() {
   const lead = leader();
   if (!up) { lead.ramPower = 0; return; }
   const mass = ramMass(lead, up);
+  // «Power Ram»: под его усилением таран бьёт в mul раз сильнее
+  const pr = upgrade('powerRam'), fury = pr && lead.buffs[pr.buff] > 0 ? pr.mul : 1;
   lead.ramPower = ramDamage(up, Math.hypot(lead.vx, lead.vy), mass) / up.maxDmg;
   for (const e of state.enemies.slice()) {
     if (!meleeHittable(e)) continue;
@@ -191,7 +194,7 @@ function applyHeroRam() {
     const closing = (lead.vx * (e.x - lead.x) + lead.vy * (e.y - lead.y)) / (d || 1);
     if (closing < up.minSpeed) continue;
     e.rammedAt = state.time;
-    combat.damageUnit(e, ramDamage(up, closing, mass) * (lead.dmgMul || 1),
+    combat.damageUnit(e, ramDamage(up, closing, mass) * (lead.dmgMul || 1) * fury,
       { ram: true, mass, speed: closing / CONFIG.LEADER.speed });
     state.effects.push({ type: 'ring', x: (lead.x + e.x) / 2, y: (lead.y + e.y) / 2, r: 12 + 10 * lead.ramPower, life: 0.25, color: COLORS.power });
   }

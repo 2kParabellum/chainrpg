@@ -305,12 +305,13 @@ function drawWarnings() {
   }
 }
 
-// горящий враг (огненные стрелы): над телом пляшут язычки огня
+// горящий враг (огненные стрелы): над телом пляшут язычки огня — три, с горениями «Wildfire» до пяти
 function drawBurn(e) {
-  if (!e.burn || e.burn.left <= 0) return;
-  ctx.globalAlpha = 0.85 * clamp(e.burn.left / 0.5, 0, 1);
-  for (let i = 0; i < 3; i++) {
-    const a = -Math.PI / 2 + (i - 1) * 0.7, s = e.r * (0.45 + 0.12 * Math.sin(state.time * 14 + i * 2));
+  if (!e.burns || !e.burns.length) return;
+  const left = Math.max(...e.burns.map((b) => b.left)), n = Math.min(5, 2 + e.burns.length);
+  ctx.globalAlpha = 0.85 * clamp(left / 0.5, 0, 1);
+  for (let i = 0; i < n; i++) {
+    const a = -Math.PI / 2 + (i - (n - 1) / 2) * 0.6, s = e.r * (0.45 + 0.12 * Math.sin(state.time * 14 + i * 2));
     const x = e.x + Math.cos(a) * e.r * 0.7, y = e.y + Math.sin(a) * e.r * 0.7;
     for (const [k, c] of [[1, COLORS.fire], [0.55, COLORS.speed]]) {
       ctx.fillStyle = c;
@@ -320,6 +321,24 @@ function drawBurn(e) {
       ctx.quadraticCurveTo(x - s * k, y, x, y - s * 1.3 * k);
       ctx.fill();
     }
+  }
+  ctx.globalAlpha = 1;
+}
+
+// враг под молнией с «Shock» (бьёт слабее): вокруг тела крутится ломаный электрический обруч цветом искры
+function drawShock(e) {
+  if (!(e.shockUntil > state.time)) return;
+  const n = 14, spin = state.time * 3;
+  ctx.globalAlpha = 0.8 * clamp((e.shockUntil - state.time) / 0.3, 0, 1);
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  for (let i = 0; i <= n; i++) {
+    const a = spin + (i / n) * Math.PI * 2, r = e.r + (i % 2 ? 7 : 3);
+    if (i) ctx.lineTo(e.x + Math.cos(a) * r, e.y + Math.sin(a) * r);
+    else ctx.moveTo(e.x + Math.cos(a) * r, e.y + Math.sin(a) * r);
+  }
+  for (const [w, c] of [[3.5, COLORS.floorLine], [1.6, COLORS.spark]]) {
+    ctx.strokeStyle = c; ctx.lineWidth = w; ctx.stroke();
   }
   ctx.globalAlpha = 1;
 }
@@ -338,6 +357,7 @@ function drawEnemies() {
     if (!isSpotted(e)) continue;
     drawEnemy(e);
     drawBurn(e);
+    drawShock(e);
   }
   G.foes.sweep();
   G.ambushArt.sweep();

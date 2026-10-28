@@ -19,7 +19,7 @@ const { COLORS } = G;
 const hero = {
   color: COLORS.hero,
   anchor: true,
-  stats: { name: 'Hero', hp: 120, radius: 14, mass: 2 },
+  stats: { name: 'Hero', hp: 144, radius: 14, mass: 2 },
   base: { weapons: {} },
   // треугольник-«нос» показывает направление движения (heading), а не взгляд оружия
   mark(u, f, ctx) {

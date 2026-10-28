@@ -31,18 +31,44 @@ function nearestTarget(from, list, range) {
   return null;
 }
 
-// улучшение «прикрытие»: копейщик в цепочке и оба его соседа получают меньше урона — от любых атак.
-// Вспышка — не чаще раза в 0.2 с, чтобы урон в секунду (облака, огонь) не мигал каждый кадр
+// улучшения «прикрытие»: копейщик в цепочке и его соседи получают меньше урона — от любых атак. «Cover» — сам
+// копейщик и оба соседа (cut); «Cover 2» — им больше, и звеньям через одно (farCut). Несколько копейщиков не
+// складываются: звено берёт защиту от ближайшего. Вспышка — не чаще раза в 0.2 с, чтобы урон в секунду (облака,
+// огонь) не мигал каждый кадр
 function coverDefense(u, dmg) {
-  const c = upgrade('cover');
+  const c = upgrade('cover2') || upgrade('cover');
   if (!c || u.kind !== 'ally') return dmg;
   const i = state.party.indexOf(u);
-  if (![state.party[i - 1], u, state.party[i + 1]].some((n) => n && n.ability === 'spear')) return dmg;
+  let gap = Infinity;
+  state.party.forEach((n, j) => { if (n.ability === 'spear') gap = Math.min(gap, Math.abs(i - j)); });
+  const cut = gap <= 1 ? c.cut : gap === 2 ? c.farCut || 0 : 0;
+  if (!cut) return dmg;
   if (!(state.time - (u.coverFx || -1) < 0.2)) {
     u.coverFx = state.time;
     state.effects.push({ type: 'ring', x: u.x, y: u.y, r: u.r + 5, life: 0.2, color: COLORS.sturdy });
   }
-  return dmg * (1 - c.cut);
+  return dmg * (1 - cut);
+}
+
+// улучшение копейщика «Thorn Guard»: под «шипами» ближние атаки по звену цепочки слабее на cut за каждого копейщика
+// в цепочке (не меньше нуля)
+function thornGuard(u, dmg, hit) {
+  const g = upgrade('thornGuard');
+  if (!g || u.kind !== 'ally' || !hit || !hit.melee || !(u.buffs[g.buff] > 0)) return dmg;
+  const spears = state.party.filter((a) => a.ability === 'spear').length;
+  return dmg * Math.max(0, 1 - g.cut * spears);
+}
+
+// улучшение искры «Shock»: враг под молнией (до e.shockUntil) бьёт слабее. shockFoe — молния держит врага (боссов
+// не берёт); foeDmgMul — множитель урона врага e сейчас: его ближних атак, выпущенных снарядов и облаков
+function shockFoe(e) {
+  const s = upgrade('shock');
+  if (s && !enemyTypes[e.type].boss) e.shockUntil = state.time + s.linger;
+}
+
+function foeDmgMul(e) {
+  const s = upgrade('shock');
+  return s && e && e.shockUntil > state.time ? 1 - s.cut : 1;
 }
 
 // hit — необязательно, откуда урон: { by: враг, melee: true } для ближних атак (укус, таран);
@@ -50,7 +76,9 @@ function coverDefense(u, dmg) {
 function damageUnit(u, dmg, hit) {
   if (u.hp <= 0) return;
   if (state.leaving && u.kind === 'ally') return; // цепочка уже уходит в портал выхода
+  if (hit && hit.by) dmg *= foeDmgMul(hit.by);
   dmg = coverDefense(u, dmg);
+  dmg = thornGuard(u, dmg, hit);
   const type = u.kind === 'enemy' && enemyTypes[u.type];
   if (type && type.damageMul) dmg *= type.damageMul(u); // броня (черепаха в панцире)
   u.hp -= dmg;
@@ -94,6 +122,7 @@ function blast(center, radius, dmg, victims, fxAt = center, edgeDmg = dmg, look)
 // extra — необязательные дополнительные поля снаряда (например, burn — поджигает цель)
 function spawnProjectile(from, tx, ty, speed, dmg, team, radius, extra) {
   const a = Math.atan2(ty - from.y, tx - from.x);
+  if (from.kind === 'enemy') dmg *= foeDmgMul(from);
   state.projectiles.push({
     x: from.x, y: from.y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed,
     dmg, team, r: radius, life: 3, ...extra,
@@ -104,12 +133,12 @@ function spawnProjectile(from, tx, ty, speed, dmg, team, radius, extra) {
 // stats — необязательное переопределение урона/радиуса/времени полёта (иначе берутся из from.cfg);
 // так им может стрелять не только сама катапульта, но и другая атака с иными числами (босс)
 function spawnMortar(from, tx, ty, stats) {
-  const s = stats || from.cfg;
+  const s = stats || from.cfg, k = foeDmgMul(from);
   state.projectiles.push({
     kind: 'mortar', team: 'enemy', r: 5, owner: from,
     sx: from.x, sy: from.y, x: from.x, y: from.y,
     tx, ty, t: 0, flight: s.flightTime,
-    dmg: s.dmg, edgeDmg: s.edgeDmg, blast: s.blastRadius,
+    dmg: s.dmg * k, edgeDmg: s.edgeDmg * k, blast: s.blastRadius,
   });
 }
 
@@ -132,7 +161,7 @@ function spawnHook(from, foe) {
     kind: 'hook', team: 'enemy', owner: from,
     x: from.x, y: from.y,
     vx: Math.cos(a) * from.cfg.projSpeed, vy: Math.sin(a) * from.cfg.projSpeed,
-    dmg: from.cfg.dmg, r: from.cfg.projRadius, life: 4,
+    dmg: from.cfg.dmg * foeDmgMul(from), r: from.cfg.projRadius, life: 4,
   });
 }
 
@@ -198,10 +227,7 @@ function updateProjectiles(dt) {
         // пробивающая стрела каждого задевает один раз
         if (dist(p, t) >= p.r + t.r || (p.hit && p.hit.includes(t))) continue;
         damageUnit(t, p.dmg);
-        // огненная стрела поджигает: повторное попадание горение обновляет, не складывает
-        if (p.burn && t.kind === 'enemy' && t.hp > 0) {
-          t.burn = { left: p.burn.time, dps: Math.max(p.burn.dps, t.burn && t.burn.left > 0 ? t.burn.dps : 0) };
-        }
+        if (p.burn && t.kind === 'enemy' && t.hp > 0) ignite(t, p.burn);
         // игрока гарпун только ранит, а вот союзника (в цепочке или лежачего) уносит к Скорпиону
         if (p.kind === 'hook' && (t.kind === 'ally' || t.kind === 'downed') && t.hp > 0) hookAlly(t, p.owner);
         // «Piercing Shots»: с шансом passChance стрела летит дальше (на каждого врага — бросок заново);
@@ -218,13 +244,31 @@ function updateProjectiles(dt) {
   }
 }
 
-// горение врагов (огненные стрелы): урон в секунду, пока не догорит
+// огненная стрела поджигает врага: e.burns — его горения { left, dps }. Без «Wildfire» горение одно: повторное
+// попадание его обновляет, не складывает. С ним каждое попадание — своё горение, до stacks разом; лишнее сменяет то,
+// что догорит раньше всех
+function ignite(e, burn) {
+  const wild = upgrade('wildfire');
+  const burns = (e.burns || []).filter((b) => b.left > 0);
+  const fresh = { left: burn.time, dps: burn.dps };
+  if (!wild) {
+    if (burns.length) fresh.dps = Math.max(fresh.dps, burns[0].dps);
+    e.burns = [fresh];
+    return;
+  }
+  if (burns.length >= wild.stacks) removeFrom(burns, burns.reduce((a, b) => (b.left < a.left ? b : a)));
+  burns.push(fresh);
+  e.burns = burns;
+}
+
+// горение врагов (огненные стрелы): каждое горение — урон в секунду, пока не догорит
 function updateBurns(dt) {
   for (const e of state.enemies.slice()) {
-    const b = e.burn;
-    if (!b || b.left <= 0) continue;
-    b.left -= dt;
-    damageUnit(e, b.dps * dt);
+    if (!e.burns || !e.burns.length) continue;
+    let dmg = 0;
+    for (const b of e.burns) { dmg += b.dps * Math.min(dt, b.left); b.left -= dt; }
+    e.burns = e.burns.filter((b) => b.left > 0);
+    if (dmg > 0) damageUnit(e, dmg);
   }
 }
 
@@ -322,7 +366,7 @@ function updateEffects(dt) {
 }
 
 G.combat = {
-  nearestTarget, damageUnit,
+  nearestTarget, damageUnit, shockFoe, foeDmgMul,
   spawnProjectile, spawnMortar, spawnBigMortar, spawnHook,
   spawnFirewall, applyFirewalls, updateCannons,
   blast, updateProjectiles, updateBurns, applySpikes, updateClouds, updateEffects,

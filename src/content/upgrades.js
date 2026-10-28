@@ -6,8 +6,10 @@
 //   who   — чьё улучшение (класс): ключ способности (стрелок, искра…), 'hero', 'general' (вся цепочка) или 'pods'
 //           (подиумы); от него цвет и подпись карточки
 //   desc  — что даёт, в несколько слов; {команда} заменяется подписью кнопки ({pack} — «C» или «BAG»)
-//   tier  — ранг: без поля — 1-й; 2 — выпадает, только если у того же who уже взято улучшение 1-го ранга
-//   needs — ключ улучшения: 2-й ранг выпадает, только если взято именно оно (вместо правила по who)
+//   tier  — ранг: без поля — 1-й; 2 — выпадает, только если у того же who уже взято улучшение 1-го ранга; 3 — если
+//           взято улучшение 2-го ранга
+//   needs — ключ улучшения: выпадает, только если взято и оно (сверх правила ранга)
+//   buff  — ключ усиления: улучшение действует, только пока оно включено
 //   dmgAdd, moveAdd, hpAdd — прибавки к базе (0.1 — +10%) урона цепочки, скорости хода Героя и HP своих; прибавки
 //           всех взятых улучшений складываются
 //   art   — (ctx, k): рисунок карточки 200 × 120; k — заготовки рисования из render/cards.js (свои, враги и
@@ -76,6 +78,22 @@ const arc = {
   },
 };
 
+// враг, которого держит молния искры (и ещё linger с после), наносит на cut меньше урона; боссов не берёт
+const shock = {
+  name: 'Shock',
+  who: 'spark',
+  desc: 'Zapped foes deal 75% less damage (not bosses)',
+  cut: 0.75,
+  linger: 0.5,
+  art(ctx, k) {
+    k.ally(36, 40, 'spark', 0);
+    k.bolt(54, 42, 142, 60, COLORS.spark);
+    k.enemy(160, 66, 'hunter');
+    k.ally(70, 92, null, 0);
+    k.shield(70, 90, 22);
+  },
+};
+
 const medicRegen = {
   name: 'Self-Heal',
   who: 'medic',
@@ -122,6 +140,7 @@ const cover = {
   who: 'spear',
   desc: 'The Brawler and its neighbors take less damage',
   cut: 0.4,          // на такую долю меньше урона от любых атак получают копейщик в цепочке и оба его соседа
+                     // (несколько копейщиков не складываются — см. «Cover 2»)
   art(ctx, k) {
     k.enemy(14, 68, 'hunter', 0);
     k.enemy(186, 68, 'hunter');
@@ -138,7 +157,7 @@ const march = {
   name: 'March',
   who: 'hero',
   desc: 'A long chain is lighter to drive',
-  links: 4,          // столько звеньев сверх обычного не утяжеляют цепочку (с «March 2» — складываются)
+  links: 4,          // столько звеньев сверх обычного не утяжеляют цепочку (с «March 2» и «March 3» — складываются)
   art(ctx, k) {
     k.speedLines(10, 64);
     for (let i = 4; i >= 1; i--) k.ally(170 - i * 30, 68, null, 0);
@@ -169,7 +188,7 @@ const ram = {
   },
 };
 
-// --- General: вся цепочка. Прибавки к базе — +10% каждое; с 2-м рангом того же — +20% (складываются) ---
+// --- General: вся цепочка. Прибавки к базе складываются: урон и HP — +10% за ранг, скорость — +7% за ранг ---
 
 // урон всего своего: оружие Героя и дружочков, таран, шипы, горение
 const damageBoost = {
@@ -189,8 +208,8 @@ const damageBoost = {
 const speedBoost = {
   name: 'Speed Boost',
   who: 'general',
-  desc: 'The chain moves 10% faster',
-  moveAdd: 0.1,
+  desc: 'The chain moves 7% faster',
+  moveAdd: 0.07,
   art(ctx, k) {
     k.speedLines(30, 64);
     k.ally(104, 68, null, 0);
@@ -363,7 +382,43 @@ const march2 = {
   },
 };
 
-// General 2-го ранга: ещё +10% к базе, только если взят 1-й ранг того же (needs)
+// горение от огненных выстрелов складывается: каждое попадание — своё горение, до stacks разом (лишнее сменяет то,
+// что догорит раньше всех); без него повторное попадание горение только обновляет
+const wildfire = {
+  name: 'Wildfire',
+  who: 'shooter',
+  tier: 2,
+  needs: 'fireArrows',
+  desc: 'Burns stack up to 5 times',
+  stacks: 5,
+  art(ctx, k) {
+    k.ally(30, 66, 'shooter', 0);
+    k.trail(52, 64, 102, 64, COLORS.fire);
+    k.shot(106, 64, COLORS.fire);
+    k.enemy(160, 72, 'zombie');
+    k.flame(140, 52, 8); k.flame(151, 44, 10); k.flame(163, 40, 11); k.flame(175, 45, 10); k.flame(184, 56, 8);
+  },
+};
+
+// сильнее «Cover»: копейщик и оба соседа получают на cut меньше урона, звенья через одно от него — на farCut меньше.
+// Несколько копейщиков не складываются: каждому звену — защита от ближайшего
+const cover2 = {
+  name: 'Cover 2',
+  who: 'spear',
+  tier: 2,
+  needs: 'cover',
+  desc: 'Stronger cover that also reaches two links away',
+  cut: 0.5,
+  farCut: 0.25,
+  art(ctx, k) {
+    k.ally(24, 68, null, 0); k.ally(62, 68, null, 0); k.ally(100, 68, 'spear', 0); k.ally(138, 68, null, 0); k.ally(176, 68, null, 0);
+    k.ring(100, 66, 20, COLORS.sturdy, true);
+    k.shield(62, 66, 22, true); k.shield(138, 66, 22);
+    k.ring(24, 66, 19, COLORS.sturdy, true); k.ring(176, 66, 19, COLORS.sturdy, true);
+  },
+};
+
+// General 2-го ранга: ещё прибавка к базе, только если взят 1-й ранг того же (needs)
 const damageBoost2 = {
   name: 'Damage Boost 2',
   who: 'general',
@@ -384,8 +439,8 @@ const speedBoost2 = {
   who: 'general',
   tier: 2,
   needs: 'speedBoost',
-  desc: 'The chain moves another 10% faster',
-  moveAdd: 0.1,
+  desc: 'The chain moves another 7% faster',
+  moveAdd: 0.07,
   art(ctx, k) {
     k.speedLines(10, 64); k.speedLines(46, 64);
     k.ally(112, 68, null, 0);
@@ -407,8 +462,153 @@ const hpBoost2 = {
   },
 };
 
-G.upgrades = { tripleShot, fireArrows, arc, medicRegen, adrenaline, doubleEdge, cover, march, ram,
+// --- 3-й ранг: выпадают, только если у того же класса уже есть улучшение 2-го ранга ---
+
+// под «скоростью» стрелки стреляют в rate раз чаще — вместо обычной прибавки усиления
+const rapidFire = {
+  name: 'Rapid Fire',
+  who: 'shooter',
+  tier: 3,
+  desc: 'Under the speed boost, Gun Mates shoot twice as fast',
+  buff: 'speed',
+  rate: 2,
+  art(ctx, k) {
+    k.pad(30, 34, 'speed', 0.4);
+    k.ally(44, 76, 'shooter', 0);
+    k.trail(66, 74, 150, 74, COLORS.allyShot);
+    k.shot(104, 74, COLORS.allyShot); k.shot(146, 74, COLORS.allyShot);
+    k.enemy(176, 76);
+  },
+};
+
+// под «крепкостью» урон каждой искры больше на per за каждую искру в цепочке (две искры — по +40%)
+const powerGrid = {
+  name: 'Power Grid',
+  who: 'spark',
+  tier: 3,
+  desc: 'With grip, Spark Mates hit +20% harder per Spark Mate in the chain',
+  buff: 'sturdy',
+  per: 0.2,
+  art(ctx, k) {
+    k.ring(40, 34, 20, COLORS.sturdy, false); k.ring(40, 94, 20, COLORS.sturdy, false);
+    k.ally(40, 36, 'spark', 0); k.ally(40, 96, 'spark', 0);
+    k.bolt(58, 38, 146, 62, COLORS.spark); k.bolt(58, 94, 146, 70, COLORS.spark);
+    k.enemy(162, 68, 'zombie');
+  },
+};
+
+// под «шипами» ближние атаки по цепочке слабее на cut за каждого копейщика в ней (потолка нет: пять — не ранят вовсе)
+const thornGuard = {
+  name: 'Thorn Guard',
+  who: 'spear',
+  tier: 3,
+  desc: 'With spikes, melee hits on the chain are 20% weaker per Brawler',
+  buff: 'spiky',
+  cut: 0.2,
+  art(ctx, k) {
+    k.spikes(100, 68, 22);
+    k.ally(100, 68, 'spear', 0);
+    k.enemy(40, 68, 'hunter', 0); k.enemy(160, 68, 'hunter');
+    k.shield(100, 66, 30, true); k.shield(100, 66, 30);
+  },
+};
+
+// «регенерация» длится дольше на add с за каждого медика в цепочке
+const fieldHospital = {
+  name: 'Field Hospital',
+  who: 'medic',
+  tier: 3,
+  desc: 'Each Doc in the chain makes the regen boost last 2 s longer',
+  buff: 'regen',
+  add: 2,
+  art(ctx, k) {
+    k.pad(100, 38, 'regen', 0.5);
+    k.ally(52, 88, 'medic', 0); k.ally(148, 88, 'medic', Math.PI);
+    k.plus(100, 92, 8, COLORS.regen); k.plus(24, 52, 6, COLORS.regen); k.plus(176, 52, 6, COLORS.regen);
+  },
+};
+
+// под «силой» таран бьёт в mul раз сильнее (поверх прибавки урона самой силы)
+const powerRam = {
+  name: 'Power Ram',
+  who: 'hero',
+  tier: 3,
+  needs: 'ram',
+  desc: 'Under the power boost, the Ram hits twice as hard',
+  buff: 'power',
+  mul: 2,
+  art(ctx, k) {
+    k.pad(30, 30, 'power', 0.4);
+    k.speedLines(14, 76);
+    k.hero(86, 78, 0);
+    k.enemy(150, 78, 'bull');
+    k.impact(116, 66, COLORS.power); k.impact(124, 88, COLORS.power);
+  },
+};
+
+// ещё links бесплатных звеньев сверх «March 2»; только после него (needs)
+const march3 = {
+  name: 'March 3',
+  who: 'hero',
+  tier: 3,
+  needs: 'march2',
+  desc: 'Yet more mates don’t weigh the chain down',
+  links: 3,
+  art(ctx, k) {
+    k.speedLines(0, 64);
+    for (let i = 6; i >= 1; i--) k.ally(182 - i * 23, 68, null, 0);
+    k.hero(182, 68, 0);
+  },
+};
+
+// General 3-го ранга: ещё прибавка к базе, только если взят 2-й ранг того же (needs)
+const damageBoost3 = {
+  name: 'Damage Boost 3',
+  who: 'general',
+  tier: 3,
+  needs: 'damageBoost2',
+  desc: 'All damage your chain deals another +10%',
+  dmgAdd: 0.1,
+  art(ctx, k) {
+    k.ally(32, 68, null, 0);
+    k.enemy(166, 28, 'hunter'); k.enemy(170, 68, 'hunter'); k.enemy(166, 108, 'hunter');
+    k.trail(50, 62, 144, 30, COLORS.power); k.trail(50, 68, 148, 68, COLORS.power); k.trail(50, 74, 144, 106, COLORS.power);
+    k.impact(154, 30, COLORS.power); k.impact(158, 68, COLORS.power); k.impact(154, 106, COLORS.power);
+  },
+};
+
+const speedBoost3 = {
+  name: 'Speed Boost 3',
+  who: 'general',
+  tier: 3,
+  needs: 'speedBoost2',
+  desc: 'The chain moves another 7% faster',
+  moveAdd: 0.07,
+  art(ctx, k) {
+    k.speedLines(0, 64); k.speedLines(36, 64); k.speedLines(72, 64);
+    k.ally(126, 68, null, 0);
+    k.hero(160, 68, 0);
+  },
+};
+
+const hpBoost3 = {
+  name: 'HP Boost 3',
+  who: 'general',
+  tier: 3,
+  needs: 'hpBoost2',
+  desc: 'The Hero and all mates get another +10% max HP',
+  hpAdd: 0.1,
+  art(ctx, k) {
+    k.ally(44, 78, null, 0); k.hpBar(44, 48, 1);
+    k.hero(100, 78, 0); k.hpBar(100, 48, 1);
+    k.ally(156, 78, null, Math.PI); k.hpBar(156, 48, 1);
+    k.plus(72, 26, 6, COLORS.regen); k.plus(128, 26, 6, COLORS.regen);
+  },
+};
+
+G.upgrades = { tripleShot, fireArrows, arc, shock, medicRegen, adrenaline, doubleEdge, cover, march, ram,
                damageBoost, speedBoost, hpBoost, luckyFoot, talentScout,
-               piercing, lastingCure, berserk, doubleSpark, quickCharge, backpack, march2,
-               quickLearning, buffStacking, damageBoost2, speedBoost2, hpBoost2 };
+               piercing, wildfire, lastingCure, berserk, cover2, doubleSpark, quickCharge, backpack, march2,
+               quickLearning, buffStacking, damageBoost2, speedBoost2, hpBoost2,
+               rapidFire, powerGrid, thornGuard, fieldHospital, powerRam, march3, damageBoost3, speedBoost3, hpBoost3 };
 })(window.Game = window.Game || {});

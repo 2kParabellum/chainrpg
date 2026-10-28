@@ -8,7 +8,7 @@ const { abilities, enemyTypes } = G;
 const { currentRoom, isSpotted, leaderSpeedMul, leader, upgrade } = G.session;
 const { world, roomCount, roomIndexAt, buttonUnder } = G.world;
 const { clamp } = G.math;
-const { nearestPickup } = G.chain;
+const { nearestPickup, buffDuration } = G.chain;
 const { ctx, screenTransform } = G.shapes;
 const { withKeys, keyLabel } = G.input;
 const { isTouch, isPortrait } = G.screen;
@@ -217,7 +217,7 @@ function drawNotice() {
   const def = G.buffs[n.key], V = CONFIG.VIEW;
   const y = V.h / 2 - 80 - Math.min(age, 1) * 8;
   const name = def.name[0].toUpperCase() + def.name.slice(1) + ': ';
-  const rest = n.packed ? withKeys('in the backpack — {pack} to use') : `${def.desc}, ${def.duration} s`;
+  const rest = n.packed ? withKeys('in the backpack — {pack} to use') : `${def.desc}, ${buffDuration(n.key)} s`;
   ctx.font = `bold 14px ${UI_FONT}`;
   const nw = ctx.measureText(name).width, x = V.w / 2 - (nw + ctx.measureText(rest).width) / 2;
   ctx.globalAlpha = 0.85 * a;
@@ -364,7 +364,7 @@ function drawBuffTimers(cx, y, leftRight, leftBottom) {
     ctx.fillStyle = UI.text;
     ctx.fillText(`${Math.ceil(left)}`, ix + 29, y + 19);
     ctx.fillStyle = UI.ink; ctx.fillRect(ix + 6, y + 24, itemW - 12, 3);
-    ctx.fillStyle = def.color; ctx.fillRect(ix + 6, y + 24, (itemW - 12) * clamp(left / def.duration, 0, 1), 3);
+    ctx.fillStyle = def.color; ctx.fillRect(ix + 6, y + 24, (itemW - 12) * clamp(left / buffDuration(k), 0, 1), 3);
     ctx.globalAlpha = 1;
   });
 }
