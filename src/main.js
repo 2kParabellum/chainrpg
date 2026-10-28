@@ -254,7 +254,7 @@ function showPerk() {
   const run = state.level.run;
   if (run) {
     document.getElementById('winTitle').textContent = `LEVEL ${state.perks + 1}`;
-    document.getElementById('winText').textContent = `${state.perks * run.levelEvery} laps done — pick an upgrade, the enemies get tougher`;
+    document.getElementById('winText').textContent = `Level ${state.perks} done — pick an upgrade, the enemies get tougher`;
   } else {
     document.getElementById('winTitle').textContent = `WAVE ${state.perks * state.level.waves.endless.perkEvery} CLEARED`;
     document.getElementById('winText').textContent = 'Pick an upgrade — then the waves go on';

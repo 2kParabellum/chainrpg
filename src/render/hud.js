@@ -7,12 +7,12 @@ const { CONFIG, COLORS, state } = G;
 const { abilities, enemyTypes } = G;
 const { currentRoom, isSpotted, leaderSpeedMul, leader, upgrade } = G.session;
 const { world, roomCount, roomIndexAt, buttonUnder } = G.world;
-const { clamp } = G.math;
+const { clamp, angleDiff } = G.math;
 const { nearestPickup, buffDuration } = G.chain;
 const { ctx, screenTransform } = G.shapes;
 const { withKeys, keyLabel } = G.input;
 const { isTouch, isPortrait } = G.screen;
-const { raceClock, lapTime, nextGate, runLevel } = G.race;
+const { raceClock, lapTime, runLevel } = G.race;
 
 // шрифт интерфейса: округлый, жирный (graphics.md); цвета — из палитры fantasy-24
 const UI_FONT = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
@@ -103,11 +103,17 @@ function drawFlagMarkers() {
   }
 }
 
-// «Endless Run»: метка у края экрана к следующим флажкам-чекпоинтам (все флажки круга пройдены — к линии старта)
-function drawGateMarker() {
-  if (state.status !== 'play' || !world.track || !world.track.flags) return;
-  const i = nextGate(), g = world.track.gates[i];
-  drawEdgeMarker(g.x, g.y, UI.gold, i === 0 ? 'START' : 'FLAG');
+// «Endless Run»: метки у края экрана к знаменосцам за экраном; «FLAG» — у ближнего, а у того, кто почти в ту же сторону
+// (подписи слиплись бы), — только треугольник
+function drawBearerMarkers() {
+  if (state.status !== 'play' || !state.level.run || !state.race) return;
+  const lead = leader(), seen = [];
+  const list = state.race.bearers.slice().sort((a, b) => Math.hypot(a.x - lead.x, a.y - lead.y) - Math.hypot(b.x - lead.x, b.y - lead.y));
+  for (const e of list) {
+    const a = Math.atan2(e.y - lead.y, e.x - lead.x), same = seen.some((b) => Math.abs(angleDiff(a, b)) < 0.25);
+    drawEdgeMarker(e.x, e.y, COLORS.flag, same ? '' : 'FLAG');
+    seen.push(a);
+  }
 }
 
 // яркость надписи, которая видна duration секунд с момента age = 0: быстро проявляется, в конце гаснет
@@ -154,12 +160,16 @@ function drawBanners() {
     drawBanner('ONSLAUGHT', `Last ${Math.round(w.surge.lastSeconds / 60)} minutes — bigger waves`, state.time - at, 4, COLORS.nest);
   }
   // «Dead Race»: круг пройден — его время и сколько дружочков уже пересекли линию (число растёт, пока проезжает хвост).
-  // «Endless Run»: «LAP N», а на круге с новым уровнем — «LEVEL N»
+  // «Endless Run»: «LAP N», а на круге с новым уровнем — «LEVEL N»; кругов уровня хватает, а флагов нет — напоминание
   const laps = state.race ? state.race.laps : [], run = state.level.run;
-  if (laps.length) {
+  // «Endless Run»: плашка собранного флага — в той же строке, что плашки круга и волны; более старые из них при ней молчат
+  const flagAt = state.flagNews && state.flagNews.kind === 'collected' ? state.flagNews.at : -Infinity;
+  if (laps.length && laps[laps.length - 1].at >= flagAt) {
     const l = laps[laps.length - 1], k = laps.length, total = state.level.victory.laps;
-    const title = run ? (k % run.levelEvery ? `LAP ${k}` : `LEVEL ${runLevel()}`) : k >= total ? 'FINISH' : `LAP ${k}/${total}`;
-    drawBanner(title, `${raceClock(l.time)} · mates across the line: ${l.mates}`, state.time - l.at, 3.5, '#efac28', 220);
+    const title = run ? (l.up ? `LEVEL ${runLevel()}` : `LAP ${k}`) : k >= total ? 'FINISH' : `LAP ${k}/${total}`;
+    const text = l.need ? `Kill the flag bearers to level up — ${state.race.flags}/${run.flags} flags collected`
+      : `${raceClock(l.time)} · mates across the line: ${l.mates}`;
+    drawBanner(title, text, state.time - l.at, 3.5, l.need ? COLORS.flag : '#efac28', 220);
   }
   // «Capture the Flags»: часовой поднял флаг или флаг потерян (часового убили, утащили, сбили с площадки) — сколько горит.
   // «Seal the Gates»: гнездо закрылось или открылось снова — сколько закрыто
@@ -173,11 +183,18 @@ function drawBanners() {
         age, 3, COLORS.flag, 220);
     }
     if (fn.kind === 'open') drawBanner('GATE OPEN', `${fn.count} of ${nests} sealed — the guard is gone`, age, 3, UI.red, 220);
+    // «Endless Run»: убит знаменосец — сколько флагов уровня собрано; все — когда будет новый уровень
+    if (fn.kind === 'collected') {
+      const need = run.flags, r = state.race;
+      const then = fn.count < need ? '' : r.levelLaps >= run.levelEvery ? ' — cross the start line to level up'
+        : ` — finish lap ${run.levelEvery} to level up`;
+      drawBanner('FLAG COLLECTED', `${fn.count}/${need} flags collected${then}`, age, 3, COLORS.flag, 220);
+    }
   }
   // «Ambush» и «Endless»: вышла волна — какая по счёту и кто в ней (в «Endless» — ещё что за волну с наградой дадут
   // выбрать улучшение)
   const wn = state.waveNews, script = w && w.script;
-  if (wn && (script || w.endless)) {
+  if (wn && (script || w.endless) && wn.at >= flagAt) {
     const names = [...new Set(wn.types)].map((k) => enemyTypes[k].stats.name).join(' · ');
     const every = w.endless && w.endless.perkEvery, perk = every && wn.n % every === 0 ? ' — clear it for an upgrade' : '';
     const title = !script ? `WAVE ${wn.n}` : wn.n >= script.length ? 'LAST WAVE' : `WAVE ${wn.n}/${script.length}`;
@@ -443,12 +460,14 @@ function drawHud() {
     chips.push({ text: `${rule.label} ${Math.min(done + 1, rule.laps)}/${rule.laps}`, color: UI.gold });
     if (!state.cleared) chips.push(t === null ? { text: 'GO!', color: UI.teal } : { text: raceClock(t), icon: 'clock' });
   }
-  // «Endless Run»: уровень, какой круг уровня из скольких и время текущего круга (до старта — «GO!»)
+  // «Endless Run»: уровень, какой круг уровня из скольких (проехал все — бирюзой), сколько флагов уровня собрано и время
+  // текущего круга (до старта — «GO!»)
   const run = level.run && state.race;
   if (run) {
-    const every = level.run.levelEvery, t = lapTime();
+    const every = level.run.levelEvery, need = level.run.flags, t = lapTime();
     chips.push({ text: `LEVEL ${runLevel()}`, color: UI.gold });
-    chips.push({ text: `${rule.label} ${(run.laps.length % every) + 1}/${every}` });
+    chips.push({ text: `${rule.label} ${Math.min(run.levelLaps + 1, every)}/${every}`, color: run.levelLaps >= every ? UI.teal : UI.text });
+    chips.push({ text: `${run.flags}/${need}`, icon: 'flag', color: run.flags >= need ? UI.teal : UI.gold });
     chips.push(t === null ? { text: 'GO!', color: UI.teal } : { text: raceClock(t), icon: 'clock' });
   }
   const speed = Math.round(leaderSpeedMul() * 100);
@@ -519,7 +538,7 @@ function drawHud() {
   drawEdgeMarkers();
   drawPodMarker();
   drawFlagMarkers();
-  drawGateMarker();
+  drawBearerMarkers();
   drawBanners();
   drawNotice();
   ctx.font = `bold 14px ${UI_FONT}`;

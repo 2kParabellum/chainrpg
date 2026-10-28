@@ -5,10 +5,8 @@
 // (бирюзовое с короной, как флажок на избушке базы) и полощется; часового ранят — полотнище вздрагивает. Флаг погас —
 // полотнище быстро соскальзывает вниз и пропадает.
 // Плиты рисуются на полу, под телами (drawPlates), древки с полотнищами — поверх тел (drawPoles).
-// Флажки-чекпоинты «Endless Run» — ворота поперёк дороги (world.track.gates, кроме линии старта): по древку с треугольным
-// флажком у каждого края дороги и пунктир между ними на полу. Следующие по ходу — золотые: флажки полощутся, пунктир
-// бежит, под древками свечение; пройденные за этот круг — бирюзовые; остальные — тусклые, флажки обвисли. Пунктир — на
-// полу (drawGateLines), древки — поверх тел (drawGatePoles).
+// Знаменосцы «Endless Run» — враги со знаменем (state.race.bearers): древко за спиной с тем же полотнищем, бирюзовое
+// свечение под телом; рисуются поверх тел (drawBearers).
 // Состояние только читается (state.flags, state.race).
 (function (G) {
 'use strict';
@@ -16,7 +14,6 @@
 const { COLORS, state } = G;
 const { ctx, glow, visible } = G.shapes;
 const { clamp } = G.math;
-const { world } = G.world;
 
 const TAU = Math.PI * 2, INK = '#2a1d0d', GOLD = '#efac28', STONE = '#927e6a', TEAL = COLORS.flag;
 const POLE = 72;               // высота древка над основанием
@@ -109,76 +106,29 @@ function drawPole(f) {
 function drawPlates() { for (const f of state.flags) drawPlate(f); }
 function drawPoles() { for (const f of state.flags) drawPole(f); }
 
-// --- флажки-чекпоинты «Endless Run» ---
-const GATE_INSET = 56;          // на сколько древко отступает от края дороги внутрь (у стены снизу её верх закрывает 48)
-const GATE_POLE = 58;           // высота древка
-const GATE_LOOK = {
-  next: { cloth: GOLD, line: GOLD, alpha: 0.85 },
-  done: { cloth: TEAL, line: TEAL, alpha: 0.4 },
-  ahead: { cloth: STONE, line: STONE, alpha: 0.3 },
-};
+// --- знаменосцы «Endless Run» ---
+const BEARER_POLE = 46;         // высота древка над телом
 
-// ворота i (1..) на этом круге: 'next' — Герой едет к ним, 'done' — уже пройдены, 'ahead' — дальше по кругу
-function gateState(i) {
-  const next = G.race.nextGate();
-  if (i === next) return 'next';
-  const started = state.race.startAt !== null;
-  return started && (next === 0 || i < next) ? 'done' : 'ahead';
-}
-
-// где у ворот g стоят древки: на концах поперёк дороги, отступив от краёв
-function gateFeet(g) {
-  const d = g.half - 30 - GATE_INSET, nx = -g.ty, ny = g.tx;
-  return [{ x: g.x + nx * d, y: g.y + ny * d }, { x: g.x - nx * d, y: g.y - ny * d }];
-}
-
-function gateBox(g) {
-  const d = g.half;
-  return { x: g.x - d, y: g.y - d - GATE_POLE, w: d * 2, h: d * 2 + GATE_POLE };
-}
-
-function eachGate(fn) {
-  if (!world.track || !world.track.flags || !state.race) return;
-  world.track.gates.forEach((g, i) => { if (i > 0 && visible(gateBox(g))) fn(g, gateState(i)); });
-}
-
-// пунктир поперёк дороги между древками; у следующих ворот бежит по ходу и ярче
-function drawGateLine(g, st) {
-  const [a, b] = gateFeet(g), look = GATE_LOOK[st], t = state.time;
-  ctx.strokeStyle = look.line; ctx.lineWidth = st === 'next' ? 4 : 3;
-  ctx.globalAlpha = look.alpha * (st === 'next' ? 0.75 + 0.25 * Math.sin(t * 5) : 1);
-  ctx.setLineDash([12, 10]); ctx.lineDashOffset = st === 'next' ? -t * 30 : 0;
-  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-  ctx.setLineDash([]); ctx.lineDashOffset = 0;
-  ctx.globalAlpha = 1;
-}
-
-// древко с треугольным флажком; у следующих ворот флажок полощется, у тусклых — обвис
-function drawGatePole(p, st, phase) {
-  const look = GATE_LOOK[st], t = state.time, top = p.y - GATE_POLE;
-  if (st === 'next') glow(ctx, p.x, p.y, 26, GOLD, 0.35 + 0.15 * Math.sin(t * 5));
-  ctx.fillStyle = 'rgba(20,10,5,0.35)';
-  ctx.beginPath(); ctx.ellipse(p.x, p.y + 2, 7, 3, 0, 0, TAU); ctx.fill();
+// знамя врага-знаменосца: древко за спиной, на нём бирюзовое полотнище с короной (как у флагов «Capture the Flags»),
+// под ним бирюзовое свечение — его видно в толпе
+function drawBearer(e) {
+  const t = state.time, px = e.x + e.r * 0.5, foot = e.y - e.r * 0.3, top = foot - e.r - BEARER_POLE;
+  if (!visible({ x: px - 10, y: top - 10, w: CLOTH_W + 20, h: foot - top + 20 })) return;
+  glow(ctx, e.x, e.y, e.r * 2.4, TEAL, 0.35 + 0.1 * Math.sin(t * 5));
   ctx.lineCap = 'round';
   ctx.strokeStyle = INK; ctx.lineWidth = 5;
-  ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x, top); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(px, foot); ctx.lineTo(px, top); ctx.stroke();
   ctx.strokeStyle = COLORS.flagPole; ctx.lineWidth = 2.2; ctx.stroke();
   ctx.lineCap = 'butt';
-  const droop = st === 'ahead', len = droop ? 18 : 26, sway = droop ? 0 : Math.sin(t * 7 + phase) * 3;
-  ctx.fillStyle = look.cloth; ctx.strokeStyle = INK; ctx.lineWidth = 1.8;
-  ctx.beginPath();
-  ctx.moveTo(p.x + 1, top + 2);
-  if (droop) { ctx.lineTo(p.x + 7, top + 2 + len); ctx.lineTo(p.x + 1, top + 16); }
-  else { ctx.quadraticCurveTo(p.x + len / 2, top + 4 + sway, p.x + len, top + 9 + sway); ctx.lineTo(p.x + 1, top + 17); }
-  ctx.closePath(); ctx.fill(); ctx.stroke();
   ctx.fillStyle = GOLD; ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
-  circle(p.x, top - 2, 3.5); ctx.fill(); ctx.stroke();
+  circle(px, top - 3, 4); ctx.fill(); ctx.stroke();
+  drawCloth(px + 1, top + 2, t + e.x * 0.01, 1, 0);
 }
 
-function drawGateLines() { eachGate(drawGateLine); }
-function drawGatePoles() {
-  eachGate((g, st) => gateFeet(g).forEach((p, k) => drawGatePole(p, st, k * 1.7 + g.x * 0.01)));
+function drawBearers() {
+  if (!state.race || !state.level.run) return;
+  for (const e of state.race.bearers) drawBearer(e);
 }
 
-G.flagArt = { drawPlates, drawPoles, drawGateLines, drawGatePoles };
+G.flagArt = { drawPlates, drawPoles, drawBearers };
 })(window.Game = window.Game || {});

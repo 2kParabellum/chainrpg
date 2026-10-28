@@ -88,10 +88,10 @@ function releaseWave(nest, cfg) {
 
 // состав волны номер k (с нуля) у волн по сценарию: { size, kinds, pool, copies }; null — волн больше нет.
 // waves.script — k-я из списка; waves.endless — по формуле: мест size.first + size.grow·k, типов и пул — из последней
-// ступени stages с from ≤ k, каждого типа хотя бы copies раз
+// ступени stages с from ≤ k (или, у «Endless Run», с level ≤ уровня гонки state.race.level), каждого типа хотя бы copies раз
 function waveSpec(cfg, k) {
   if (cfg.script) return cfg.script[k] || null;
-  const e = cfg.endless, stage = e.stages.filter((s) => s.from <= k).pop();
+  const e = cfg.endless, stage = e.stages.filter((s) => (s.level ? s.level <= state.race.level : s.from <= k)).pop();
   return {
     size: Math.floor(e.size.first + e.size.grow * k),
     kinds: stage.kinds,
