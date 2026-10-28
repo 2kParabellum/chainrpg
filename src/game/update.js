@@ -110,19 +110,31 @@ function updateLeader(dt) {
   } else if (aim !== null && aim !== undefined) ({ throttle, turn } = aimSteer(lead, aim, turnSpeed * dt));
 
   // в экранных координатах (y вниз) уменьшение угла — поворот налево
-  lead.heading += turn * turnSpeed * dt;
+  const dh = turn * turnSpeed * dt;
+  lead.heading += dh;
   lead.facing = lead.heading;
+  // задержка управления (LEADER.controlLag): нос (heading — его видно, по нему доводят мышь и джойстик) поворачивает
+  // сразу, а курс, по которому Герой едет (course), повторяет те же повороты через controlLag секунд — нос уже в
+  // повороте, а Героя ещё несёт прямо, как в заносе. 0 — курс и есть нос
+  const lag = lead.turnLag;
+  if (cfg.controlLag > 0) {
+    lag.push({ at: state.time, dh });
+    while (lag.length && state.time - lag[0].at >= cfg.controlLag) lead.course += lag.shift().dh;
+  } else {
+    lag.length = 0;
+    lead.course = lead.heading;
+  }
 
   const k = throttle > 0 ? 1 : 0;
-  const wantX = Math.cos(lead.heading) * cfg.speed * speedMul * k;
-  const wantY = Math.sin(lead.heading) * cfg.speed * speedMul * k;
+  const wantX = Math.cos(lead.course) * cfg.speed * speedMul * k;
+  const wantY = Math.sin(lead.course) * cfg.speed * speedMul * k;
   const dx = wantX - lead.vx, dy = wantY - lead.vy;
   const step = (k ? cfg.accel * mv / mass : cfg.brake * mv / chainMass(true)) * dt;
   // занос (LEADER.drift): поперёк носа скорость поправляется в (1 − drift) раз слабее, чем вдоль, — боковая инерция
   // остаётся, Героя сносит. Шаг ограничен эллипсом: там, где боковая ось растянута в 1/(1 − drift) раз, он обычный
   // круговой; при drift 0 — ровно прежний шаг к желаемой скорости
   const side = Math.max(0.05, 1 - cfg.drift);
-  const fx = Math.cos(lead.heading), fy = Math.sin(lead.heading);
+  const fx = Math.cos(lead.course), fy = Math.sin(lead.course);
   const ef = dx * fx + dy * fy, es = (dy * fx - dx * fy) / side;
   const gap = Math.hypot(ef, es);
   const t = gap <= step ? 1 : step / gap;

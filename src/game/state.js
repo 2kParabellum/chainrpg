@@ -228,6 +228,8 @@ function resetGame(level) {
   // куда смотрит Герой и куда едет по W; по умолчанию вверх
   hero.heading = level.spawn.heading === undefined ? -Math.PI / 2 : level.spawn.heading;
   hero.facing = hero.heading;
+  hero.course = hero.heading;      // куда Герой на самом деле едет: нос с задержкой управления (см. update.js)
+  hero.turnLag = [];               // повороты носа, которые курс ещё не повторил: { at, dh }
   state.party.push(hero);
   // уровень может начинаться с уже собранной цепочкой: дружочки встают в хвост чуть позади героя
   // и сразу же подтягиваются на своё место плёткой

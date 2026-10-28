@@ -18,6 +18,7 @@ const PARAMS = [
   ['Hero', 'LEADER.turnSpeed', 'turn', 0.5, 8, 0.1],
   ['Hero', 'LEADER.drift', 'drift', 0, 0.95, 0.01],
   ['Hero', 'LEADER.thrust', 'thrust', 0, 1, 0.01],
+  ['Hero', 'LEADER.controlLag', 'control lag', 0, 1, 0.01],
   ['Hero', 'LEADER.wallFriction', 'wall slide', 0.5, 1, 0.01],
   ['Weight', 'CHAIN.heft.freeLinks', 'free links', 0, 20, 1],
   ['Weight', 'CHAIN.heft.linkMass', 'link mass', 0, 1, 0.01],
