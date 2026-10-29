@@ -235,8 +235,9 @@ const hpBoost = {
 const luckyFoot = {
   name: 'Lucky Foot',
   who: 'pods',
-  desc: 'Boost pads show up more often',
+  desc: 'Boost pads show up more often (Endless Run: +1 per lap)',
   mul: 1.35,         // подиумы усилений появляются во столько раз чаще (пауза между ними — во столько же раз короче)
+  runPads: 1,        // «Endless Run»: на столько больше подиумов усилений в раскладке каждого проезда старта
   art(ctx, k) {
     k.pad(40, 36, 'speed', 0.42); k.pad(160, 36, 'power', 0.42); k.pad(40, 94, 'regen', 0.42); k.pad(160, 94, 'will', 0.42);
     k.hero(100, 68, 0);
@@ -246,8 +247,9 @@ const luckyFoot = {
 const talentScout = {
   name: 'Talent Scout',
   who: 'pods',
-  desc: 'Profession pads show up more often',
+  desc: 'Profession pads show up more often (Endless Run: +1 per lap)',
   mul: 1.35,         // подиумы профессий появляются во столько раз чаще (пауза между ними — во столько же раз короче)
+  runPads: 1,        // «Endless Run»: на столько больше подиумов профессий в раскладке каждого проезда старта
   art(ctx, k) {
     k.ally(40, 40, 'shooter', 0); k.ally(160, 40, 'medic', Math.PI); k.ally(40, 96, 'spear', 0); k.ally(160, 96, 'spark', Math.PI);
     k.hero(100, 68, 0);

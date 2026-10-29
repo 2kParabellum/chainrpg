@@ -1,8 +1,9 @@
 // Данные уровня «Endless Run» — последнего в прохождении: трасса «Dead Race» (дорога-кольцо из прямых с прямыми углами,
 // колонны, шипы, гнёзда в карманах), только пол обычный, не лёд. Каждый проезд линии старта раскладывает по дороге
-// впереди дружочков и подиумы и заряжает гнёзда — через несколько секунд из них выходит волна. На каждом уровне двое
-// врагов несут знамя: убил — флаг собран. Три круга уровня и оба флага — на линии новый уровень (чекпоинт): карточка
-// улучшения, а враги волн — сильнее типами. Победы нет: партия идёт, пока жив Герой; счёт — сколько кругов проехано.
+// впереди дружочков и подиумы и заряжает гнёзда — через несколько секунд из них выходит волна; в ней двое врагов несут
+// знамя: убил — флаг собран. Уровень — один круг: проехал линию с обоими флагами (чекпоинт) — новый уровень, монстры
+// сильнее, новая раскладка и волна; без флагов проезд ничего не даёт. Каждые три уровня — карточка улучшения. Победы нет:
+// партия идёт, пока жив Герой; счёт — до какого уровня дошёл.
 // Здесь только данные — никакой игровой логики (дорога — game/world.js, круги, раскладка, заряд гнёзд и знаменосцы —
 // game/race.js, волны — game/waves.js).
 (function (G) {
@@ -46,7 +47,7 @@ const ROOM_PLAN = {
   nests: [[2000, 560], [2640, 1450], [1600, 1280], [560, 750]],
 };
 
-// враги волн по уровням: сперва простые, потом подвижнее и злее, с 4-го — все, с 5-го — только тяжёлые
+// враги волн по уровням: сперва простые, потом подвижнее и злее, с 7-го — все, с 9-го — только тяжёлые
 const EASY = ['bull', 'zombie', 'shooter'];
 const BASE = ['shooter', 'bull', 'scorpion', 'zombie', 'hunter'];
 const NEW = ['chariot', 'snail', 'piper', 'turtle', 'catapult2'];
@@ -54,33 +55,36 @@ const ALL = BASE.concat(NEW);
 
 G.level11 = {
   name: 'Endless Run',
-  blurb: 'The race track without ice: every lap brings mates, pads and a wave; kill the two flag bearers and drive three laps to level up',
-  goal: 'Each start brings mates, pads and a wave. Kill the 2 flag bearers and finish 3 laps — then level up at the start',
+  blurb: 'The race track without ice: kill the two flag bearers, cross the line — the enemies level up, new mates, pads and a wave',
+  goal: 'Kill the 2 flag bearers of each wave, then cross the start line: the enemies level up and bring a new wave',
   geometry: { kind: 'rect', width: W + 80, height: H + 80, wall: 40 },
   spawn: { room: 0, at: [START[0] - 170, START[1]], heading: 0 },   // перед линией старта, лицом по ходу
   enemyPool: ALL,
   enemyWeights: { shooter: 3, zombie: 2, hunter: 2, bull: 2, scorpion: 1, chariot: 1, snail: 2, piper: 2, turtle: 2, catapult2: 2 },
   zoneNames: ['ENDLESS RUN'],
-  // проезд линии старта (и самый первый, и каждый круг): по дороге впереди — от from до to длины круга — вразброс
-  // ложатся mates дружочков, jobs подиумов профессий и buffs подиумов усилений; гнёзда заряжаются (волна — через
-  // waves.telegraph секунд). На уровне flags знаменосцев — по одному в первых волнах уровня, убитый — флаг собран.
-  // Проехано levelEvery кругов уровня и собраны все флаги — на линии новый уровень: выбор улучшения, враги волн — со
-  // следующей ступени; флаги не собраны — круги того же уровня идут дальше
-  run: { levelEvery: 3, flags: 2, drop: { mates: 4, jobs: 6, buffs: 3, from: 0.05, to: 0.65 } },
-  // волны сами не выходят (firstAt, interval — никогда): гнёзда заряжает проезд старта. Волна номер k (k-й проезд, с
-  // нуля): мест size.first + size.grow·k (новый враг и колесница — два), типов и из кого — по ступеням stages (level — с
-  // какого уровня), каждого типа хотя бы copies. Враги — с обычным HP. Живых врагов волн не больше maxAlive: лишние из
-  // волны пропадают
+  // засчитанный проезд линии старта (самый первый; дальше — только если флаги уровня собраны) — новый уровень (первый — 1-й):
+  // по дороге впереди — от from до to длины круга, подиумы профессий — не раньше jobsFrom (сперва набрать дружочков) —
+  // вразброс ложатся mates дружочков, jobs подиумов профессий и buffs подиумов усилений (first — на старте, then — дальше);
+  // гнёзда заряжаются (волна — через waves.telegraph секунд), в волне flags знаменосцев, убитый — флаг собран. Флаги не
+  // собраны — проезд ничего не даёт. Каждые perkEvery уровней — выбор улучшения
+  run: {
+    flags: 2, perkEvery: 3,
+    drop: { first: { mates: 4, jobs: 6, buffs: 3 }, then: { mates: 3, jobs: 5, buffs: 2 }, from: 0.05, to: 0.65, jobsFrom: 0.15 },
+  },
+  // волны сами не выходят (firstAt, interval — никогда): гнёзда заряжает засчитанный проезд старта — по волне на уровень.
+  // Волна номер k (с нуля; уровень k + 1): мест size.first + size.grow·k (новый враг и колесница — два), типов и из кого —
+  // по ступеням stages (level — с какого уровня), каждого типа хотя бы copies. Враги — с обычным HP. Живых врагов волн не
+  // больше maxAlive: лишние из волны пропадают
   waves: {
     firstAt: Infinity, interval: Infinity,
     endless: {
       size: { first: 8, grow: 3 },
       stages: [
-        { level: 1, kinds: 2, pool: EASY },                          // Бычки, Зомби, Стрелки
-        { level: 2, kinds: 2, pool: BASE },                          // + Скорпион, Хантер
-        { level: 3, kinds: 2, pool: BASE.concat(['chariot', 'snail']) }, // + Колесница, улитка-рыцарь
-        { level: 4, kinds: 3, pool: ALL },                           // все, три типа
-        { level: 5, kinds: 3, pool: NEW },                           // 5-й и дальше: только тяжёлые
+        { level: 1, kinds: 2, pool: EASY },                          // 1–2: Бычки, Зомби, Стрелки
+        { level: 3, kinds: 2, pool: BASE },                          // 3–4: + Скорпион, Хантер
+        { level: 5, kinds: 2, pool: BASE.concat(['chariot', 'snail']) }, // 5–6: + Колесница, улитка-рыцарь
+        { level: 7, kinds: 3, pool: ALL },                           // 7–8: все, три типа
+        { level: 9, kinds: 3, pool: NEW },                           // 9-й и дальше: только тяжёлые
       ],
       copies: 2,
     },
@@ -88,8 +92,8 @@ G.level11 = {
     spawnRadius: 70,
     telegraph: 5,
   },
-  // победы нет: круги идут, пока жив Герой
-  victory: { kind: 'endless', label: 'LAP' },
+  // победы нет: уровни идут, пока жив Герой
+  victory: { kind: 'endless', label: 'LEVEL' },
   // сами по себе подиумы и дружочки не появляются — только раскладка проезда старта; живут 45 с
   padSpawn: { lifetime: [45, 45], jobs: { startCount: 0, maxActive: 0 }, buffs: { startCount: 0, maxActive: 0 } },
   allySpawn: { startCount: 0, maxActive: 0, lifetime: [45, 45] },

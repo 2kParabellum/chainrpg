@@ -9,7 +9,7 @@
 // предыдущие уровни пройдены), потом сам уровень. Пауза (ESC, кнопка паузы, свернули вкладку, телефон повернули
 // вертикально) — тот же оверлей с панелью «Продолжить / Заново / Управление / В меню»; пока пауза, игра стоит.
 // На «Endless» каждая третья волна, когда перебита, ставит игру на выбор улучшения (perk) — экран карточек, как между
-// уровнями, но после выбора та же партия идёт дальше; на «Endless Run» — каждые три круга (новый уровень).
+// уровнями, но после выбора та же партия идёт дальше; на «Endless Run» — каждые три уровня.
 (function (G) {
 'use strict';
 
@@ -84,10 +84,10 @@ function syncOverlay() {
 // подпись клавиши в скобках на кнопке экрана: « (ПРОБЕЛ)»; на телефоне клавиш нет — без неё
 function keyHint(name) { return screenInfo.isTouch() ? '' : ` (${keyLabel(name)})`; }
 
-// рекорды бесконечных уровней: «Endless» — до какой волны дошли, «Endless Run» — сколько кругов проехали; хранятся в
-// этом браузере (нет хранилища — рекорд только этой партии). Дошли до n: прежний рекорд побит — запоминается; возвращает
+// рекорды бесконечных уровней: «Endless» — до какой волны дошли, «Endless Run» — до какого уровня; хранятся в этом
+// браузере (нет хранилища — рекорд только этой партии). Дошли до n: прежний рекорд побит — запоминается; возвращает
 // прежний рекорд
-const BEST_KEYS = { wave: 'chainrpg.endlessBest', laps: 'chainrpg.endlessRunBest' };
+const BEST_KEYS = { wave: 'chainrpg.endlessBest', level: 'chainrpg.endlessRunLevel' };
 function recordBest(what, n) {
   let best = 0;
   try { best = Number(localStorage.getItem(BEST_KEYS[what])) || 0; } catch (e) { /* без рекорда */ }
@@ -102,13 +102,13 @@ function bestLine(text, what, n, unit) {
 }
 
 // поражение: Герой выбит или база разрушена — кнопки «Заново» и «В меню» поверх замершей партии;
-// в «Endless» — ещё до какой волны дошли и рекорд, в «Endless Run» — уровень, сколько кругов и рекорд кругов
+// в «Endless» — ещё до какой волны дошли и рекорд, в «Endless Run» — до какого уровня и рекорд
 function showDead() {
   const lostBase = state.base && state.base.hp <= 0;
   document.getElementById('deadTitle').textContent = lostBase ? 'BASE DESTROYED' : 'DEFEAT';
-  const endless = state.level.victory.kind === 'endless', n = state.waveNo, laps = state.race ? state.race.laps.length : 0;
+  const endless = state.level.victory.kind === 'endless', n = state.waveNo;
   document.getElementById('deadText').textContent = !endless ? ''
-    : state.level.run ? bestLine(`Reached level ${G.race.runLevel()} · ${laps} laps`, 'laps', laps, (b) => `${b} laps`)
+    : state.level.run ? bestLine(`Reached level ${G.race.runLevel()}`, 'level', G.race.runLevel(), (b) => `level ${b}`)
     : bestLine(`Reached wave ${n}`, 'wave', n, (b) => `wave ${b}`);
   document.getElementById('deadRestartBtn').textContent = 'Restart' + keyHint('restart');
   showPanel('dead');
@@ -253,8 +253,8 @@ function showPerk() {
   if (!offers.length) { goNext(); return; }
   const run = state.level.run;
   if (run) {
-    document.getElementById('winTitle').textContent = `LEVEL ${state.perks + 1}`;
-    document.getElementById('winText').textContent = `Level ${state.perks} done — pick an upgrade, the enemies get tougher`;
+    document.getElementById('winTitle').textContent = `LEVEL ${G.race.runLevel()}`;
+    document.getElementById('winText').textContent = `${state.perks * run.perkEvery} levels done — pick an upgrade, the enemies keep getting tougher`;
   } else {
     document.getElementById('winTitle').textContent = `WAVE ${state.perks * state.level.waves.endless.perkEvery} CLEARED`;
     document.getElementById('winText').textContent = 'Pick an upgrade — then the waves go on';

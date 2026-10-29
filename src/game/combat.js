@@ -274,9 +274,9 @@ function updateBurns(dt) {
 
 // --- среда ---
 
-// шипы колют всех, кто движется по ним; стоящего на месте не трогают
+// шипы колют своих — звенья цепочки и лежачих, — кто движется по ним; стоящего на месте не трогают. Врагов шипы не ранят
 function applySpikes(dt) {
-  const victims = chainUnits().concat(state.downed, state.enemies);
+  const victims = chainUnits().concat(state.downed);
   for (const u of victims) {
     const moved = u.spikeX === undefined || Math.hypot(u.x - u.spikeX, u.y - u.spikeY) > CONFIG.SPIKES.moveSpeed * dt;
     u.spikeX = u.x; u.spikeY = u.y;

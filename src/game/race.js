@@ -4,16 +4,16 @@
 // старт, дальше круг засчитан, когда Герой впервые дошёл до линии, пройдя все чекпоинты. Время круга — от прошлого
 // пересечения линии. Дружочки цепочки, пересёкшие линию вперёд после Героя, идут в счёт этого круга, каждый — раз.
 // Числа — у уровня (world.track, level.victory.laps), счёт и время — в state.race.
-// «Endless Run» (level.run): та же гонка без конца. Каждый проезд линии (старт и каждый круг) раскладывает по дороге
-// впереди дружочков и подиумы и заряжает гнёзда (волна выйдет через waves.telegraph секунд; дальше — game/waves.js).
-// На каждом уровне гонки run.flags врагов несут знамя (по одному в первых волнах уровня); знаменосец пропал из врагов
-// (убит) — флаг собран. Проехано run.levelEvery кругов уровня и собраны все его флаги — на линии новый уровень (выбор
-// улучшения, см. levelUpDue); флагов не хватает — круги того же уровня идут дальше.
+// «Endless Run» (level.run): та же гонка без конца, только кругов не считает — уровень гонки и есть круг. Засчитанный
+// проезд линии (самый первый — старт, дальше — только когда собраны все флаги уровня) — новый уровень: раскладка по дороге
+// впереди дружочков и подиумов и заряд гнёзд (волна выйдет через waves.telegraph секунд; дальше — game/waves.js). В волне
+// уровня run.flags врагов несут знамя; знаменосец пропал из врагов (убит) — флаг собран. Флаги не собраны — проезд
+// ничего не даёт. Каждые run.perkEvery уровней — выбор улучшения (см. levelUpDue).
 (function (G) {
 'use strict';
 
 const { COLORS, state } = G;
-const { shuffled, pickOne, removeFrom } = G.math;
+const { shuffled, removeFrom } = G.math;
 const { world, trackAt } = G.world;
 const { leader, upgrade } = G.session;
 const { spawnMates, spawnJobPad, spawnBuffPad } = G.pads;
@@ -27,58 +27,65 @@ function crossing(p, q, g) {
   return Math.abs((x - g.x) * -g.ty + (y - g.y) * g.tx) <= g.half ? dir : 0;
 }
 
-// «Endless Run»: Герой проехал линию — на дороге впереди (от drop.from до drop.to длины круга) вразброс, примерно поровну
-// по пути, ложатся drop.mates дружочков, drop.jobs подиумов профессий и drop.buffs подиумов усилений (с «Talent Scout» и
-// «Lucky Foot» — во столько раз больше, во сколько они чаще на других уровнях), каждый — в свободном месте поперёк дороги;
-// гнёзда заряжаются — до волны telegraph секунд
-function supplyRun(run) {
+// «Endless Run»: засчитанный проезд линии — на дороге впереди вразброс, примерно поровну по пути, ложатся n.mates
+// дружочков и n.buffs подиумов усилений (от drop.from до drop.to длины круга) и n.jobs подиумов профессий (от drop.jobsFrom
+// — не у самого старта: сперва набрать дружочков); «Talent Scout» и «Lucky Foot» добавляют по runPads подиумов. Каждый —
+// в свободном месте поперёк дороги. Гнёзда заряжаются — до волны telegraph секунд
+function supplyRun(run, n) {
   const d = run.drop, scout = upgrade('talentScout'), lucky = upgrade('luckyFoot');
-  const jobs = Math.round(d.jobs * (scout ? scout.mul : 1)), buffs = Math.round(d.buffs * (lucky ? lucky.mul : 1));
-  const items = shuffled([...Array(d.mates).fill('mate'), ...Array(jobs).fill('jobs'), ...Array(buffs).fill('buffs')]);
-  items.forEach((kind, i) => {
-    const k = d.from + ((d.to - d.from) * (i + 0.2 + Math.random() * 0.6)) / items.length;
-    const p = trackAt(k * world.track.length), half = p.hw - 20;
-    const area = { x: p.x - half, y: p.y - half, w: half * 2, h: half * 2 };
-    if (kind === 'mate') spawnMates(area, 1);
-    else if (kind === 'jobs') spawnJobPad(area);
-    else spawnBuffPad(area);
-  });
+  const spread = (count, from, place) => {
+    for (let i = 0; i < count; i++) {
+      const p = trackAt((from + ((d.to - from) * (i + 0.2 + Math.random() * 0.6)) / count) * world.track.length);
+      const half = p.hw - 20;
+      place({ x: p.x - half, y: p.y - half, w: half * 2, h: half * 2 });
+    }
+  };
+  spread(n.mates, d.from, (area) => spawnMates(area, 1));
+  spread(n.jobs + (scout ? scout.runPads : 0), d.jobsFrom, spawnJobPad);
+  spread(n.buffs + (lucky ? lucky.runPads : 0), d.from, spawnBuffPad);
   const telegraph = state.level.waves.telegraph;
-  for (const n of state.nests) n.nextIn = Math.min(n.nextIn, telegraph);
+  for (const nest of state.nests) nest.nextIn = Math.min(nest.nextIn, telegraph);
 }
 
-// «Endless Run»: круг засчитан — ещё один круг уровня. Проехано levelEvery и собраны все флаги — новый уровень (lap.up):
-// счёт кругов и флагов уровня с нуля, состав следующей волны бросается заново — уже по новому уровню. Кругов хватает, а
-// флагов нет — lap.need (плашка напомнит)
-function runLap(r, run, lap) {
-  r.levelLaps += 1;
-  if (r.levelLaps < run.levelEvery) return;
-  if (r.flags < run.flags) { lap.need = true; return; }
-  r.level += 1;
-  r.levelLaps = 0; r.flags = 0; r.tagged = 0;
-  lap.up = true;
-  for (const n of state.nests) n.queue = null;
-}
-
-// Герой дошёл до линии с новым счётом ворот: первый раз — старт гонки, дальше — круг пройден.
-// «Endless Run» — и в том и в другом случае раскладка по дороге и заряд гнёзд (после смены уровня — уже для нового)
-function passLine(r) {
-  const run = state.level.run;
-  if (r.startAt === null) {
-    r.startAt = r.lapAt = state.time;
-  } else {
-    const lap = { time: state.time - r.lapAt, mates: 0, at: state.time };
-    r.laps.push(lap);
-    r.lapAt = state.time;
-    r.counted = [];
-    if (run) runLap(r, run, lap);
+// «Endless Run»: Герой проехал линию. Первый раз — старт, 1-й уровень; дальше — только если флаги уровня собраны: новый
+// уровень (счёт флагов и знаменосцев с нуля, состав следующей волны бросается заново — уже по новому уровню), иначе
+// проезд ничего не даёт. r.line — для плашки. Засчитанный — раскладка (на старте drop.first, дальше drop.then) и заряд
+// гнёзд; знаменосцы ждут волны уровня (armed)
+function runLine(r, run) {
+  const first = r.startAt === null;
+  if (first) r.startAt = state.time;
+  else if (r.flags < run.flags) { r.line = { ok: false, at: state.time }; return; }
+  else {
+    r.level += 1;
+    r.flags = 0; r.tagged = 0;
+    for (const n of state.nests) n.queue = null;
+    r.line = { ok: true, at: state.time };
   }
-  if (run) supplyRun(run);
+  r.armed = true;
+  supplyRun(run, first ? run.drop.first : run.drop.then);
 }
 
-// «Endless Run»: знаменосцы. Пропавший из state.enemies (убит) — флаг собран (state.flagNews — плашка). Вышла новая волна,
-// а знаменосцев уровня вышло меньше run.flags — знамя получает случайный враг этой волны (не вышло никого — любой живой
-// враг из гнёзд без знамени; нет и таких — знамя ждёт следующей волны)
+// Герой дошёл до линии с новым счётом ворот: первый раз — старт гонки, дальше — круг пройден («Endless Run» — см. runLine)
+function passLine(r) {
+  if (state.level.run) { runLine(r, state.level.run); return; }
+  if (r.startAt === null) { r.startAt = r.lapAt = state.time; return; }
+  r.laps.push({ time: state.time - r.lapAt, mates: 0, at: state.time });
+  r.lapAt = state.time;
+  r.counted = [];
+}
+
+// знамя — count случайным врагам без знамени из списка pool
+function tagBearers(r, pool, count) {
+  for (const e of shuffled(pool).slice(0, count)) {
+    e.flag = true;
+    r.bearers.push(e);
+    r.tagged += 1;
+  }
+}
+
+// «Endless Run»: знаменосцы. Пропавший из state.enemies (убит) — флаг собран (state.flagNews — плашка). Вышла волна уровня
+// (armed) — знамя получают run.flags случайных врагов этой волны; не хватило (из гнёзд вышло меньше) — любые живые враги
+// из гнёзд без знамени, хоть кадром позже; нет и таких — недостающие флаги считаются собранными, иначе уровень не сменить
 function updateBearers(r, run) {
   for (const e of r.bearers.slice()) {
     if (state.enemies.includes(e)) continue;
@@ -87,16 +94,15 @@ function updateBearers(r, run) {
     state.flagNews = { kind: 'collected', count: r.flags, at: state.time };
     state.effects.push({ type: 'ring', x: e.x, y: e.y, r: e.r + 18, life: 0.6, color: COLORS.flag });
   }
-  if (state.waveNo === r.seenWave) return;
-  r.seenWave = state.waveNo;
-  if (r.tagged >= run.flags) return;
-  const fresh = state.enemies.filter((e) => e.wave === state.waveNo && !e.flag);
-  const pool = fresh.length ? fresh : state.enemies.filter((e) => e.fromNest && !e.flag);
-  if (!pool.length) return;
-  const e = pickOne(pool);
-  e.flag = true;
-  r.bearers.push(e);
-  r.tagged += 1;
+  if (r.armed) {
+    if (state.waveNo === r.seenWave) return;
+    r.seenWave = state.waveNo;
+    r.armed = false;
+    tagBearers(r, state.enemies.filter((e) => e.wave === state.waveNo && !e.flag), run.flags - r.tagged);
+  }
+  if (r.startAt === null || r.tagged >= run.flags) return;
+  tagBearers(r, state.enemies.filter((e) => e.fromNest && !e.flag), run.flags - r.tagged);
+  if (r.tagged < run.flags) { r.flags += run.flags - r.tagged; r.tagged = run.flags; }
 }
 
 // Герой и ворота: вперёд — только через следующие по порядку, назад — только через последние пройденные.
@@ -134,9 +140,10 @@ function updateRace() {
 // «Endless Run»: какой сейчас уровень гонки (с 1-го)
 function runLevel() { return state.race.level; }
 
-// «Endless Run»: пора выбрать улучшение — уровень гонки сменился, а улучшение за него ещё не выбрано
+// «Endless Run»: пора выбрать улучшение — пройдено ещё run.perkEvery уровней (на 4-м, 7-м, 10-м …)
 function levelUpDue() {
-  return !!state.level.run && !!state.race && state.race.level > state.perks + 1;
+  const run = state.level.run;
+  return !!run && !!state.race && state.race.level - 1 >= run.perkEvery * (state.perks + 1);
 }
 
 // время гонки текстом: «1:05.3»

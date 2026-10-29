@@ -159,17 +159,20 @@ function drawBanners() {
     const at = state.level.victory.time - w.surge.lastSeconds;
     drawBanner('ONSLAUGHT', `Last ${Math.round(w.surge.lastSeconds / 60)} minutes — bigger waves`, state.time - at, 4, COLORS.nest);
   }
-  // «Dead Race»: круг пройден — его время и сколько дружочков уже пересекли линию (число растёт, пока проезжает хвост).
-  // «Endless Run»: «LAP N», а на круге с новым уровнем — «LEVEL N»; кругов уровня хватает, а флагов нет — напоминание
+  // «Dead Race»: круг пройден — его время и сколько дружочков уже пересекли линию (число растёт, пока проезжает хвост)
   const laps = state.race ? state.race.laps : [], run = state.level.run;
-  // «Endless Run»: плашка собранного флага — в той же строке, что плашки круга и волны; более старые из них при ней молчат
-  const flagAt = state.flagNews && state.flagNews.kind === 'collected' ? state.flagNews.at : -Infinity;
-  if (laps.length && laps[laps.length - 1].at >= flagAt) {
+  if (laps.length) {
     const l = laps[laps.length - 1], k = laps.length, total = state.level.victory.laps;
-    const title = run ? (l.up ? `LEVEL ${runLevel()}` : `LAP ${k}`) : k >= total ? 'FINISH' : `LAP ${k}/${total}`;
-    const text = l.need ? `Kill the flag bearers to level up — ${state.race.flags}/${run.flags} flags collected`
-      : `${raceClock(l.time)} · mates across the line: ${l.mates}`;
-    drawBanner(title, text, state.time - l.at, 3.5, l.need ? COLORS.flag : '#efac28', 220);
+    drawBanner(k >= total ? 'FINISH' : `LAP ${k}/${total}`, `${raceClock(l.time)} · mates across the line: ${l.mates}`,
+      state.time - l.at, 3.5, '#efac28', 220);
+  }
+  // «Endless Run»: проезд линии — новый уровень («LEVEL N») или, без флагов, напоминание. Плашка собранного флага — в той
+  // же строке, что плашки линии и волны; более старые из них при ней молчат
+  const flagAt = state.flagNews && state.flagNews.kind === 'collected' ? state.flagNews.at : -Infinity;
+  const line = run && state.race.line;
+  if (line && line.at >= flagAt) {
+    if (line.ok) drawBanner(`LEVEL ${runLevel()}`, 'The enemies level up — new mates, pads and a wave', state.time - line.at, 3.5, '#efac28', 220);
+    else drawBanner('NO LEVEL UP', `Kill the flag bearers first — ${state.race.flags}/${run.flags} flags collected`, state.time - line.at, 3.5, COLORS.flag, 220);
   }
   // «Capture the Flags»: часовой поднял флаг или флаг потерян (часового убили, утащили, сбили с площадки) — сколько горит.
   // «Seal the Gates»: гнездо закрылось или открылось снова — сколько закрыто
@@ -183,11 +186,9 @@ function drawBanners() {
         age, 3, COLORS.flag, 220);
     }
     if (fn.kind === 'open') drawBanner('GATE OPEN', `${fn.count} of ${nests} sealed — the guard is gone`, age, 3, UI.red, 220);
-    // «Endless Run»: убит знаменосец — сколько флагов уровня собрано; все — когда будет новый уровень
+    // «Endless Run»: убит знаменосец — сколько флагов уровня собрано; все — пора к линии старта
     if (fn.kind === 'collected') {
-      const need = run.flags, r = state.race;
-      const then = fn.count < need ? '' : r.levelLaps >= run.levelEvery ? ' — cross the start line to level up'
-        : ` — finish lap ${run.levelEvery} to level up`;
+      const need = run.flags, then = fn.count < need ? '' : ' — cross the start line to level up';
       drawBanner('FLAG COLLECTED', `${fn.count}/${need} flags collected${then}`, age, 3, COLORS.flag, 220);
     }
   }
@@ -460,15 +461,13 @@ function drawHud() {
     chips.push({ text: `${rule.label} ${Math.min(done + 1, rule.laps)}/${rule.laps}`, color: UI.gold });
     if (!state.cleared) chips.push(t === null ? { text: 'GO!', color: UI.teal } : { text: raceClock(t), icon: 'clock' });
   }
-  // «Endless Run»: уровень, какой круг уровня из скольких (проехал все — бирюзой), сколько флагов уровня собрано и время
-  // текущего круга (до старта — «GO!»)
+  // «Endless Run»: уровень и сколько флагов уровня собрано (все — бирюзой: пора к линии); до старта — «GO!»
   const run = level.run && state.race;
   if (run) {
-    const every = level.run.levelEvery, need = level.run.flags, t = lapTime();
-    chips.push({ text: `LEVEL ${runLevel()}`, color: UI.gold });
-    chips.push({ text: `${rule.label} ${Math.min(run.levelLaps + 1, every)}/${every}`, color: run.levelLaps >= every ? UI.teal : UI.text });
-    chips.push({ text: `${run.flags}/${need}`, icon: 'flag', color: run.flags >= need ? UI.teal : UI.gold });
-    chips.push(t === null ? { text: 'GO!', color: UI.teal } : { text: raceClock(t), icon: 'clock' });
+    const need = level.run.flags;
+    chips.push({ text: `${rule.label} ${runLevel()}`, color: UI.gold });
+    chips.push(run.startAt === null ? { text: 'GO!', color: UI.teal }
+      : { text: `${run.flags}/${need}`, icon: 'flag', color: run.flags >= need ? UI.teal : UI.gold });
   }
   const speed = Math.round(leaderSpeedMul() * 100);
   if (!podRule) chips.push({ text: `${state.party.length}`, icon: 'mate' });
@@ -494,17 +493,15 @@ function drawHud() {
       for (const line of wrapLines(task.split(' '), maxX - 12)) { bottom += 20; ctx.fillText(line, 12, bottom); }
     });
   }
-  // «Dead Race»: пройденные круги — время и сколько дружочков пересекли линию; лучший круг — золотом.
-  // «Endless Run» — только три последних
-  const done = (race || run) ? state.race.laps : [];
-  if (done.length) {
-    const best = Math.min(...done.map((l) => l.time)), from = run ? Math.max(0, done.length - 3) : 0;
+  // «Dead Race»: пройденные круги — время и сколько дружочков пересекли линию; лучший круг — золотом
+  if (race && race.laps.length) {
+    const best = Math.min(...race.laps.map((l) => l.time));
     ctx.font = `bold 13px ${UI_FONT}`;
     shadowText(() => {
-      done.slice(from).forEach((l, j) => {
+      race.laps.forEach((l, i) => {
         bottom += 17;
-        ctx.fillStyle = l.time === best && done.length > 1 ? UI.gold : UI.text;
-        ctx.fillText(`Lap ${from + j + 1}   ${raceClock(l.time)}   ×${l.mates}`, 12, bottom);
+        ctx.fillStyle = l.time === best && race.laps.length > 1 ? UI.gold : UI.text;
+        ctx.fillText(`Lap ${i + 1}   ${raceClock(l.time)}   ×${l.mates}`, 12, bottom);
       });
     });
   }

@@ -127,8 +127,9 @@ src/
                     раз хотя бы каждого типа), waves.ramp (пауза сокращается), waves.maxAlive; победа — endless
                     (никогда); в прохождении — после Ambush
     level11.js      «Endless Run»: трасса «Dead Race» своей копией (plan.track без чекпоинтов), без level.ice; level.run
-                    (levelEvery — кругов на уровень, flags — знаменосцев на уровень, drop — сколько дружочков и подиумов
-                    раскладывает проезд старта и на какой доле круга), волны waves.endless с firstAt / interval = Infinity
+                    (flags — знаменосцев на уровень, perkEvery — уровней на улучшение, drop — сколько дружочков и подиумов
+                    раскладывает проезд старта — first на старте, then дальше — и на какой доле круга, jobsFrom — откуда
+                    профессии), волны waves.endless с firstAt / interval = Infinity
                     (сами не выходят — гнёзда заряжает race.js), ступени stages с level — по уровню гонки; случайные
                     подиумы и дружочки выключены (maxActive 0), их lifetime — для раскладки; победа endless (никогда);
                     последний в прохождении, после Endless
@@ -158,14 +159,14 @@ src/
     race.js         гонка «Dead Race» и «Endless Run»: ворота старта-финиша и чекпоинтов (world.track.gates), счёт кругов,
                     время круга, дружочки, пересёкшие линию (updateRace); время текстом и итоги (raceClock, lapTime,
                     raceSummary); «Endless Run» — раскладка и заряд гнёзд на линии (supplyRun), круг уровня и смена уровня
-                    (runLap), знаменосцы и собранные флаги (updateBearers), уровень (runLevel), пора выбрать улучшение
+                    (runLine), знаменосцы и собранные флаги (updateBearers), уровень (runLevel), пора выбрать улучшение
                     (levelUpDue)
     flags.js        флаги «Capture the Flags» и «Seal the Gates»: кто лежит на площадке (часовой), подъём и падение флага,
                     удар по часовому, события для плашки (updateFlags); сколько поднято и все ли (flagsHeld, allFlagsHeld);
                     заслонка гнезда флага (updateSeal), сколько гнёзд закрыто и все ли (gatesSealed, allGatesSealed)
     chain.js        цепочка: след, следование «плёткой», вербовка, бросок, нокаут, выдача способностей подиумами;
                     зазомбированные дудочником (charmAlly, updateCharmed: бредут к нему, убит — снова лежачие)
-    combat.js       урон (с бронёй типа — damageMul), снаряды, взрывы, эффекты, средовой урон
+    combat.js       урон (с бронёй типа — damageMul), снаряды, взрывы, эффекты, средовой урон (шипы — только своих)
     roaming.js      общие движения врагов: блуждание по комнате, сход с шипов, погоня за игроком, осада базы, охота за
                     ближайшим союзником (враг волны с hunt)
     waves.js        волны из гнёзд («Оборона», «Логово», «Hit the Count», «Capture the Flags», «Seal the Gates», «Ambush»):
@@ -245,8 +246,8 @@ src/
                     картинки поля через shapes.drawOn, пули, молнии, лечение, огонь — как в бою
     hud.js          интерфейс, шторка ухода в портал, метки у края экрана, плашка цели уровня, надпись о взятом усилении;
                     «Dead Race»: круг N/5 и время круга, список пройденных кругов (время, дружочки), плашка пройденного круга;
-                    «Endless Run»: уровень, круг уровня, флаги уровня, время, три последних круга, метки у края к
-                    знаменосцам, плашки собранного флага и «флагов не хватает»
+                    «Endless Run»: уровень, флаги уровня, метки у края к знаменосцам, плашки проезда линии (новый уровень
+                    или «флагов не хватает») и собранного флага
 
   ui/         панели меню (HTML)      — зависит только от core
     controls.js     «Управление»: на компьютере — назначения клавиш и мыши, режим мыши; на телефоне — сторона
@@ -255,8 +256,8 @@ src/
 
   main.js     бутстрап, игровой цикл, смысл намерений ввода, список уровней и их выбор, экраны (меню, пауза,
               поражение, карточки — HTML-панели; пройденный тестовый уровень — свой экран без карточек: итоги гонки
-              race.raceSummary и «Again»; на «Endless» на экране поражения — волна и рекорд, на «Endless Run» — уровень,
-              круги и рекорд кругов, рекорды в localStorage; выбор улучшения посреди «Endless» и «Endless Run» — showPerk),
+              race.raceSummary и «Again»; на «Endless» на экране поражения — волна и рекорд, на «Endless Run» — уровень и
+              рекорд уровня, рекорды в localStorage; выбор улучшения посреди «Endless» и «Endless Run» — showPerk),
               видимость и подсветка сенсорных кнопок. Кадр перерисовывается,
               пока идёт партия; в меню, на паузе, после поражения — только при смене экрана или размера холста
               (state.status — единственный источник правды: menu | play | pause | dead | win)
@@ -511,26 +512,28 @@ src/
 - **Уровень «Endless Run» (`levels/level11.js`, `game/race.js`, `game/waves.js`)**. Та же дорога-кольцо и та же гонка, без
   `level.ice`, без чекпоинтов (ворота — одна линия старта: назад через неё — счёт −1) и без победы (`victory.kind:
   'endless'`). У отрезков оси — `from` (путь от начала оси), у ворот — `along` (где они на оси); `world.trackAt(d)` — точка
-  оси в `d` px пути от линии старта. `race.passLine` (старт и каждый круг) с `level.run`: на круге — `runLap`, потом
-  `supplyRun`. `supplyRun`: `drop.mates` дружочков (`pads.spawnMates`), `drop.jobs` подиумов профессий (`pads.spawnJobPad`) и
-  `drop.buffs` усилений (`pads.spawnBuffPad`) — каждый в квадрате поперёк дороги вокруг `trackAt` (сторона — ширина дороги
-  без 40) на своей доле пути между `drop.from` и `drop.to`; число подиумов домножается на `mul` «Talent Scout» / «Lucky
-  Foot»; живут `padSpawn.lifetime` / `allySpawn.lifetime` уровня. Случайные появления выключены (`maxActive: 0`). Гнёзда:
-  волны — `waves.endless` (состав — `waveSpec`), но `firstAt` и `interval` — `Infinity`: сами таймеры гнёзд не доходят до
-  нуля, а `supplyRun` ставит всем `nest.nextIn = min(nextIn, waves.telegraph)` — дальше обычный `updateScripted` (выпуск,
-  `waveNo += 1`, план следующей, `nextIn = interval` = снова `Infinity`). Плашка над норой без секунд, пока `nextIn`
-  бесконечен (`nestart.js`). Размер волны — по её номеру (`size`), ступень — у ступеней с `level` по уровню гонки
-  `state.race.level` (`waveSpec`).
-  Уровень гонки — поля `state.race`: `level`, `levelLaps`, `flags`, `tagged`, `bearers`, `seenWave`. `runLap`: `levelLaps += 1`;
-  `levelLaps ≥ run.levelEvery` и `flags ≥ run.flags` — `level += 1`, счётчики уровня — в ноль, `lap.up`, у гнёзд `queue = null`
-  (`updateScripted` бросит состав следующей волны заново — уже по новому уровню); флагов не хватает — `lap.need`.
-  `updateBearers` (в конце `updateRace`, то есть кадром позже выхода волны): знаменосец, которого нет в `state.enemies`, —
-  `flags += 1`, `state.flagNews = { kind: 'collected' }`; `state.waveNo` сменился и `tagged < run.flags` — случайный враг
-  этой волны (`e.wave`; нет — любой живой из гнёзд) получает `e.flag`, в `bearers`. `race.runLevel()` — `state.race.level`;
-  `race.levelUpDue()` — `level > state.perks + 1`: `update` ставит `status = 'perk'` так же, как по `waves.perkDue()`
-  «Endless», экран — `main.showPerk` («LEVEL N»). Рисует знамёна `flagart.drawBearers` (после `drawPoles`), строку
-  состояния, метки к знаменосцам и плашки (`l.up` / `l.need`, собранный флаг — новее плашек круга и волны, они при ней
-  молчат) — `hud.js`. Экран поражения — уровень, круги и рекорд кругов (`chainrpg.endlessRunBest`).
+  оси в `d` px пути от линии старта. Кругов уровень не считает (`state.race.laps` пуст): `race.passLine` с `level.run` зовёт
+  `runLine` — первый проезд — старт (`startAt`), дальше засчитан, только если `flags ≥ run.flags`: `level += 1`, `flags` и
+  `tagged` — в ноль, у гнёзд `queue = null` (`updateScripted` бросит состав следующей волны заново — уже по новому уровню);
+  не засчитан — только `state.race.line = { ok: false }` для плашки, больше ничего. Засчитанный — `line = { ok: true }`,
+  `armed = true` и `supplyRun(run, drop.first | drop.then)`: `n.mates` дружочков (`pads.spawnMates`) и `n.buffs` усилений
+  (`pads.spawnBuffPad`) — на долях пути от `drop.from` до `drop.to`, `n.jobs` подиумов профессий (`pads.spawnJobPad`) — от
+  `drop.jobsFrom`; каждый в квадрате поперёк дороги вокруг `trackAt` (сторона — ширина дороги без 40); «Talent Scout» и
+  «Lucky Foot» добавляют по своему `runPads`; живут `padSpawn.lifetime` / `allySpawn.lifetime` уровня. Случайные появления
+  выключены (`maxActive: 0`). Гнёзда: волны — `waves.endless` (состав — `waveSpec`), но `firstAt` и `interval` — `Infinity`:
+  сами таймеры гнёзд не доходят до нуля, а `supplyRun` ставит всем `nest.nextIn = min(nextIn, waves.telegraph)` — дальше
+  обычный `updateScripted` (выпуск, `waveNo += 1`, план следующей, `nextIn = interval` = снова `Infinity`). Плашка над норой
+  без секунд, пока `nextIn` бесконечен (`nestart.js`). Размер волны — по её номеру (`size`; волна на уровень), ступень — у
+  ступеней с `level` по уровню гонки `state.race.level` (`waveSpec`).
+  Поля уровня гонки в `state.race`: `level`, `flags`, `tagged`, `bearers`, `armed`, `seenWave`, `line`. `updateBearers` (в конце
+  `updateRace`, то есть кадром позже выхода волны): знаменосец, которого нет в `state.enemies`, — `flags += 1`,
+  `state.flagNews = { kind: 'collected' }`; `armed` и `state.waveNo` сменился — `run.flags` случайных врагов этой волны
+  (`e.wave`) получают `e.flag` (`tagBearers`), не хватило — любые живые из гнёзд, нет и таких — недостающие флаги считаются
+  собранными (иначе уровень не сменить). `race.runLevel()` — `state.race.level`; `race.levelUpDue()` — `level − 1 ≥
+  run.perkEvery·(state.perks + 1)`: `update` ставит `status = 'perk'` так же, как по `waves.perkDue()` «Endless», экран —
+  `main.showPerk` («LEVEL N»). Рисует знамёна `flagart.drawBearers` (после `drawPoles`), строку состояния («LEVEL N», флаги),
+  метки к знаменосцам и плашки (`line`, собранный флаг — новее плашек линии и волны, они при ней молчат) — `hud.js`. Экран
+  поражения — уровень и рекорд уровня (`chainrpg.endlessRunLevel`).
 - **Поля путей (`world.js`, `roaming.js`)**. При сборке мира `world.js` покрывает его сеткой клеток `CONFIG.NAV.cell`;
   клетка закрыта у стен, колонн, дверей и пропастей (`world.pathBlockers`, отступ `NAV.clearance`). `buildFlowField(цели)` —
   расстояния от ближайшей цели до каждой клетки (Дейкстра по 8 соседям, диагональ не срезает углы; цели — точки или
