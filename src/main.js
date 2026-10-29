@@ -5,8 +5,8 @@
 // Оверлей главного меню в HTML только отражает его и сам ничего не решает: при menu — меню, при win —
 // экран «уровень пройден» с тремя карточками улучшений и переходом к следующему уровню (после последнего —
 // «вы прошли игру»). Прохождение — это цепочка уровней подряд через этот экран; уровень, выбранный из меню,
-// начинает новое прохождение: с первого — без улучшений, с N-го — сперва N−1 раз выбор карточки (как будто
-// предыдущие уровни пройдены), потом сам уровень. Пауза (ESC, кнопка паузы, свернули вкладку, телефон повернули
+// начинает новое прохождение: с первого — без улучшений, с любого другого — сперва выбор карточки
+// (CONFIG.UPGRADE_CARDS.beforeLevel раз), потом сам уровень. Пауза (ESC, кнопка паузы, свернули вкладку, телефон повернули
 // вертикально) — тот же оверлей с панелью «Продолжить / Заново / Управление / В меню»; пока пауза, игра стоит.
 // На «Endless» каждая третья волна, когда перебита, ставит игру на выбор улучшения (perk) — экран карточек, как между
 // уровнями, но после выбора та же партия идёт дальше; на «Endless Run» — каждые три уровня.
@@ -30,11 +30,13 @@ const { drawScene, drawCannonShots } = G.renderer;
 const { drawHud } = G.hud;
 const screenInfo = G.screen;
 
-// уровни в порядке их показа в меню; за фоном меню при запуске стоит первый
-const LEVELS = [G.level1, G.level2, G.level6, G.level3, G.level8, G.level7, G.level4, G.level5, G.level9, G.level10, G.level11];
+// уровни прохождения в порядке их показа в меню; за фоном меню при запуске стоит первый
+const LEVELS = [G.level1, G.level10, G.level11];
 const START_LEVEL = LEVELS[0];
-// тестовые уровни: только из меню выбора уровней, в прохождение не входят; стартуют с улучшениями level.upgrades
-const TEST_LEVELS = [G.levelTestRam, G.levelTestChain, G.levelTestRace];
+// тестовые уровни: только из меню выбора уровней, в прохождение не входят; стартуют с улучшениями level.upgrades.
+// Сперва бывшие уровни прохождения (в прежнем порядке), потом проверочные комнаты
+const TEST_LEVELS = [G.level2, G.level6, G.level3, G.level8, G.level7, G.level4, G.level5, G.level9,
+  G.levelTestRam, G.levelTestChain, G.levelTestRace];
 
 // --- ввод: намерения игрока ---
 
@@ -283,13 +285,12 @@ function showTestWin() {
   showPanel('win');
 }
 
-// старт не с первого уровня (для проверки уровней): перед ним picksLeft раз выбор карточки из total,
-// как будто предыдущие уровни пройдены; потом сам уровень
+// старт не с первого уровня: перед ним picksLeft раз выбор карточки из total; потом сам уровень
 function prepareLevel(level, picksLeft, total) {
   if (picksLeft <= 0) { startLevel(level); return; }
   const n = total - picksLeft + 1;
   document.getElementById('winTitle').textContent = `BEFORE LEVEL ${LEVELS.indexOf(level) + 1}`;
-  document.getElementById('winText').textContent = `Upgrade ${n} of ${total} — for the levels you skipped`;
+  document.getElementById('winText').textContent = total > 1 ? `Upgrade ${n} of ${total} to start with` : 'Pick an upgrade to start with';
   const btn = document.getElementById('nextBtn');
   btn.style.display = '';
   btn.textContent = (picksLeft > 1 ? 'Next' : 'Start') + keyHint('recruit');
@@ -337,12 +338,13 @@ LEVELS.forEach((level, i) => {
   const blurb = document.createElement('small');
   blurb.textContent = level.blurb;
   btn.append(blurb);
-  // уровень из меню — новое прохождение; с N-го уровня сперва N−1 карточка улучшений
+  // уровень из меню — новое прохождение; не с первого — сперва карточки улучшений
+  const picks = i ? CONFIG.UPGRADE_CARDS.beforeLevel : 0;
   btn.addEventListener('click', (ev) => {
     ev.currentTarget.blur();
     screenInfo.enterFullscreen();
     startRun();
-    prepareLevel(level, i, i);
+    prepareLevel(level, picks, picks);
   });
   levelList.append(btn);
 });
