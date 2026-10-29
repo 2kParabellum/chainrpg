@@ -216,9 +216,10 @@ function resetGame(level) {
   state.waveNo = 0; state.waveNews = null; state.perks = 0;
   // у каждого гнезда свой таймер волн; порядок, в котором гнёзда выпускают первые волны, бросается заново
   const waves = level.waves;
-  // carry — дробный остаток врагов при общем потоке (waves.share)
+  // carry — дробный остаток врагов при общем потоке (waves.share); rally — зона сбора гнезда ({ x, y, r, flow }: середина
+  // из плана, радиус waves.rally, поле путей к ней), если она есть
   state.nests = waves ? shuffled(world.nests).map((p, k) => ({
-    x: p.x, y: p.y, wave: 0, nextIn: waves.firstAt + k * (waves.stagger || 0), releasedAt: -99, lastCount: 0, carry: 0,
+    x: p.x, y: p.y, rally: p.rally && waves.rally ? { ...p.rally, r: waves.rally } : null, wave: 0, nextIn: waves.firstAt + k * (waves.stagger || 0), releasedAt: -99, lastCount: 0, carry: 0,
     seal: 0, sealed: false, guarded: false, openedAt: -99,
   })) : [];
   // «Seal the Gates»: каждый флаг закрывает ближайшее к нему гнездо

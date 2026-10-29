@@ -7,11 +7,17 @@ const { CONFIG, state } = G;
 const { dist } = G.math;
 const { moveAndCollide, circleRectOverlap } = G.collision;
 const { leader, chainUnits } = G.session;
-const { world, spikeRectAt, standsOnSpikes, freeSpotInRoom, hasLineOfSight, flowDir, buildFlowField, pathClear } = G.world;
+const { world, spikeRectAt, standsOnSpikes, freeSpotInRoom, freeSpotInZone, hasLineOfSight, flowDir, buildFlowField, pathClear } = G.world;
 const { nearestTarget } = G.combat;
 
-// враг, оказавшийся на шипах не в рывке, сходит с них кратчайшим путём
+// враг с зоной сбора гнезда (e.rally) идёт в неё: он вне зоны или ещё не дошёл до первой своей точки в ней
+// (e.settled — дошёл; вышел из зоны — сбрасывается)
+function rallying(e) { return !!e.rally && (!e.settled || dist(e, e.rally) > e.rally.r); }
+
+// враг, оказавшийся на шипах не в рывке, сходит с них кратчайшим путём; идущий в зону сбора — нет, идёт дальше по ним
+// (врагов шипы не ранят), а то топтался бы у полосы шипов на пути
 function stepOffSpikes(e, dt, speed) {
+  if (rallying(e)) return false;
   const rect = spikeRectAt(e);
   if (!rect) return false;
 
@@ -25,16 +31,28 @@ function stepOffSpikes(e, dt, speed) {
   return true;
 }
 
-// случайные перебежки врага в пределах своей комнаты
+// случайные перебежки врага в пределах своей комнаты. С зоной сбора гнезда (e.rally) — только по ней: вне её (только
+// что вылез из норы или потерял цепочку, за которой погнался) идёт в зону без пауз до точки в ней, а если прямо не
+// пройти — по полю путей к зоне
 function wanderStep(e, dt, speed) {
   if (e.anchored) return; // стоит на своём месте (островок), не бродит
-  if (e.pauseTimer > 0 && !standsOnSpikes(e)) { e.pauseTimer -= dt; return; }
+  const zone = e.rally, away = !!zone && dist(e, zone) > zone.r;
+  if (away) e.settled = false;
+  const going = zone && !e.settled;
+  if (e.pauseTimer > 0 && !going && !standsOnSpikes(e)) { e.pauseTimer -= dt; return; }
+  if (away && e.wanderTarget && dist(e.wanderTarget, zone) > zone.r) e.wanderTarget = null; // цель вне зоны — в зону
 
   if (!e.wanderTarget || dist(e, e.wanderTarget) < CONFIG.WANDER.arrive) {
-    e.wanderTarget = freeSpotInRoom(e);
-    e.pauseTimer = standsOnSpikes(e) ? 0
+    if (going && e.wanderTarget && !away) e.settled = true; // дошёл до точки в зоне — дальше бродит, как обычно
+    e.wanderTarget = zone ? freeSpotInZone(zone, e.r) : freeSpotInRoom(e);
+    e.pauseTimer = (zone && !e.settled) || standsOnSpikes(e) ? 0
       : CONFIG.WANDER.pauseMin + Math.random() * (CONFIG.WANDER.pauseMax - CONFIG.WANDER.pauseMin);
     return;
+  }
+
+  if (away && !pathClear(e, e.wanderTarget, e.r)) {
+    const dir = flowDir(zone.flow, e.x, e.y);
+    if (dir) { moveAndCollide(e, dir.x * speed * dt, dir.y * speed * dt, world.moveBlockers); return; }
   }
 
   const dx = e.wanderTarget.x - e.x, dy = e.wanderTarget.y - e.y;
@@ -142,5 +160,5 @@ function chaseStep(e, dt, speed, stopDist, target) {
   }
 }
 
-G.roaming = { wanderStep, stepOffSpikes, chaseStep };
+G.roaming = { wanderStep, stepOffSpikes, chaseStep, rallying };
 })(window.Game = window.Game || {});

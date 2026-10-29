@@ -8,8 +8,8 @@
 // начинает новое прохождение: с первого — без улучшений, с любого другого — сперва выбор карточки
 // (CONFIG.UPGRADE_CARDS.beforeLevel раз), потом сам уровень. Пауза (ESC, кнопка паузы, свернули вкладку, телефон повернули
 // вертикально) — тот же оверлей с панелью «Продолжить / Заново / Управление / В меню»; пока пауза, игра стоит.
-// На «Endless» каждая третья волна, когда перебита, ставит игру на выбор улучшения (perk) — экран карточек, как между
-// уровнями, но после выбора та же партия идёт дальше; на «Endless Run» — каждые три уровня.
+// На «Endless» каждая вторая волна, когда перебита, ставит игру на выбор улучшения (perk) — экран карточек, как между
+// уровнями, но после выбора та же партия идёт дальше; на «Endless Run» — каждый новый уровень.
 (function (G) {
 'use strict';
 
@@ -257,7 +257,7 @@ function showPerk() {
   const run = state.level.run;
   if (run) {
     document.getElementById('winTitle').textContent = `LEVEL ${G.race.runLevel()}`;
-    document.getElementById('winText').textContent = `${state.perks * run.perkEvery} levels done — pick an upgrade, the enemies keep getting tougher`;
+    document.getElementById('winText').textContent = `Level ${G.race.runLevel() - 1} done — pick an upgrade, the enemies keep getting tougher`;
   } else {
     document.getElementById('winTitle').textContent = `WAVE ${state.perks * state.level.waves.endless.perkEvery} CLEARED`;
     document.getElementById('winText').textContent = 'Pick an upgrade — then the waves go on';

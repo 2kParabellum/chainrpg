@@ -17,7 +17,7 @@ const { updateRace, levelUpDue } = G.race;
 const { updateFlags, allFlagsHeld, allGatesSealed } = G.flags;
 const combat = G.combat;
 const { updateProjectiles, updateBurns, updateClouds, applySpikes, applyFirewalls, updateEffects, updateCannons } = combat;
-const { wanderStep, stepOffSpikes, chaseStep } = G.roaming;
+const { wanderStep, stepOffSpikes, chaseStep, rallying } = G.roaming;
 const { separateBodies } = G.bodies;
 const { onVictory, updateExit, updateLeavingLink } = G.exit;
 const { enemyTypes, weapons } = G;
@@ -277,8 +277,9 @@ function updateEnemy(e, dt) {
     }
   }
 
-  // порталы и порождённые ими враги действуют на любом расстоянии, остальные спят вдали от игрока
-  if (!type.alwaysActive && !e.chasing && dist(e, leader()) > CONFIG.ACTIVATION_DIST) return;
+  // порталы и порождённые ими враги действуют на любом расстоянии, враг волны, идущий в зону сбора гнезда, — тоже,
+  // остальные спят вдали от игрока
+  if (!type.alwaysActive && !e.chasing && !rallying(e) && dist(e, leader()) > CONFIG.ACTIVATION_DIST) return;
   // враги целятся в ближайшего союзника — и в цепочке, и выбитого (его добивают), а на «Обороне» — и в базу;
   // первым в списке всегда Герой (на него, например, смотрит босс)
   type.update(e, dt, enemyTargets(), game);
@@ -393,7 +394,7 @@ function update(dt) {
   // победа открывает портал выхода (на «Обороне» — после волны от базы); заехал в него — уровень пройден
   if (state.status === 'play' && !state.cleared && isVictory()) onVictory();
   updateExit(dt);
-  // «Endless»: перебиты все враги очередной perkEvery-й волны, «Endless Run»: проехано ещё levelEvery кругов — игра
+  // «Endless»: перебиты все враги очередной perkEvery-й волны, «Endless Run»: пройдено ещё run.perkEvery уровней — игра
   // встаёт на выбор улучшения (экран — main.js)
   if (state.status === 'play' && (perkDue() || levelUpDue())) { state.perks += 1; state.status = 'perk'; }
 

@@ -144,7 +144,7 @@ function updateRace() {
 // «Endless Run»: какой сейчас уровень гонки (с 1-го)
 function runLevel() { return state.race.level; }
 
-// «Endless Run»: пора выбрать улучшение — пройдено ещё run.perkEvery уровней (на 4-м, 7-м, 10-м …)
+// «Endless Run»: пора выбрать улучшение — пройдено ещё run.perkEvery уровней (при 1 — на каждом новом: 2-м, 3-м …)
 function levelUpDue() {
   const run = state.level.run;
   return !!run && !!state.race && state.race.level - 1 >= run.perkEvery * (state.perks + 1);

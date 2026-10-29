@@ -58,12 +58,15 @@ function nextCount(cfg, nest) {
 }
 
 // враг type выходит из гнезда nest: место рядом с норой, вспышка. Враг волны идёт к цели через всю карту (chasing), а с
-// waves.chase: false («Endless Run») — нет: бродит у гнезда и нападает, только когда цепочка рядом, как обычный враг.
+// waves.chase: false («Endless Run») — нет: нападает, только когда цепочка рядом, как обычный враг, а бродит — в зоне сбора
+// гнезда (e.rally, см. roaming.wanderStep; нет зоны — у самой норы).
 // Возвращает врага, null — места не нашлось
 function spawnAt(nest, type, cfg) {
   const spot = freeSpotNear(nest.x, nest.y, 20, cfg.spawnRadius, 20);
   if (!spot) return null;
-  const e = spawnEnemy(type, spot.x, spot.y, 0, { chasing: cfg.chase !== false, fromNest: true, siege: !!state.base, hunt: !!cfg.hunt });
+  const chasing = cfg.chase !== false;
+  const e = spawnEnemy(type, spot.x, spot.y, 0, { chasing, fromNest: true, siege: !!state.base, hunt: !!cfg.hunt,
+                                                  rally: chasing ? null : nest.rally });
   state.effects.push({ type: 'ring', x: spot.x, y: spot.y, r: 24, life: 0.4, color: COLORS.nest });
   nest.lastCount += 1;
   return e;

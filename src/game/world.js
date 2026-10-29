@@ -305,7 +305,10 @@ function addRoomContent(plan, i) {
     world.base = { ...r, hp: plan.base.hp };
     world.solids.push(r);
   }
-  for (const [cx, cy] of plan.nests || []) world.nests.push(localToWorld(i, cx, cy));
+  // гнездо: [cx, cy] или [cx, cy, rx, ry] — с серединой зоны сбора (rally), куда ползут вышедшие из него враги
+  for (const [cx, cy, rx, ry] of plan.nests || []) {
+    world.nests.push({ ...localToWorld(i, cx, cy), rally: rx === undefined ? null : localToWorld(i, rx, ry) });
+  }
   if (plan.track) addTrack(plan.track, i);
   // Под («Hit the Count»): круглый механизм на полу, ничего не блокирует; его счёт и перезарядка — в state.pod
   if (plan.pod) {
@@ -579,6 +582,8 @@ function buildWorld(level) {
   world.spikes.index = indexRects(world.spikes);
   buildNav();
   world.baseFlow = world.base ? buildFlowField([world.base]) : null;
+  // к зоне сбора гнезда — своё поле путей: враг, ушедший за цепочкой за угол, возвращается по нему
+  for (const n of world.nests) if (n.rally) n.rally.flow = buildFlowField([n.rally]);
 }
 
 // путь по прямой от a до b свободен для тела радиуса r: средняя линия и линии по краям тела не задевают
@@ -645,6 +650,19 @@ function freeSpotInRoom(e) {
     return p;
   }
   return fallback;
+}
+
+// случайная точка в круге zone ({ x, y, r }) для тела радиуса r — куда бредёт враг в зоне сбора гнезда: не на шипах и
+// не в препятствиях; не нашлось — середина зоны
+function freeSpotInZone(zone, r) {
+  for (let tries = 0; tries < 20; tries++) {
+    const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * zone.r;
+    const p = { x: zone.x + Math.cos(a) * d, y: zone.y + Math.sin(a) * d, r };
+    if (standsOnSpikes(p)) continue;
+    if (world.moveBlockers.index.near(p.x - r, p.y - r, p.x + r, p.y + r).some((rect) => circleRectOverlap(p.x, p.y, r, rect))) continue;
+    return p;
+  }
+  return { x: zone.x, y: zone.y, r };
 }
 
 // случайная свободная точка комнаты для стартовой расстановки: не на шипах, не в препятствиях
@@ -715,7 +733,7 @@ function freeSquareIn(area, size, avoid, accept) {
 
 G.world = {
   world, roomCount, roomIndexAt, roomInterior, localToWorld, buildWorld, hasLineOfSight,
-  spikeRectAt, standsOnSpikes, buttonUnder, freeSpotInRoom, scatterSpot, freeSpotNear, freeSquareNear, freeSquareIn, setDoorsOpen,
+  spikeRectAt, standsOnSpikes, buttonUnder, freeSpotInRoom, freeSpotInZone, scatterSpot, freeSpotNear, freeSquareNear, freeSquareIn, setDoorsOpen,
   flowDir, buildFlowField, pathClear, inHome, trackAt,
 };
 })(window.Game = window.Game || {});
