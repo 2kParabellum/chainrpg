@@ -515,13 +515,15 @@ src/
   оси в `d` px пути от линии старта. Кругов уровень не считает (`state.race.laps` пуст): `race.passLine` с `level.run` зовёт
   `runLine` — первый проезд — старт (`startAt`), дальше засчитан, только если `flags ≥ run.flags`: `level += 1`, `flags` и
   `tagged` — в ноль, у гнёзд `queue = null` (`updateScripted` бросит состав следующей волны заново — уже по новому уровню);
-  не засчитан — только `state.race.line = { ok: false }` для плашки, больше ничего. Засчитанный — `state.race.score +=`
+  не засчитан — только `state.race.line = { ok: false }` для плашки и `best −= 1` (проезд линию не «тратит»: сдал назад
+  через линию и проехал снова — `heroGates` позовёт `passLine` ещё раз), больше ничего. Засчитанный — `state.race.score +=`
   дружочков в цепочке (`party.length − 1`), `line = { ok: true, mates }` (кроме старта), `armed = true` и
   `supplyRun(run, drop.first | drop.then)`: `n.mates` дружочков (`pads.spawnMates`) и `n.buffs` усилений
   (`pads.spawnBuffPad`) — на долях пути от `drop.from` до `drop.to`, `n.jobs` подиумов профессий (`pads.spawnJobPad`) — от
   `drop.jobsFrom`; каждый в квадрате поперёк дороги вокруг `trackAt` (сторона — ширина дороги без 40); «Talent Scout» и
   «Lucky Foot» добавляют по своему `runPads`; живут `padSpawn.lifetime` / `allySpawn.lifetime` уровня. Случайные появления
-  выключены (`maxActive: 0`). Гнёзда: волны — `waves.endless` (состав — `waveSpec`), но `firstAt` и `interval` — `Infinity`:
+  выключены (`maxActive: 0`). Гнёзда: волны — `waves.endless` (состав — `waveSpec`) с `waves.chase: false` (`waves.spawnAt` не
+  ставит врагу `chasing`: он бродит и спит вдали, как обычный враг уровня), но `firstAt` и `interval` — `Infinity`:
   сами таймеры гнёзд не доходят до нуля, а `supplyRun` ставит всем `nest.nextIn = min(nextIn, waves.telegraph)` — дальше
   обычный `updateScripted` (выпуск, `waveNo += 1`, план следующей, `nextIn = interval` = снова `Infinity`). Плашка над норой
   без секунд, пока `nextIn` бесконечен (`nestart.js`). Размер волны — по её номеру (`size`; волна на уровень), ступень — у
