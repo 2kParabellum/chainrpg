@@ -59,7 +59,8 @@ const state = {
   // «Endless Run» ещё (круги не считаются): level — уровень гонки (с 1-го), flags — сколько его флагов собрано, tagged —
   // сколько знаменосцев на нём уже вышло, bearers — живые знаменосцы (враги с e.flag), armed — волна уровня ещё не вышла
   // (её врагам раздать знамя), seenWave — последняя волна, которую уже видели (state.waveNo), line — последний проезд
-  // линии { ok, at } (ok — засчитан: новый уровень) для плашки. null на других уровнях
+  // линии { ok, at, mates } (ok — засчитан: новый уровень; mates — сколько он прибавил к счёту) для плашки, score — счёт:
+  // сумма дружочков в цепочке на засчитанных проездах. null на других уровнях
   race: null,
   // «Capture the Flags», «Seal the Gates»: флаги по площадкам мира (см. game/flags.js) — btn: площадка (кнопка мира с
   // flag: true), guard: союзник, лежащий на ней (часовой, или null), held: флаг горит (есть часовой или — кроме «Seal the
@@ -203,7 +204,8 @@ function resetGame(level) {
   state.base = world.base ? makeBase(world.base) : null;
   state.pod = world.pod ? { count: 0, passing: false, touched: [], lastTouch: 0, cooldown: 0, countAt: -99, dropped: false, lastSide: -1, streak: 0, drops: [] } : null;
   state.race = world.track ? { gates: 0, best: 0, startAt: null, lapAt: 0, laps: [], counted: [], prev: new Map(),
-                                level: 1, flags: 0, tagged: 0, bearers: [], armed: false, seenWave: 0, line: null } : null;
+                                level: 1, flags: 0, tagged: 0, bearers: [], armed: false, seenWave: 0, line: null,
+                                score: 0 } : null;
   state.flags = world.buttons.filter((b) => b.flag).map((btn) => ({ btn, guard: null, held: false, raise: 0, guardHp: 0, hitAt: -99, nest: null }));
   state.flagNews = null;
   state.allyFlow = null;

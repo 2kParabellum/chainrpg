@@ -68,7 +68,7 @@
   #overlay.pause { background: rgba(29,20,10,0.8); }
   #overlay.dead { background: rgba(29,20,10,0.6); }
   #panelDead h1 { color: #ef3a0c; }
-  #deadText { margin: 0 0 10px; font-size: 16px; color: #efd8a1; }   /* «Endless»: до какой волны дошли и рекорд */
+  #deadText { margin: 0 0 10px; font-size: 16px; color: #efd8a1; white-space: pre-line; }   /* «Endless»: до какой волны дошли и рекорд; «Endless Run» — уровень и счёт, по строке */
   #deadText:empty { display: none; }
   /* подписи только для клавиатуры или только для касаний */
   body.touch .kbd-only, body:not(.touch) .touch-only { display: none !important; }
@@ -361,7 +361,7 @@
           <button id="backBtn">Back</button>
         </div>
       </div>
-      <div id="build">build 56</div>
+      <div id="build">build 57</div>
     </div>
   </div>
   <script src="src/core/debug.js"></script>

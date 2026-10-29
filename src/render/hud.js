@@ -171,7 +171,7 @@ function drawBanners() {
   const flagAt = state.flagNews && state.flagNews.kind === 'collected' ? state.flagNews.at : -Infinity;
   const line = run && state.race.line;
   if (line && line.at >= flagAt) {
-    if (line.ok) drawBanner(`LEVEL ${runLevel()}`, 'The enemies level up — new mates, pads and a wave', state.time - line.at, 3.5, '#efac28', 220);
+    if (line.ok) drawBanner(`LEVEL ${runLevel()}`, `+${line.mates} score — the enemies level up`, state.time - line.at, 3.5, '#efac28', 220);
     else drawBanner('NO LEVEL UP', `Kill the flag bearers first — ${state.race.flags}/${run.flags} flags collected`, state.time - line.at, 3.5, COLORS.flag, 220);
   }
   // «Capture the Flags»: часовой поднял флаг или флаг потерян (часового убили, утащили, сбили с площадки) — сколько горит.
@@ -461,11 +461,12 @@ function drawHud() {
     chips.push({ text: `${rule.label} ${Math.min(done + 1, rule.laps)}/${rule.laps}`, color: UI.gold });
     if (!state.cleared) chips.push(t === null ? { text: 'GO!', color: UI.teal } : { text: raceClock(t), icon: 'clock' });
   }
-  // «Endless Run»: уровень и сколько флагов уровня собрано (все — бирюзой: пора к линии); до старта — «GO!»
+  // «Endless Run»: уровень, счёт и сколько флагов уровня собрано (все — бирюзой: пора к линии); до старта — «GO!»
   const run = level.run && state.race;
   if (run) {
     const need = level.run.flags;
     chips.push({ text: `${rule.label} ${runLevel()}`, color: UI.gold });
+    chips.push({ text: `SCORE ${run.score}`, color: UI.gold });
     chips.push(run.startAt === null ? { text: 'GO!', color: UI.teal }
       : { text: `${run.flags}/${need}`, icon: 'flag', color: run.flags >= need ? UI.teal : UI.gold });
   }

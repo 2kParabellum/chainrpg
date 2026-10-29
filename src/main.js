@@ -84,10 +84,10 @@ function syncOverlay() {
 // подпись клавиши в скобках на кнопке экрана: « (ПРОБЕЛ)»; на телефоне клавиш нет — без неё
 function keyHint(name) { return screenInfo.isTouch() ? '' : ` (${keyLabel(name)})`; }
 
-// рекорды бесконечных уровней: «Endless» — до какой волны дошли, «Endless Run» — до какого уровня; хранятся в этом
+// рекорды бесконечных уровней: «Endless» — до какой волны дошли, «Endless Run» — до какого уровня и счёт; хранятся в этом
 // браузере (нет хранилища — рекорд только этой партии). Дошли до n: прежний рекорд побит — запоминается; возвращает
 // прежний рекорд
-const BEST_KEYS = { wave: 'chainrpg.endlessBest', level: 'chainrpg.endlessRunLevel' };
+const BEST_KEYS = { wave: 'chainrpg.endlessBest', level: 'chainrpg.endlessRunLevel', score: 'chainrpg.endlessRunScore' };
 function recordBest(what, n) {
   let best = 0;
   try { best = Number(localStorage.getItem(BEST_KEYS[what])) || 0; } catch (e) { /* без рекорда */ }
@@ -102,13 +102,14 @@ function bestLine(text, what, n, unit) {
 }
 
 // поражение: Герой выбит или база разрушена — кнопки «Заново» и «В меню» поверх замершей партии;
-// в «Endless» — ещё до какой волны дошли и рекорд, в «Endless Run» — до какого уровня и рекорд
+// в «Endless» — ещё до какой волны дошли и рекорд, в «Endless Run» — до какого уровня и счёт, у каждого — рекорд
 function showDead() {
   const lostBase = state.base && state.base.hp <= 0;
   document.getElementById('deadTitle').textContent = lostBase ? 'BASE DESTROYED' : 'DEFEAT';
-  const endless = state.level.victory.kind === 'endless', n = state.waveNo;
+  const endless = state.level.victory.kind === 'endless', n = state.waveNo, level = state.level.run && G.race.runLevel();
   document.getElementById('deadText').textContent = !endless ? ''
-    : state.level.run ? bestLine(`Reached level ${G.race.runLevel()}`, 'level', G.race.runLevel(), (b) => `level ${b}`)
+    : level ? [bestLine(`Reached level ${level}`, 'level', level, (b) => `level ${b}`),
+      bestLine(`Score ${state.race.score}`, 'score', state.race.score, (b) => `${b}`)].join('\n')
     : bestLine(`Reached wave ${n}`, 'wave', n, (b) => `wave ${b}`);
   document.getElementById('deadRestartBtn').textContent = 'Restart' + keyHint('restart');
   showPanel('dead');

@@ -8,7 +8,8 @@
 // проезд линии (самый первый — старт, дальше — только когда собраны все флаги уровня) — новый уровень: раскладка по дороге
 // впереди дружочков и подиумов и заряд гнёзд (волна выйдет через waves.telegraph секунд; дальше — game/waves.js). В волне
 // уровня run.flags врагов несут знамя; знаменосец пропал из врагов (убит) — флаг собран. Флаги не собраны — проезд
-// ничего не даёт. Каждые run.perkEvery уровней — выбор улучшения (см. levelUpDue).
+// ничего не даёт. Каждый засчитанный проезд прибавляет к счёту (score) столько, сколько дружочков сейчас в цепочке.
+// Каждые run.perkEvery уровней — выбор улучшения (см. levelUpDue).
 (function (G) {
 'use strict';
 
@@ -49,8 +50,8 @@ function supplyRun(run, n) {
 
 // «Endless Run»: Герой проехал линию. Первый раз — старт, 1-й уровень; дальше — только если флаги уровня собраны: новый
 // уровень (счёт флагов и знаменосцев с нуля, состав следующей волны бросается заново — уже по новому уровню), иначе
-// проезд ничего не даёт. r.line — для плашки. Засчитанный — раскладка (на старте drop.first, дальше drop.then) и заряд
-// гнёзд; знаменосцы ждут волны уровня (armed)
+// проезд ничего не даёт. r.line — для плашки. Засчитанный — к счёту дружочки в цепочке (без Героя), раскладка (на старте
+// drop.first, дальше drop.then) и заряд гнёзд; знаменосцы ждут волны уровня (armed)
 function runLine(r, run) {
   const first = r.startAt === null;
   if (first) r.startAt = state.time;
@@ -59,8 +60,10 @@ function runLine(r, run) {
     r.level += 1;
     r.flags = 0; r.tagged = 0;
     for (const n of state.nests) n.queue = null;
-    r.line = { ok: true, at: state.time };
   }
+  const mates = state.party.length - 1;
+  r.score += mates;
+  if (!first) r.line = { ok: true, at: state.time, mates };
   r.armed = true;
   supplyRun(run, first ? run.drop.first : run.drop.then);
 }
